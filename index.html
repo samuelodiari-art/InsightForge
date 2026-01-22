@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>InsightForge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      color: #22c55e;
+    }
+    button {
+      padding: 15px 25px;
+      margin: 10px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+    }
+    .run { background: #22c55e; color: black; }
+    .upload { background: #3b82f6; color: white; }
+    .report { background: #f59e0b; color: black; }
+
+    #output {
+      background: #020617;
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 10px;
+      min-height: 120px;
+      text-align: left;
+      font-size: 14px;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🚀 InsightForge Web App</h1>
+<p>Upload your CSV and run instant analysis.</p>
+
+<input type="file" id="fileInput" accept=".csv"><br><br>
+
+<button class="run" onclick="runApp()">Run InsightForge</button>
+<button class="report" onclick="downloadReport()">Download Report</button>
+
+<div id="output">Waiting for data...</div>
+
+<script>
+function runApp() {
+  const file = document.getElementById("fileInput").files[0];
+  if (!file) {
+    alert("Please upload a CSV file first.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const lines = text.split("\n").length;
+    document.getElementById("output").innerHTML =
+      "✅ File loaded successfully<br>" +
+      "📊 Rows detected: " + lines + "<br>" +
+      "🤖 AI Analysis simulated successfully.";
+  };
+  reader.readAsText(file);
+}
+
+function downloadReport() {
+  const report = "InsightForge Report\nGenerated Successfully.";
+  const blob = new Blob([report], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "insightforge_report.txt";
+  link.click();
+}
+</script>
+
+</body>
+</html>
