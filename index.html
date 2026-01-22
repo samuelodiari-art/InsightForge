@@ -2,99 +2,81 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>InsightForge AI</title>
+<title>InsightForge Pro</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#22c55e">
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-function loadCSV(input) {
-  const file = input.files[0];
-  if (!file) return;
 
-  const reader = new FileReader();
-
-  reader.onload = function (e) {
-    const text = e.target.result.trim();
-    const rows = text.split("\n").map(r => r.split(","));
-    const headers = rows[0];
-
-    const dropdown = document.getElementById("columnSelect");
-    dropdown.innerHTML = `<option value="">Select column...</option>`;
-
-    headers.forEach(h => {
-      const opt = document.createElement("option");
-      opt.value = h.trim();
-      opt.textContent = h.trim();
-      dropdown.appendChild(opt);
-    });
-
-    document.getElementById("output").innerHTML =
-      "✅ CSV loaded successfully<br>📊 Columns: " + headers.join(", ");
-  };
-
-  reader.readAsText(file);
-}
 <style>
 body {
   font-family: system-ui, Arial;
   background:#020617;
   color:white;
   text-align:center;
-  padding:15px;
+  padding:14px;
 }
 h1 { color:#22c55e; }
 
+input, select {
+  padding:10px;
+  border-radius:8px;
+  border:none;
+  margin:6px;
+  font-size:14px;
+}
+
 button {
-  padding:14px 22px;
-  margin:8px;
+  padding:12px 18px;
+  margin:6px;
   border-radius:10px;
   border:none;
-  font-size:16px;
+  font-size:15px;
   cursor:pointer;
 }
+
 .run { background:#22c55e; color:black; }
+.load { background:#0ea5e9; color:black; }
 .report { background:#f59e0b; color:black; }
-.install { background:#0ea5e9; color:black; display:none; }
 
 #output {
   background:#020617;
   padding:12px;
   border-radius:10px;
-  margin-top:15px;
+  margin-top:12px;
   text-align:left;
-  font-size:14px;
+  font-size:13px;
 }
 
 .dashboard {
   background:rgba(255,255,255,0.06);
   padding:12px;
   border-radius:12px;
-  margin-top:15px;
+  margin-top:12px;
   text-align:left;
 }
 
-.stat { margin:6px 0; }
+.stat { margin:5px 0; }
 
-canvas { max-width:100%; margin-top:20px; }
+canvas {
+  max-width:100%;
+  margin-top:16px;
+}
 </style>
 </head>
 
 <body>
 
-<h1>🚀 InsightForge AI</h1>
-<p>Upload CSV → Run AI Forecast → Install as App</p>
+<h1>🚀 InsightForge Pro</h1>
+<p>Upload CSV → Load → Analyze → Forecast</p>
 
-<input type="file" id="fileInput" accept=".csv" onchange="loadCSV(this)"><br><br>
+<input type="file" id="fileInput" accept=".csv"><br>
+<button class="load" onclick="loadCSV()">Load CSV</button><br>
 
 <select id="columnSelect">
   <option value="">Select column...</option>
-</select><br><br>
+</select><br>
 
 <button class="run" onclick="runAnalysis()">Run AI Analysis</button>
 <button class="report" onclick="downloadReport()">Download Report</button>
-<button class="install" id="installBtn">Install App</button>
 
 <div id="output">Waiting for CSV...</div>
 
@@ -106,8 +88,8 @@ canvas { max-width:100%; margin-top:20px; }
   <div class="stat" id="statMin"></div>
   <div class="stat" id="statMax"></div>
   <div class="stat" id="statGrowth"></div>
+  <div class="stat" id="statTrend"></div>
   <div class="stat" id="statForecast"></div>
-  <div class="stat" id="statConfidence"></div>
   <div class="stat" id="statAnomaly"></div>
 </div>
 
@@ -115,51 +97,45 @@ canvas { max-width:100%; margin-top:20px; }
 let csvRows = [];
 let chartInstance = null;
 let reportData = null;
-let deferredPrompt = null;
 
-// -------------------- PWA INSTALL --------------------
-window.addEventListener("beforeinstallprompt", e => {
-  e.preventDefault();
-  deferredPrompt = e;
-  document.getElementById("installBtn").style.display = "inline-block";
-});
-
-document.getElementById("installBtn").onclick = async () => {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  deferredPrompt = null;
-};
-
-// -------------------- CSV LOAD --------------------
-document.getElementById("fileInput").addEventListener("change", loadCSV);
-
+// ================= CSV LOADER =================
 function loadCSV() {
-  const file = fileInput.files[0];
-  if (!file) return;
+  const input = document.getElementById("fileInput");
+  const file = input.files[0];
+
+  if (!file) {
+    alert("Please select a CSV file first.");
+    return;
+  }
 
   const reader = new FileReader();
-  reader.onload = e => {
+
+  reader.onload = function (e) {
     const text = e.target.result.trim();
     csvRows = text.split("\n").map(r => r.split(","));
     const headers = csvRows[0];
 
-    columnSelect.innerHTML = '<option value="">Select column...</option>';
+    const dropdown = document.getElementById("columnSelect");
+    dropdown.innerHTML = '<option value="">Select column...</option>';
+
     headers.forEach(h => {
       const opt = document.createElement("option");
       opt.value = h.trim();
       opt.textContent = h.trim();
-      columnSelect.appendChild(opt);
+      dropdown.appendChild(opt);
     });
 
-    output.innerHTML = "✅ CSV Loaded. Select a column.";
+    document.getElementById("output").innerHTML =
+      "✅ CSV Loaded<br>📊 Columns: " + headers.join(", ");
   };
+
   reader.readAsText(file);
 }
 
-// -------------------- CORE ENGINE --------------------
+// ================= CORE ANALYSIS =================
 function runAnalysis() {
-  const column = columnSelect.value;
-  if (!column) return alert("Select a column.");
+  const column = document.getElementById("columnSelect").value;
+  if (!column) return alert("Select a column first.");
 
   const headers = csvRows[0].map(h => h.trim());
   const colIndex = headers.indexOf(column);
@@ -175,129 +151,93 @@ function runAnalysis() {
     values.push(isNaN(num) ? 0 : num);
   }
 
-  if (values.length < 3) return alert("Need more data.");
+  if (values.length < 5) return alert("Dataset too small for forecasting.");
 
-  // ---------- Stats ----------
+  // -------- Stats --------
   const avg = values.reduce((a,b)=>a+b,0)/values.length;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const growth = ((values.at(-1)-values[0])/values[0])*100;
+  const trendStrength = ((values.at(-1)-values.at(-2))/avg)*100;
 
-// ===== SMART FORECAST ENGINE =====
+  // -------- Forecast Engine --------
+  const forecastSteps = 5;
 
-// Smooth values (moving average)
-function smooth(values, window = 3) {
-  return values.map((_, i, arr) => {
-    const start = Math.max(0, i - window + 1);
-    const slice = arr.slice(start, i + 1);
-    return slice.reduce((a, b) => a + b, 0) / slice.length;
-  });
-}
-
-// Weighted linear regression slope
-function weightedSlope(values) {
-  const n = values.length;
-  let sumW = 0, sumWX = 0, sumWY = 0, sumWXY = 0, sumWX2 = 0;
-
-  values.forEach((y, i) => {
-    const w = i + 1; // recent data weighted higher
-    const x = i;
-    sumW += w;
-    sumWX += w * x;
-    sumWY += w * y;
-    sumWXY += w * x * y;
-    sumWX2 += w * x * x;
+  const smoothed = values.map((_,i,arr)=>{
+    const start = Math.max(0,i-2);
+    const slice = arr.slice(start,i+1);
+    return slice.reduce((a,b)=>a+b,0)/slice.length;
   });
 
-  const numerator = sumW * sumWXY - sumWX * sumWY;
-  const denominator = sumW * sumWX2 - sumWX * sumWX;
+  const n = smoothed.length;
+  const x = smoothed.map((_,i)=>i);
+  const sumX = x.reduce((a,b)=>a+b,0);
+  const sumY = smoothed.reduce((a,b)=>a+b,0);
+  const sumXY = x.reduce((s,xi,i)=>s + xi*smoothed[i],0);
+  const sumX2 = x.reduce((s,xi)=>s + xi*xi,0);
 
-  return denominator === 0 ? 0 : numerator / denominator;
-}
+  const slope = (n*sumXY - sumX*sumY)/(n*sumX2 - sumX*sumX);
+  const intercept = (sumY - slope*sumX)/n;
 
-// Generate forecast
-function generateForecast(rawValues, steps = 3) {
-  if (rawValues.length < 3) {
-    const last = rawValues[rawValues.length - 1] || 0;
-    return Array(steps).fill(last);
+  let forecastValues = [...values];
+  let forecastLabels = [...labels];
+
+  for(let i=1;i<=forecastSteps;i++){
+    const nextX = n + i;
+    let pred = slope*nextX + intercept;
+
+    const clamp = Math.abs(avg)*0.4;
+    pred = Math.max(values.at(-1)-clamp, Math.min(values.at(-1)+clamp, pred));
+
+    forecastValues.push(Math.round(pred));
+    forecastLabels.push("F"+i);
   }
 
-  const smoothed = smooth(rawValues);
-  const slope = weightedSlope(smoothed);
-  const last = smoothed[smoothed.length - 1];
-
-  const forecasts = [];
-  for (let i = 1; i <= steps; i++) {
-    let next = last + slope * i;
-
-    // Clamp extreme jumps
-    const maxJump = Math.abs(last) * 0.35;
-    next = Math.max(last - maxJump, Math.min(last + maxJump, next));
-
-    forecasts.push(Math.round(next));
-  }
-
-  return forecasts;
-}
-
-// Confidence range
-function confidenceBands(values, forecasts) {
-  const avg = values.reduce((a, b) => a + b, 0) / values.length;
-  const variance = values.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / values.length;
+  // -------- Confidence --------
+  const variance = values.reduce((a,b)=>a + Math.pow(b-avg,2),0)/values.length;
   const deviation = Math.sqrt(variance);
 
-  const upper = forecasts.map(v => Math.round(v + deviation));
-  const lower = forecasts.map(v => Math.round(v - deviation));
+  const upper = forecastValues.map(v=>v + deviation);
+  const lower = forecastValues.map(v=>v - deviation);
 
-  return { upper, lower };
-}
-
-// ===== Run forecast =====
-const forecastSteps = 3;
-const forecastArray = generateForecast(values, forecastSteps);
-const forecast = forecastArray[forecastArray.length - 1];
-
-const bands = confidenceBands(values, forecastArray);
-const upper = bands.upper;
-const lower = bands.lower;
-
-
-
-
-  // ---------- Anomaly ----------
+  // -------- Anomaly --------
   let anomalies=[];
   values.forEach((v,i)=>{
-    if(v>avg+2*std) anomalies.push(`Row ${i+1} spike`);
-    if(v<avg-2*std) anomalies.push(`Row ${i+1} drop`);
+    if(v>avg+2*deviation) anomalies.push("Spike at row "+(i+1));
+    if(v<avg-2*deviation) anomalies.push("Drop at row "+(i+1));
   });
 
   reportData = {
-    column, avg, min, max,
+    column,
+    avg: avg.toFixed(0),
+    min: min.toFixed(0),
+    max: max.toFixed(0),
     growth: growth.toFixed(1),
+    trend: trendStrength.toFixed(1),
     forecast: forecastValues.slice(-forecastSteps),
-    confidence: std.toFixed(0),
     anomalies
   };
 
   updateDashboard(reportData);
   renderChart(forecastLabels, forecastValues, upper, lower, column);
-  output.innerHTML = "✅ AI Analysis completed.";
+
+  document.getElementById("output").innerHTML = "✅ AI Analysis Complete";
 }
 
-// -------------------- UI --------------------
+// ================= UI =================
 function updateDashboard(r){
   dashboard.style.display="block";
-  statAvg.innerHTML = "📊 Average: "+r.avg.toFixed(0);
-  statMin.innerHTML = "⬇️ Min: "+r.min.toFixed(0);
-  statMax.innerHTML = "⬆️ Max: "+r.max.toFixed(0);
+  statAvg.innerHTML = "📊 Average: "+r.avg;
+  statMin.innerHTML = "⬇ Min: "+r.min;
+  statMax.innerHTML = "⬆ Max: "+r.max;
   statGrowth.innerHTML = "📈 Growth: "+r.growth+"%";
-  statForecast.innerHTML = "🤖 Forecast: "+r.forecast.join(", ");
-  statConfidence.innerHTML = "🎯 Confidence σ: "+r.confidence;
+  statTrend.innerHTML = "⚡ Trend Strength: "+r.trend+"%";
+  statForecast.innerHTML = "🤖 Forecast (5): "+r.forecast.join(", ");
   statAnomaly.innerHTML = "🚨 Anomalies: "+(r.anomalies.length?r.anomalies.join(", "):"None");
 }
 
 function renderChart(labels,data,upper,lower,name){
-  const ctx = chart.getContext("2d");
+  const ctx = document.getElementById("chart").getContext("2d");
   if(chartInstance) chartInstance.destroy();
 
   chartInstance = new Chart(ctx,{
@@ -305,29 +245,29 @@ function renderChart(labels,data,upper,lower,name){
     data:{
       labels,
       datasets:[
-        {label:name,data,tension:.3},
-        {label:"Upper CI",data:upper,borderDash:[5,5]},
-        {label:"Lower CI",data:lower,borderDash:[5,5]}
+        {label:name,data,pointRadius:4,tension:.3},
+        {label:"Upper Confidence",data:upper,borderDash:[5,5],pointRadius:0},
+        {label:"Lower Confidence",data:lower,borderDash:[5,5],pointRadius:0}
       ]
     },
     options:{responsive:true}
   });
 }
 
-// -------------------- REPORT --------------------
+// ================= REPORT =================
 function downloadReport(){
   if(!reportData) return alert("Run analysis first.");
 
   const text = `
-INSIGHTFORGE AI REPORT
---------------------
+INSIGHTFORGE PRO REPORT
+-----------------------
 Column: ${reportData.column}
-Average: ${reportData.avg.toFixed(0)}
-Min: ${reportData.min.toFixed(0)}
-Max: ${reportData.max.toFixed(0)}
+Average: ${reportData.avg}
+Min: ${reportData.min}
+Max: ${reportData.max}
 Growth: ${reportData.growth}%
-Forecast: ${reportData.forecast.join(", ")}
-Confidence σ: ${reportData.confidence}
+Trend Strength: ${reportData.trend}%
+Forecast (5): ${reportData.forecast.join(", ")}
 Anomalies: ${reportData.anomalies.length?reportData.anomalies.join(", "):"None"}
 `;
 
@@ -337,56 +277,7 @@ Anomalies: ${reportData.anomalies.length?reportData.anomalies.join(", "):"None"}
   a.download="insightforge_report.txt";
   a.click();
 }
-  let deferredPrompt;
-
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  document.getElementById("installBtn").style.display = "inline-block";
-});
-
-document.getElementById("installBtn").addEventListener("click", async () => {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  deferredPrompt = null;
-});
-  // =========================
-// Auto-load CSV when selected
-// =========================
-document.getElementById("fileInput").addEventListener("change", function () {
-  const file = this.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = function (e) {
-    const text = e.target.result.trim();
-    const rows = text.split("\n").map(r => r.split(","));
-    const headers = rows[0];
-
-    const dropdown = document.getElementById("columnSelect");
-    dropdown.innerHTML = `<option value="">Select column...</option>`;
-
-    headers.forEach(h => {
-      const opt = document.createElement("option");
-      opt.value = h.trim();
-      opt.textContent = h.trim();
-      dropdown.appendChild(opt);
-    });
-
-    document.getElementById("output").innerHTML =
-      "✅ CSV loaded<br>📊 Columns detected: " + headers.join(", ");
-  };
-
-  reader.readAsText(file);
-});
 </script>
 
 </body>
-</html>      
-
-
-
-
-    
+</html>
