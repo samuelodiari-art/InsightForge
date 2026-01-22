@@ -1,276 +1,270 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>InsightForge</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0f172a;
-      color: white;
-      text-align: center;
-      padding: 20px;
-    }
-    h1 {
-      color: #22c55e;
-    }
-    button {
-      padding: 15px 25px;
-      margin: 10px;
-      font-size: 16px;
-      border-radius: 8px;
-      border: none;
-      cursor: pointer;
-    }
-    .run { background: #22c55e; color: black; }
-    .upload { background: #3b82f6; color: white; }
-    .report { background: #f59e0b; color: black; }
+<meta charset="UTF-8">
+<title>InsightForge AI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    #output {
-      background: #020617;
-      margin-top: 20px;
-      padding: 15px;
-      border-radius: 10px;
-      min-height: 120px;
-      text-align: left;
-      font-size: 14px;
-      overflow: auto;
-      .dashboard {
-  background: rgba(255,255,255,0.05);
-  border-radius: 12px;
-  padding: 15px;
-  margin-top: 15px;
-  text-align: left;
-  font-size: 14px;
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22c55e">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+  font-family: system-ui, Arial;
+  background:#020617;
+  color:white;
+  text-align:center;
+  padding:15px;
+}
+h1 { color:#22c55e; }
+
+button {
+  padding:14px 22px;
+  margin:8px;
+  border-radius:10px;
+  border:none;
+  font-size:16px;
+  cursor:pointer;
+}
+.run { background:#22c55e; color:black; }
+.report { background:#f59e0b; color:black; }
+.install { background:#0ea5e9; color:black; display:none; }
+
+#output {
+  background:#020617;
+  padding:12px;
+  border-radius:10px;
+  margin-top:15px;
+  text-align:left;
+  font-size:14px;
 }
 
-.stat {
-  margin: 6px 0;
-             }
-    }
-  </style>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+.dashboard {
+  background:rgba(255,255,255,0.06);
+  padding:12px;
+  border-radius:12px;
+  margin-top:15px;
+  text-align:left;
+}
+
+.stat { margin:6px 0; }
+
+canvas { max-width:100%; margin-top:20px; }
+</style>
 </head>
+
 <body>
 
-<h1>🚀 InsightForge Web App</h1>
-<p>Upload your CSV and run instant analysis.</p>
+<h1>🚀 InsightForge AI</h1>
+<p>Upload CSV → Run AI Forecast → Install as App</p>
 
 <input type="file" id="fileInput" accept=".csv"><br><br>
-  
+
 <select id="columnSelect">
   <option value="">Select column...</option>
-</select>
-<br><br>
-<button class="run" onclick="runApp()">Run InsightForge</button>
+</select><br><br>
+
+<button class="run" onclick="runAnalysis()">Run AI Analysis</button>
 <button class="report" onclick="downloadReport()">Download Report</button>
+<button class="install" id="installBtn">Install App</button>
 
-<div id="output">Waiting for data...</div>
+<div id="output">Waiting for CSV...</div>
 
+<canvas id="chart"></canvas>
 
-  
-  
-
-  <canvas id="chart" style="max-width:100%; margin-top:20px;"></canvas>
-  <div class="dashboard" id="dashboard">
+<div id="dashboard" class="dashboard" style="display:none;">
   <h3>📊 Live Insights</h3>
   <div class="stat" id="statAvg"></div>
   <div class="stat" id="statMin"></div>
   <div class="stat" id="statMax"></div>
   <div class="stat" id="statGrowth"></div>
-  <div class="stat" id="statTrend"></div>
+  <div class="stat" id="statForecast"></div>
+  <div class="stat" id="statConfidence"></div>
   <div class="stat" id="statAnomaly"></div>
-  </div>
-  
+</div>
 
 <script>
+let csvRows = [];
 let chartInstance = null;
+let reportData = null;
+let deferredPrompt = null;
 
-function runApp() {
-  alert("Run button clicked ✅");
-  const file = document.getElementById("fileInput").files[0];
-  const selectedColumn = document.getElementById("columnSelect").value;
+// -------------------- PWA INSTALL --------------------
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById("installBtn").style.display = "inline-block";
+});
 
-  if (!file) {
-    alert("Please upload a CSV file first.");
-    return;
-  }
-  alert("File detected ✅");
+document.getElementById("installBtn").onclick = async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt = null;
+};
+
+// -------------------- CSV LOAD --------------------
+document.getElementById("fileInput").addEventListener("change", loadCSV);
+
+function loadCSV() {
+  const file = fileInput.files[0];
+  if (!file) return;
 
   const reader = new FileReader();
-
-  reader.onload = function (e) {
-    alert("File loaded into memory ✅");
-    alert("First 100 chars:\n" + e.target.result.slice(0,100));
+  reader.onload = e => {
     const text = e.target.result.trim();
-    const rows = text.split("\n").map(r => r.split(","));
+    csvRows = text.split("\n").map(r => r.split(","));
+    const headers = csvRows[0];
 
-    const headers = rows[0];
-    // Populate dropdown with CSV headers
-const dropdown = document.getElementById("columnSelect");
-dropdown.innerHTML = '<option value="">Select column...</option>';
-
-headers.forEach(h => {
-  const option = document.createElement("option");
-  option.value = h.trim();
-  option.textContent = h.trim();
-  dropdown.appendChild(option);
-});
-    const colIndex = headers.map(h => h.trim()).indexOf(selectedColumn.trim());
-
-    if (colIndex === -1) {
-      alert("Column not found in CSV.");
-      return;
-    }
-
-    let labels = [];
-    let values = [];
-
-    for (let i = 1; i < rows.length; i++) {
-      labels.push("Row " + i);
-
-      let raw = rows[i][colIndex] || "0";
-      raw = raw.replace(/[^0-9.-]/g, "");
-      const num = parseFloat(raw);
-
-      values.push(isNaN(num) ? 0 : num);
-    }
-
-    // ===== Advanced Analytics Engine =====
-
-// Basic stats
-const sum = values.reduce((a,b)=>a+b,0);
-const avg = sum / values.length;
-const min = Math.min(...values);
-const max = Math.max(...values);
-
-// Growth %
-const first = values[0];
-const last = values[values.length - 1];
-const growthPct = ((last - first) / first) * 100;
-
-
-
-
-
-// Trend strength
-const trendDelta = last - values[values.length - 2];
-const trendStrength = Math.abs(trendDelta) / avg * 100;
-
-// Anomaly detection
-let anomalies = [];
-values.slice(0,-1).forEach((v,i)=>{
-  if(v > avg * 1.4) anomalies.push(`Row ${i+1} spike`);
-  if(v < avg * 0.6) anomalies.push(`Row ${i+1} drop`);
-});
-
-// Store report data globally
-window._reportData = {
-  column: selectedColumn,
-  rows: values.length - 1,
-  lastValue: last,
-  forecast: forecast,
-  trend: trendDelta,
-  avg: Math.round(avg),
-  min,
-  max,
-  growthPct: growthPct.toFixed(1),
-  trendStrength: trendStrength.toFixed(1),
-  anomalies
-};
-    // Update dashboard UI
-const dash = document.getElementById("dashboard");
-dash.style.display = "block";
-dash.style.marginTop = "20px";
-dash.scrollIntoView({ behavior: "smooth" });
-document.getElementById("statAvg").innerHTML = "📊 Average: " + window._reportData.avg;
-document.getElementById("statMin").innerHTML = "⬇️ Min: " + window._reportData.min;
-document.getElementById("statMax").innerHTML = "⬆️ Max: " + window._reportData.max;
-document.getElementById("statGrowth").innerHTML = "📈 Growth: " + window._reportData.growthPct + "%";
-document.getElementById("statTrend").innerHTML = "⚡ Trend Strength: " + window._reportData.trendStrength + "%";
-document.getElementById("statAnomaly").innerHTML = 
-  "🚨 Anomalies: " + (window._reportData.anomalies.length ? window._reportData.anomalies.join(", ") : "None");
-
-    document.getElementById("output").innerHTML =
-      "✅ File loaded successfully<br>" +
-      "📊 Rows detected: " + values.length + "<br>" +
-      "🔮 Forecast generated";
-
-    const ctx = document.getElementById("chart").getContext("2d");
-
-    if (window.chartInstance) {
-      window.chartInstance.destroy();
-    }
-
-    window.chartInstance = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: [
-  {
-    label: selectedColumn,
-    data: values,
-    tension: 0.3,
-    fill: false
-  },
-  
-]
-      },
-      options: {
-        responsive: true
-      }
+    columnSelect.innerHTML = '<option value="">Select column...</option>';
+    headers.forEach(h => {
+      const opt = document.createElement("option");
+      opt.value = h.trim();
+      opt.textContent = h.trim();
+      columnSelect.appendChild(opt);
     });
+
+    output.innerHTML = "✅ CSV Loaded. Select a column.";
+  };
+  reader.readAsText(file);
+}
+
+// -------------------- CORE ENGINE --------------------
+function runAnalysis() {
+  const column = columnSelect.value;
+  if (!column) return alert("Select a column.");
+
+  const headers = csvRows[0].map(h => h.trim());
+  const colIndex = headers.indexOf(column);
+  if (colIndex === -1) return alert("Column not found.");
+
+  let labels = [];
+  let values = [];
+
+  for (let i = 1; i < csvRows.length; i++) {
+    labels.push("Row " + i);
+    let raw = (csvRows[i][colIndex] || "").replace(/[^0-9.-]/g,"");
+    const num = parseFloat(raw);
+    values.push(isNaN(num) ? 0 : num);
+  }
+
+  if (values.length < 3) return alert("Need more data.");
+
+  // ---------- Stats ----------
+  const avg = values.reduce((a,b)=>a+b,0)/values.length;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const growth = ((values.at(-1)-values[0])/values[0])*100;
+
+  // ---------- Linear Regression Forecast ----------
+  const x = values.map((_,i)=>i+1);
+  const y = values;
+
+  const n = x.length;
+  const sumX = x.reduce((a,b)=>a+b,0);
+  const sumY = y.reduce((a,b)=>a+b,0);
+  const sumXY = x.reduce((s,xi,i)=>s + xi*y[i],0);
+  const sumX2 = x.reduce((s,xi)=>s + xi*xi,0);
+
+  const slope = (n*sumXY - sumX*sumY)/(n*sumX2 - sumX*sumX);
+  const intercept = (sumY - slope*sumX)/n;
+
+  const forecastSteps = 3;
+  let forecastValues = [...values];
+  let forecastLabels = [...labels];
+
+  for(let i=1;i<=forecastSteps;i++){
+    const nextX = n + i;
+    const pred = slope*nextX + intercept;
+    forecastValues.push(Math.round(pred));
+    forecastLabels.push("F"+i);
+  }
+
+  // ---------- Confidence ----------
+  const std = Math.sqrt(values.map(v=>(v-avg)**2).reduce((a,b)=>a+b)/values.length);
+  const upper = forecastValues.map(v=>v + std);
+  const lower = forecastValues.map(v=>v - std);
+
+  // ---------- Anomaly ----------
+  let anomalies=[];
+  values.forEach((v,i)=>{
+    if(v>avg+2*std) anomalies.push(`Row ${i+1} spike`);
+    if(v<avg-2*std) anomalies.push(`Row ${i+1} drop`);
+  });
+
+  reportData = {
+    column, avg, min, max,
+    growth: growth.toFixed(1),
+    forecast: forecastValues.slice(-forecastSteps),
+    confidence: std.toFixed(0),
+    anomalies
   };
 
-  reader.readAsText(file);
-  }
-function downloadReport() {
-  if (!window._reportData) {
-    alert("Run analysis first before downloading report.");
-    return;
-  }
+  updateDashboard(reportData);
+  renderChart(forecastLabels, forecastValues, upper, lower, column);
+  output.innerHTML = "✅ AI Analysis completed.";
+}
 
-  const r = window._reportData;
+// -------------------- UI --------------------
+function updateDashboard(r){
+  dashboard.style.display="block";
+  statAvg.innerHTML = "📊 Average: "+r.avg.toFixed(0);
+  statMin.innerHTML = "⬇️ Min: "+r.min.toFixed(0);
+  statMax.innerHTML = "⬆️ Max: "+r.max.toFixed(0);
+  statGrowth.innerHTML = "📈 Growth: "+r.growth+"%";
+  statForecast.innerHTML = "🤖 Forecast: "+r.forecast.join(", ");
+  statConfidence.innerHTML = "🎯 Confidence σ: "+r.confidence;
+  statAnomaly.innerHTML = "🚨 Anomalies: "+(r.anomalies.length?r.anomalies.join(", "):"None");
+}
 
-  const direction =
-    r.trend > 0 ? "Upward 📈" :
-    r.trend < 0 ? "Downward 📉" :
-    "Stable ➖";
+function renderChart(labels,data,upper,lower,name){
+  const ctx = chart.getContext("2d");
+  if(chartInstance) chartInstance.destroy();
 
-  const report = `
-INSIGHTFORGE ANALYSIS REPORT
-===========================
+  chartInstance = new Chart(ctx,{
+    type:"line",
+    data:{
+      labels,
+      datasets:[
+        {label:name,data,tension:.3},
+        {label:"Upper CI",data:upper,borderDash:[5,5]},
+        {label:"Lower CI",data:lower,borderDash:[5,5]}
+      ]
+    },
+    options:{responsive:true}
+  });
+}
 
-Selected Column : ${r.column}
-Total Rows      : ${r.rows}
-Last Value       : ${r.lastValue}
-Forecast Value   : ${r.forecast}
-Trend Direction  : ${direction}
-Trend Delta       : ${r.trend}
+// -------------------- REPORT --------------------
+function downloadReport(){
+  if(!reportData) return alert("Run analysis first.");
 
-Average Value     : ${r.avg}
-Minimum Value     : ${r.min}
-Maximum Value     : ${r.max}
-Growth Percentage : ${r.growthPct}%
-Trend Strength    : ${r.trendStrength}%
-Anomalies         : ${r.anomalies.length ? r.anomalies.join(", ") : "None"}
-
-Interpretation:
-The selected data shows a ${direction.toLowerCase()} trend.
-Growth rate indicates how much the value has changed from the first to the latest entry.
-Trend strength measures how strong recent movement is compared to the overall average.
-
-Generated by InsightForge Web App
+  const text = `
+INSIGHTFORGE AI REPORT
+--------------------
+Column: ${reportData.column}
+Average: ${reportData.avg.toFixed(0)}
+Min: ${reportData.min.toFixed(0)}
+Max: ${reportData.max.toFixed(0)}
+Growth: ${reportData.growth}%
+Forecast: ${reportData.forecast.join(", ")}
+Confidence σ: ${reportData.confidence}
+Anomalies: ${reportData.anomalies.length?reportData.anomalies.join(", "):"None"}
 `;
 
-  const blob = new Blob([report], { type: "text/plain" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "insightforge_report.txt";
-  link.click();
-  }
-
+  const blob = new Blob([text],{type:"text/plain"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download="insightforge_report.txt";
+  a.click();
+}
 </script>
 
 </body>
-</html>
+</html>      
+
+
+
+
+    
