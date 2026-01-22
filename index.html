@@ -55,6 +55,8 @@
 
 <script>
 
+let chartInstance = null;
+
 function runApp() {
   const file = document.getElementById("fileInput").files[0];
   if (!file) {
@@ -64,19 +66,52 @@ function runApp() {
 
   const reader = new FileReader();
   reader.onload = function(e) {
-    const text = e.target.result;
-    const lines = text.split("\n").length;
+    const text = e.target.result.trim();
+    const rows = text.split("\n");
+
+    let labels = [];
+    let values = [];
+
+    // Skip header row
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i].split(",");
+      labels.push("Row " + i);
+      values.push(parseFloat(cols[1]) || 0);
+    }
 
     document.getElementById("output").innerHTML =
       "✅ File loaded successfully<br>" +
-      "📊 Rows detected: " + lines + "<br>" +
+      "📊 Rows detected: " + (rows.length - 1) + "<br>" +
       "🤖 AI Analysis completed<br>" +
       "📈 Forecast generated<br>" +
       "📄 Report ready for download";
+
+    const ctx = document.getElementById("chart").getContext("2d");
+
+    if (chartInstance) {
+      chartInstance.destroy();
+    }
+
+    chartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "CSV Values",
+          data: values,
+          fill: false,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true
+      }
+    });
   };
 
   reader.readAsText(file);
-}
+        }
+
   
 
 function downloadReport() {
