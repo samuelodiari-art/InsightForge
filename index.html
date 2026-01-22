@@ -145,23 +145,7 @@ const first = values[0];
 const last = values[values.length - 1];
 const growthPct = ((last - first) / first) * 100;
 
-// ===== Advanced Forecast Engine =====
 
-// Calculate trend slope (simple linear growth)
-const slope = (values[values.length - 1] - values[0]) / values.length;
-
-// Generate 3-step forecast
-const forecastSteps = 3;
-let forecastValues = [];
-
-let lastValue = values[values.length - 1];
-
-for (let i = 1; i <= forecastSteps; i++) {
-  const next = Math.round(lastValue + slope * i);
-  forecastValues.push(next);
-  labels.push("Forecast " + i);
-  values.push(next);
-}
 
 // Confidence range (±10%)
 const confidenceUpper = forecastValues.map(v => Math.round(v * 1.10));
