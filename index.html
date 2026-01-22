@@ -89,8 +89,13 @@ headers.forEach((h, index) => {
 
 for (let i = 1; i < rows.length; i++) {
   const cols = rows[i].split(",");
-  labels.push("Row " + i);
-  values.push(parseFloat(cols[selectedIndex]) || 0);
+
+  // Use first column as label (example: Month)
+  labels.push(cols[0]);
+
+  // Selected column as numeric value
+  const num = parseFloat(cols[selectedIndex]);
+  values.push(isNaN(num) ? 0 : num);
 }
 
     // Forecast (simple trend)
