@@ -72,6 +72,15 @@
   <div id="stats"></div>
 </div>
   <canvas id="chart" style="max-width:100%; margin-top:20px;"></canvas>
+  <div class="dashboard" id="dashboard" style="display:none;">
+  <h3>📊 Live Insights</h3>
+  <div class="stat" id="statAvg"></div>
+  <div class="stat" id="statMin"></div>
+  <div class="stat" id="statMax"></div>
+  <div class="stat" id="statGrowth"></div>
+  <div class="stat" id="statTrend"></div>
+  <div class="stat" id="statAnomaly"></div>
+  </div>
   
 
 <script>
@@ -171,6 +180,15 @@ window._reportData = {
   trendStrength: trendStrength.toFixed(1),
   anomalies
 };
+    // Update dashboard UI
+document.getElementById("dashboard").style.display = "block";
+document.getElementById("statAvg").innerHTML = "📊 Average: " + window._reportData.avg;
+document.getElementById("statMin").innerHTML = "⬇️ Min: " + window._reportData.min;
+document.getElementById("statMax").innerHTML = "⬆️ Max: " + window._reportData.max;
+document.getElementById("statGrowth").innerHTML = "📈 Growth: " + window._reportData.growthPct + "%";
+document.getElementById("statTrend").innerHTML = "⚡ Trend Strength: " + window._reportData.trendStrength + "%";
+document.getElementById("statAnomaly").innerHTML = 
+  "🚨 Anomalies: " + (window._reportData.anomalies.length ? window._reportData.anomalies.join(", ") : "None");
 
     document.getElementById("output").innerHTML =
       "✅ File loaded successfully<br>" +
