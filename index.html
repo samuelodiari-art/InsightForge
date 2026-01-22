@@ -92,17 +92,47 @@ function runApp() {
       chartInstance.destroy();
     }
 
-    chartInstance = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: [{
-          label: "CSV Values",
-          data: values,
-          fill: false,
-          tension: 0.3
-        }]
+    // --- Forecast Calculation ---
+const lastValue = values[values.length - 1];
+const prevValue = values[values.length - 2] || lastValue;
+const trend = lastValue - prevValue;
+
+const forecast = lastValue + trend;
+labels.push("Forecast");
+values.push(forecast);
+
+// Confidence range (±10%)
+const upper = values.map(v => v * 1.1);
+const lower = values.map(v => v * 0.9);
+
+// --- Chart Render ---
+const ctx = document.getElementById("chart").getContext("2d");
+
+if (chartInstance) chartInstance.destroy();
+
+chartInstance = new Chart(ctx, {
+  type: "line",
+  data: {
+    labels: labels,
+    datasets: [
+      {
+        label: "Actual + Forecast",
+        data: values,
+        tension: 0.3
       },
+      {
+        label: "Upper Confidence",
+        data: upper,
+        borderDash: [5,5]
+      },
+      {
+        label: "Lower Confidence",
+        data: lower,
+        borderDash: [5,5]
+      }
+    ]
+  }
+});
       options: {
         responsive: true
       }
