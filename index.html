@@ -145,15 +145,27 @@ const first = values[0];
 const last = values[values.length - 1];
 const growthPct = ((last - first) / first) * 100;
 
-// Moving average forecast
-const windowSize = Math.min(3, values.length);
-const recent = values.slice(-windowSize);
-const movingAvg = recent.reduce((a,b)=>a+b,0) / windowSize;
-const forecast = Math.round(movingAvg);
+// ===== Advanced Forecast Engine =====
 
-// Add forecast to chart
-labels.push("Forecast");
-values.push(forecast);
+// Calculate trend slope (simple linear growth)
+const slope = (values[values.length - 1] - values[0]) / values.length;
+
+// Generate 3-step forecast
+const forecastSteps = 3;
+let forecastValues = [];
+
+let lastValue = values[values.length - 1];
+
+for (let i = 1; i <= forecastSteps; i++) {
+  const next = Math.round(lastValue + slope * i);
+  forecastValues.push(next);
+  labels.push("Forecast " + i);
+  values.push(next);
+}
+
+// Confidence range (±10%)
+const confidenceUpper = forecastValues.map(v => Math.round(v * 1.10));
+const confidenceLower = forecastValues.map(v => Math.round(v * 0.90));
 
 // Trend strength
 const trendDelta = last - values[values.length - 2];
@@ -208,12 +220,26 @@ document.getElementById("statAnomaly").innerHTML =
       type: "line",
       data: {
         labels: labels,
-        datasets: [{
-          label: selectedColumn,
-          data: values,
-          tension: 0.3,
-          fill: false
-        }]
+        datasets: [
+  {
+    label: selectedColumn,
+    data: values,
+    tension: 0.3,
+    fill: false
+  },
+  {
+    label: "Upper Confidence",
+    data: new Array(values.length - forecastSteps).fill(null).concat(confidenceUpper),
+    borderDash: [5,5],
+    fill: false
+  },
+  {
+    label: "Lower Confidence",
+    data: new Array(values.length - forecastSteps).fill(null).concat(confidenceLower),
+    borderDash: [5,5],
+    fill: false
+  }
+]
       },
       options: {
         responsive: true
