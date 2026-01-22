@@ -159,14 +159,7 @@ window._reportData = {
       "✅ File loaded successfully<br>" +
       "📊 Rows detected: " + values.length + "<br>" +
       "🔮 Forecast generated";
-// Store data for report download
-window._reportData = {
-  column: selectedColumn,
-  rows: values.length,
-  lastValue: last,
-  forecast: forecast,
-  trend: forecast - last
-};
+
     const ctx = document.getElementById("chart").getContext("2d");
 
     if (window.chartInstance) {
