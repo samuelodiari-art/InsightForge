@@ -157,34 +157,90 @@ function runAnalysis() {
   const max = Math.max(...values);
   const growth = ((values.at(-1)-values[0])/values[0])*100;
 
-  // ---------- Linear Regression Forecast ----------
-  const x = values.map((_,i)=>i+1);
-  const y = values;
+// ===== SMART FORECAST ENGINE =====
 
-  const n = x.length;
-  const sumX = x.reduce((a,b)=>a+b,0);
-  const sumY = y.reduce((a,b)=>a+b,0);
-  const sumXY = x.reduce((s,xi,i)=>s + xi*y[i],0);
-  const sumX2 = x.reduce((s,xi)=>s + xi*xi,0);
+// Smooth values (moving average)
+function smooth(values, window = 3) {
+  return values.map((_, i, arr) => {
+    const start = Math.max(0, i - window + 1);
+    const slice = arr.slice(start, i + 1);
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
+  });
+}
 
-  const slope = (n*sumXY - sumX*sumY)/(n*sumX2 - sumX*sumX);
-  const intercept = (sumY - slope*sumX)/n;
+// Weighted linear regression slope
+function weightedSlope(values) {
+  const n = values.length;
+  let sumW = 0, sumWX = 0, sumWY = 0, sumWXY = 0, sumWX2 = 0;
 
-  const forecastSteps = 3;
-  let forecastValues = [...values];
-  let forecastLabels = [...labels];
+  values.forEach((y, i) => {
+    const w = i + 1; // recent data weighted higher
+    const x = i;
+    sumW += w;
+    sumWX += w * x;
+    sumWY += w * y;
+    sumWXY += w * x * y;
+    sumWX2 += w * x * x;
+  });
 
-  for(let i=1;i<=forecastSteps;i++){
-    const nextX = n + i;
-    const pred = slope*nextX + intercept;
-    forecastValues.push(Math.round(pred));
-    forecastLabels.push("F"+i);
+  const numerator = sumW * sumWXY - sumWX * sumWY;
+  const denominator = sumW * sumWX2 - sumWX * sumWX;
+
+  return denominator === 0 ? 0 : numerator / denominator;
+}
+
+// Generate forecast
+function generateForecast(rawValues, steps = 3) {
+  if (rawValues.length < 3) {
+    const last = rawValues[rawValues.length - 1] || 0;
+    return Array(steps).fill(last);
   }
 
-  // ---------- Confidence ----------
-  const std = Math.sqrt(values.map(v=>(v-avg)**2).reduce((a,b)=>a+b)/values.length);
-  const upper = forecastValues.map(v=>v + std);
-  const lower = forecastValues.map(v=>v - std);
+  const smoothed = smooth(rawValues);
+  const slope = weightedSlope(smoothed);
+  const last = smoothed[smoothed.length - 1];
+
+  const forecasts = [];
+  for (let i = 1; i <= steps; i++) {
+    let next = last + slope * i;
+
+    // Clamp extreme jumps
+    const maxJump = Math.abs(last) * 0.35;
+    next = Math.max(last - maxJump, Math.min(last + maxJump, next));
+
+    forecasts.push(Math.round(next));
+  }
+
+  return forecasts;
+}
+
+// Confidence range
+function confidenceBands(values, forecasts) {
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / values.length;
+  const deviation = Math.sqrt(variance);
+
+  const upper = forecasts.map(v => Math.round(v + deviation));
+  const lower = forecasts.map(v => Math.round(v - deviation));
+
+  return { upper, lower };
+}
+
+// ===== Run forecast =====
+const forecastSteps = 3;
+const forecastArray = generateForecast(values, forecastSteps);
+const forecast = forecastArray[forecastArray.length - 1];
+
+const bands = confidenceBands(values, forecastArray);
+const upper = bands.upper;
+const lower = bands.lower;
+
+// Extend chart arrays
+forecastArray.forEach((v, i) => {
+  forecastValues.push(v);
+  forecastLabels.push("F" + (i + 1));
+});
+
 
   // ---------- Anomaly ----------
   let anomalies=[];
