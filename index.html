@@ -181,7 +181,10 @@ window._reportData = {
   anomalies
 };
     // Update dashboard UI
-document.getElementById("dashboard").style.display = "block";
+const dash = document.getElementById("dashboard");
+dash.style.display = "block";
+dash.style.marginTop = "20px";
+dash.scrollIntoView({ behavior: "smooth" });
 document.getElementById("statAvg").innerHTML = "📊 Average: " + window._reportData.avg;
 document.getElementById("statMin").innerHTML = "⬇️ Min: " + window._reportData.min;
 document.getElementById("statMax").innerHTML = "⬆️ Max: " + window._reportData.max;
