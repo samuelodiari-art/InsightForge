@@ -106,21 +106,54 @@ headers.forEach(h => {
       values.push(isNaN(num) ? 0 : num);
     }
 
-    // Simple forecast
-    const last = values[values.length - 1] || 0;
-const prev = values[values.length - 2] || last;
-const trend = last - prev;
-const forecast = last + trend;
-    window._reportData = {
+    // ===== Advanced Analytics Engine =====
+
+// Basic stats
+const sum = values.reduce((a,b)=>a+b,0);
+const avg = sum / values.length;
+const min = Math.min(...values);
+const max = Math.max(...values);
+
+// Growth %
+const first = values[0];
+const last = values[values.length - 1];
+const growthPct = ((last - first) / first) * 100;
+
+// Moving average forecast
+const windowSize = Math.min(3, values.length);
+const recent = values.slice(-windowSize);
+const movingAvg = recent.reduce((a,b)=>a+b,0) / windowSize;
+const forecast = Math.round(movingAvg);
+
+// Add forecast to chart
+labels.push("Forecast");
+values.push(forecast);
+
+// Trend strength
+const trendDelta = last - values[values.length - 2];
+const trendStrength = Math.abs(trendDelta) / avg * 100;
+
+// Anomaly detection
+let anomalies = [];
+values.slice(0,-1).forEach((v,i)=>{
+  if(v > avg * 1.4) anomalies.push(`Row ${i+1} spike`);
+  if(v < avg * 0.6) anomalies.push(`Row ${i+1} drop`);
+});
+
+// Store report data globally
+window._reportData = {
   column: selectedColumn,
-  rows: values.length,
+  rows: values.length - 1,
   lastValue: last,
   forecast: forecast,
-  trend: trend
+  trend: trendDelta,
+  avg: Math.round(avg),
+  min,
+  max,
+  growthPct: growthPct.toFixed(1),
+  trendStrength: trendStrength.toFixed(1),
+  anomalies
 };
-
-    labels.push("Forecast");
-    values.push(forecast);
 
     document.getElementById("output").innerHTML =
       "✅ File loaded successfully<br>" +
