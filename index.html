@@ -101,6 +101,7 @@ function runApp() {
 
   reader.onload = function (e) {
     alert("File loaded into memory ✅");
+    alert("First 100 chars:\n" + e.target.result.slice(0,100));
     const text = e.target.result.trim();
     const rows = text.split("\n").map(r => r.split(","));
 
