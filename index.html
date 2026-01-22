@@ -3,64 +3,83 @@
 <head>
 <meta charset="UTF-8">
 <title>PARAGON ANALYTICS</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- Libraries -->
+<!-- Chart + PDF libs -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-body{
+body {
   font-family: system-ui, Arial;
-  background: linear-gradient(135deg,#3b1d5f,#7a5c00);
-  color:white;
-  text-align:center;
-  padding:18px;
+  background: linear-gradient(135deg, #2a003f, #5a2d82, #c9a227);
+  color: white;
+  text-align: center;
+  padding: 14px;
 }
 
-h1{
-  letter-spacing:2px;
-  color:#ffd54a;
+h1 {
+  letter-spacing: 2px;
+  color: #ffd700;
 }
 
-button{
-  border:none;
-  padding:14px 22px;
-  margin:8px;
-  border-radius:10px;
-  font-weight:600;
-  cursor:pointer;
+.tagline {
+  opacity: 0.9;
+  margin-bottom: 15px;
 }
 
-.load{background:#5e35b1;color:white;}
-.run{background:#ffd600;color:black;}
-.pdf{background:#4527a0;color:white;}
-
-select,input{padding:10px;border-radius:8px;margin:6px;}
-
-.panel{
-  background:rgba(255,255,255,0.08);
-  border-radius:14px;
-  padding:14px;
-  margin-top:14px;
+button {
+  padding: 14px 22px;
+  border-radius: 10px;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  margin: 6px;
 }
 
-canvas{max-width:100%;margin-top:20px;}
+.load { background: #5e2ea5; color: white; }
+.run { background: gold; color: black; }
+.pdf { background: #3b1c64; color: white; }
 
-.stat{margin:5px 0;}
+select, input {
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  margin: 6px;
+}
+
+.panel {
+  background: rgba(0,0,0,0.35);
+  padding: 12px;
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+canvas { max-width: 100%; margin-top: 15px; }
+
+.stat { margin: 4px 0; }
+
+footer {
+  margin-top: 20px;
+  opacity: 0.6;
+  font-size: 12px;
+}
 </style>
 </head>
 
 <body>
 
 <h1>PARAGON ANALYTICS</h1>
-<p>Smart Business Intelligence & Forecasting</p>
+<div class="tagline">Smart Business Intelligence & Forecasting</div>
 
-<input type="file" id="fileInput" accept=".csv"><br>
-<button class="load" onclick="loadCSV()">Load CSV</button><br>
+<input type="file" id="fileInput" accept=".csv">
+<br>
+<button class="load" onclick="loadCSV()">Load CSV</button>
 
-<select id="columnSelect"></select><br>
+<br>
+<select id="columnSelect"></select>
 
+<br>
 <button class="run" onclick="runAnalysis()">Run AI Analysis</button>
 <button class="pdf" onclick="downloadPDF()">Download Report PDF</button>
 
@@ -68,208 +87,204 @@ canvas{max-width:100%;margin-top:20px;}
 
 <canvas id="chart"></canvas>
 
-<div id="insights" class="panel"></div>
+<div id="insights" class="panel" style="display:none;"></div>
+
+<footer>
+PARAGON ANALYTICS — Automated Forecast Intelligence
+</footer>
 
 <script>
-let csvRows=[], chart=null, reportData=null;
+let rawCSV = "";
+let headers = [];
+let rows = [];
+let chart = null;
+let reportData = null;
 
+// ---------------- LOAD CSV ----------------
 function loadCSV(){
-  const file=document.getElementById("fileInput").files[0];
-  if(!file){ alert("Select CSV first"); return; }
+  const file = document.getElementById("fileInput").files[0];
+  if(!file){ alert("Please select a CSV file."); return; }
 
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const text=e.target.result.trim();
-    csvRows=text.split("\n").map(r=>r.split(","));
-    const headers=csvRows[0];
-
-    const sel=document.getElementById("columnSelect");
-    sel.innerHTML="";
-    headers.forEach(h=>{
-      const opt=document.createElement("option");
-      opt.value=h.trim();
-      opt.textContent=h.trim();
-      sel.appendChild(opt);
-    });
-
-    document.getElementById("status").innerText="CSV Loaded ✔";
+  const reader = new FileReader();
+  reader.onload = e => {
+    rawCSV = e.target.result.trim();
+    parseCSV();
   };
   reader.readAsText(file);
 }
 
-function cleanNumber(raw){
-  if(!raw) return NaN;
-  raw = raw.replace(/[^0-9.-]/g,"");   // remove commas, currency, spaces
-  return parseFloat(raw);
+function parseCSV(){
+  rows = rawCSV.split("\n").map(r => r.split(","));
+  headers = rows[0].map(h => h.trim());
+
+  const dropdown = document.getElementById("columnSelect");
+  dropdown.innerHTML = "";
+  headers.forEach(h=>{
+    const opt = document.createElement("option");
+    opt.value = h;
+    opt.textContent = h;
+    dropdown.appendChild(opt);
+  });
+
+  document.getElementById("status").innerHTML = "CSV Loaded Successfully ✅";
 }
 
-/* --- Seasonal Detection --- */
-function detectSeasonLength(n){
-  if(n>=24) return 12;
-  if(n>=12) return 6;
-  if(n>=8) return 4;
-  return 1;
+// ---------------- CLEAN NUMBER ----------------
+function cleanNumber(v){
+  if(!v) return NaN;
+  return parseFloat(
+    v.replace(/[^0-9.-]/g,"").trim()
+  );
 }
 
+// ---------------- ANALYSIS ----------------
 function runAnalysis(){
-  const colName=document.getElementById("columnSelect").value;
-  const idx=csvRows[0].indexOf(colName);
-
-  let values=[], labels=[];
-
-  for(let i=1;i<csvRows.length;i++){
-    const v=cleanNumber(csvRows[i][idx]);
-    if(!isNaN(v)){
-      values.push(v);
-      labels.push("Row "+i);
-    }
+  const column = document.getElementById("columnSelect").value;
+  const colIndex = headers.indexOf(column);
+  if(colIndex === -1){
+    alert("Invalid column selected.");
+    return;
   }
 
-  if(values.length<2){
+  let values = [];
+  for(let i=1;i<rows.length;i++){
+    const num = cleanNumber(rows[i][colIndex]);
+    if(!isNaN(num) && isFinite(num)) values.push(num);
+  }
+
+  if(values.length < 6){
     alert("Not enough valid numeric data found.");
     return;
   }
 
-  /* ---- Basic Stats ---- */
-  const sum=values.reduce((a,b)=>a+b,0);
-  const avg=sum/values.length;
-  const min=Math.min(...values);
-  const max=Math.max(...values);
-  const growth=((values.at(-1)-values[0])/values[0])*100;
+  // Stats
+  const avg = values.reduce((a,b)=>a+b,0)/values.length;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const growth = ((values.at(-1)-values[0])/values[0])*100;
 
-  /* ---- Trend Forecast (Linear Regression) ---- */
-  const x=values.map((_,i)=>i+1);
-  const n=x.length;
-  const sumX=x.reduce((a,b)=>a+b,0);
-  const sumY=values.reduce((a,b)=>a+b,0);
-  const sumXY=x.reduce((s,xi,i)=>s+xi*values[i],0);
-  const sumX2=x.reduce((s,xi)=>s+xi*xi,0);
-
-  const slope=(n*sumXY-sumX*sumY)/(n*sumX2-sumX*sumX);
-  const intercept=(sumY-slope*sumX)/n;
-
-  const horizon=5;
-  let trendForecast=[];
-  for(let i=1;i<=horizon;i++){
-    const nx=n+i;
-    trendForecast.push(Math.round(slope*nx+intercept));
-  }
-
-  /* ---- Seasonal Forecast ---- */
-  const seasonLen = detectSeasonLength(values.length);
-  let seasonIndex = new Array(seasonLen).fill(0);
-  let counts = new Array(seasonLen).fill(0);
+  // ---------------- SEASONAL MODEL ----------------
+  const seasonLength = Math.min(12, Math.floor(values.length/2));
+  let seasonalAvg = new Array(seasonLength).fill(0);
+  let counts = new Array(seasonLength).fill(0);
 
   values.forEach((v,i)=>{
-    const s=i%seasonLen;
-    seasonIndex[s]+=v;
-    counts[s]++;
+    seasonalAvg[i % seasonLength]+=v;
+    counts[i % seasonLength]++;
   });
+  seasonalAvg = seasonalAvg.map((v,i)=>v/counts[i]);
 
-  seasonIndex=seasonIndex.map((v,i)=>v/(counts[i]||1));
-  const seasonAvg = seasonIndex.reduce((a,b)=>a+b,0)/seasonIndex.length;
-  seasonIndex = seasonIndex.map(v=>v/seasonAvg);
+  // ---------------- TREND REGRESSION ----------------
+  const x = values.map((_,i)=>i+1);
+  const y = values;
+  const n = x.length;
+  const sumX = x.reduce((a,b)=>a+b,0);
+  const sumY = y.reduce((a,b)=>a+b,0);
+  const sumXY = x.reduce((s,xi,i)=>s+xi*y[i],0);
+  const sumX2 = x.reduce((s,xi)=>s+xi*xi,0);
+  const slope = (n*sumXY - sumX*sumY)/(n*sumX2 - sumX*sumX);
+  const intercept = (sumY - slope*sumX)/n;
 
-  let seasonalForecast=[];
-  for(let i=0;i<horizon;i++){
-    seasonalForecast.push(
-      Math.round(trendForecast[i]*seasonIndex[(n+i)%seasonLen])
-    );
+  // ---------------- FORECAST ----------------
+  const futureSteps = 5;
+  let forecast = [];
+  for(let i=1;i<=futureSteps;i++){
+    const trend = slope*(n+i)+intercept;
+    const season = seasonalAvg[(n+i-1)%seasonLength] || 0;
+    forecast.push(Math.round((trend+season)/2));
   }
 
-  /* ---- Confidence ---- */
-  const std=Math.sqrt(values.map(v=>(v-avg)**2).reduce((a,b)=>a+b)/values.length);
-  const upper=seasonalForecast.map(v=>v+std);
-  const lower=seasonalForecast.map(v=>Math.max(0,v-std));
+  // ---------------- CONFIDENCE ----------------
+  const std = Math.sqrt(values.map(v=>(v-avg)**2).reduce((a,b)=>a+b)/values.length);
+  const upper = forecast.map(v=>Math.round(v+std));
+  const lower = forecast.map(v=>Math.round(v-std));
 
-  /* ---- Executive Summary ---- */
+  // ---------------- SUMMARY ----------------
   const summary = `
-The selected dataset shows an average value of ${avg.toFixed(0)} with growth of ${growth.toFixed(1)}%.
-Trend analysis indicates a ${slope>0?"positive":"negative"} trajectory.
-Seasonal behavior was detected with a cycle of approximately ${seasonLen} periods.
-Forecast projections suggest stable forward performance with moderate variability.
-This insight supports informed strategic planning and risk-aware decision making.
-`;
+The dataset shows an average value of ${avg.toFixed(0)} with a growth rate of ${growth.toFixed(1)}%.
+Seasonality was detected with a cycle length of approximately ${seasonLength} periods.
+Forecast projects continued movement with moderate confidence bands.
+This insight supports data-driven planning, budgeting and performance optimization.
+  `.trim();
 
-  /* ---- Store Report ---- */
-  reportData={
-    column:colName,
-    avg,min,max,growth,
-    trendForecast,seasonalForecast,
-    seasonLen,summary
-  };
+  reportData = { column, avg, min, max, growth, forecast, upper, lower, seasonLength, summary };
 
-  /* ---- Chart ---- */
-  const ctx=document.getElementById("chart").getContext("2d");
+  renderChart(values, forecast, upper, lower, seasonalAvg, seasonLength);
+  renderInsights(reportData);
+
+  document.getElementById("status").innerHTML = "AI Analysis Complete ✅";
+}
+
+// ---------------- CHART ----------------
+function renderChart(values, forecast, upper, lower, seasonalAvg, seasonLength){
+  const labels = values.map((_,i)=>"R"+(i+1))
+    .concat(forecast.map((_,i)=>"F"+(i+1)));
+
+  const paddedForecast = new Array(values.length-1).fill(null).concat(forecast);
+  const paddedUpper = new Array(values.length-1).fill(null).concat(upper);
+  const paddedLower = new Array(values.length-1).fill(null).concat(lower);
+
   if(chart) chart.destroy();
 
-  const forecastLabels=[...labels];
-  for(let i=1;i<=horizon;i++) forecastLabels.push("F"+i);
-
-  chart=new Chart(ctx,{
+  chart = new Chart(document.getElementById("chart"),{
     type:"line",
     data:{
-      labels:forecastLabels,
+      labels,
       datasets:[
-        {label:"Actual",data:values,borderWidth:3,tension:.3,pointRadius:4},
-        {label:"Seasonal Forecast",
-         data:new Array(values.length).fill(null).concat(seasonalForecast),
-         borderDash:[6,4],borderWidth:3},
-        {label:"Upper Confidence",
-         data:new Array(values.length).fill(null).concat(upper),
-         borderDash:[2,4]},
-        {label:"Lower Confidence",
-         data:new Array(values.length).fill(null).concat(lower),
-         borderDash:[2,4]}
+        { label:"Actual", data:values, borderWidth:3, tension:0.3, pointRadius:4 },
+        { label:"Forecast", data:paddedForecast, borderDash:[5,5], tension:0.3 },
+        { label:"Upper Confidence", data:paddedUpper, borderDash:[2,6] },
+        { label:"Lower Confidence", data:paddedLower, borderDash:[2,6] }
       ]
-    }
+    },
+    options:{ responsive:true }
   });
+}
 
-  document.getElementById("status").innerText="AI Analysis Complete ✔";
-
-  document.getElementById("insights").innerHTML=`
-  <b>Live Insights</b><br>
-  Average: ${avg.toFixed(0)}<br>
-  Min: ${min}<br>
-  Max: ${max}<br>
-  Growth: ${growth.toFixed(1)}%<br>
-  Season Length: ${seasonLen}<br>
-  Forecast: ${seasonalForecast.join(", ")}<br><br>
-  <b>Summary</b><br>${summary}
+// ---------------- INSIGHTS ----------------
+function renderInsights(r){
+  const div = document.getElementById("insights");
+  div.style.display="block";
+  div.innerHTML = `
+  <div class="stat">📊 Average: ${r.avg.toFixed(0)}</div>
+  <div class="stat">⬇ Min: ${r.min}</div>
+  <div class="stat">⬆ Max: ${r.max}</div>
+  <div class="stat">📈 Growth: ${r.growth.toFixed(1)}%</div>
+  <div class="stat">🧭 Season Length: ${r.seasonLength}</div>
+  <div class="stat">🔮 Forecast: ${r.forecast.join(", ")}</div>
+  <hr>
+  <b>Summary</b><br>${r.summary}
   `;
 }
 
-/* ---- PDF Generator ---- */
+// ---------------- PDF EXPORT ----------------
 async function downloadPDF(){
-  if(!reportData){
-    alert("Run analysis first.");
-    return;
-  }
+  if(!reportData){ alert("Run analysis first."); return; }
 
   const { jsPDF } = window.jspdf;
-  const pdf=new jsPDF();
+  const pdf = new jsPDF();
 
   pdf.setFontSize(18);
-  pdf.text("PARAGON ANALYTICS",10,15);
+  pdf.text("PARAGON ANALYTICS", 10, 15);
   pdf.setFontSize(11);
   pdf.text("Smart Business Intelligence & Forecasting",10,22);
 
   pdf.setFontSize(12);
   pdf.text(`Column: ${reportData.column}`,10,35);
-  pdf.text(`Average: ${reportData.avg.toFixed(0)}`,10,43);
-  pdf.text(`Min: ${reportData.min}`,10,50);
-  pdf.text(`Max: ${reportData.max}`,10,57);
-  pdf.text(`Growth: ${reportData.growth.toFixed(1)}%`,10,64);
-  pdf.text(`Season Length: ${reportData.seasonLen}`,10,71);
-  pdf.text(`Forecast: ${reportData.seasonalForecast.join(", ")}`,10,78);
+  pdf.text(`Average: ${reportData.avg.toFixed(0)}`,10,42);
+  pdf.text(`Min: ${reportData.min}`,10,49);
+  pdf.text(`Max: ${reportData.max}`,10,56);
+  pdf.text(`Growth: ${reportData.growth.toFixed(1)}%`,10,63);
+  pdf.text(`Forecast: ${reportData.forecast.join(", ")}`,10,70);
 
-  pdf.text("Executive Summary:",10,95);
-  pdf.text(pdf.splitTextToSize(reportData.summary,180),10,103);
+  pdf.text("Executive Summary:",10,85);
+  pdf.setFontSize(10);
+  pdf.text(reportData.summary,10,92,{maxWidth:180});
 
-  const img = document.getElementById("chart").toDataURL("image/png");
+  const canvas = document.getElementById("chart");
+  const img = canvas.toDataURL("image/png",1.0);
   pdf.addPage();
-  pdf.text("Forecast Visualization",10,15);
-  pdf.addImage(img,"PNG",10,25,180,100);
+  pdf.addImage(img,"PNG",10,20,180,100);
 
   pdf.save("Paragon_Analytics_Report.pdf");
 }
