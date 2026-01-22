@@ -54,7 +54,6 @@
   
 
 <script>
-
 let chartInstance = null;
 
 function runApp() {
@@ -65,7 +64,7 @@ function runApp() {
   }
 
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = function (e) {
     const text = e.target.result.trim();
     const rows = text.split("\n");
 
@@ -79,12 +78,19 @@ function runApp() {
       values.push(parseFloat(cols[1]) || 0);
     }
 
+    // Forecast (simple trend)
+    const lastValue = values[values.length - 1];
+    const prevValue = values[values.length - 2] || lastValue;
+    const trend = lastValue - prevValue;
+    const forecast = lastValue + trend;
+
+    labels.push("Forecast");
+    values.push(forecast);
+
     document.getElementById("output").innerHTML =
       "✅ File loaded successfully<br>" +
       "📊 Rows detected: " + (rows.length - 1) + "<br>" +
-      "🤖 AI Analysis completed<br>" +
-      "📈 Forecast generated<br>" +
-      "📄 Report ready for download";
+      "🔮 Forecast generated";
 
     const ctx = document.getElementById("chart").getContext("2d");
 
@@ -92,47 +98,17 @@ function runApp() {
       chartInstance.destroy();
     }
 
-    // --- Forecast Calculation ---
-const lastValue = values[values.length - 1];
-const prevValue = values[values.length - 2] || lastValue;
-const trend = lastValue - prevValue;
-
-const forecast = lastValue + trend;
-labels.push("Forecast");
-values.push(forecast);
-
-// Confidence range (±10%)
-const upper = values.map(v => v * 1.1);
-const lower = values.map(v => v * 0.9);
-
-// --- Chart Render ---
-const ctx = document.getElementById("chart").getContext("2d");
-
-if (chartInstance) chartInstance.destroy();
-
-chartInstance = new Chart(ctx, {
-  type: "line",
-  data: {
-    labels: labels,
-    datasets: [
-      {
-        label: "Actual + Forecast",
-        data: values,
-        tension: 0.3
+    chartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "CSV Values",
+          data: values,
+          fill: false,
+          tension: 0.3
+        }]
       },
-      {
-        label: "Upper Confidence",
-        data: upper,
-        borderDash: [5,5]
-      },
-      {
-        label: "Lower Confidence",
-        data: lower,
-        borderDash: [5,5]
-      }
-    ]
-  }
-});
       options: {
         responsive: true
       }
@@ -140,18 +116,16 @@ chartInstance = new Chart(ctx, {
   };
 
   reader.readAsText(file);
-        }
-
-  
+}
 
 function downloadReport() {
-  const report = "InsightForge Report\nGenerated Successfully.";
+  const report = "InsightForge Report\nForecast generated successfully.";
   const blob = new Blob([report], { type: "text/plain" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = "insightforge_report.txt";
   link.click();
-}
+      }
 </script>
 
 </body>
