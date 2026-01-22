@@ -76,7 +76,17 @@ function runApp() {
     const rows = text.split("\n").map(r => r.split(","));
 
     const headers = rows[0];
-    const colIndex = headers.indexOf(selectedColumn);
+    // Populate dropdown with CSV headers
+const dropdown = document.getElementById("columnSelect");
+dropdown.innerHTML = '<option value="">Select column...</option>';
+
+headers.forEach(h => {
+  const option = document.createElement("option");
+  option.value = h.trim();
+  option.textContent = h.trim();
+  dropdown.appendChild(option);
+});
+    const colIndex = headers.map(h => h.trim()).indexOf(selectedColumn.trim());
 
     if (colIndex === -1) {
       alert("Column not found in CSV.");
