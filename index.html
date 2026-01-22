@@ -45,7 +45,11 @@
 <p>Upload your CSV and run instant analysis.</p>
 
 <input type="file" id="fileInput" accept=".csv"><br><br>
-
+  
+<select id="columnSelect">
+  <option value="">Select column...</option>
+</select>
+<br><br>
 <button class="run" onclick="runApp()">Run InsightForge</button>
 <button class="report" onclick="downloadReport()">Download Report</button>
 
@@ -67,16 +71,27 @@ function runApp() {
   reader.onload = function (e) {
     const text = e.target.result.trim();
     const rows = text.split("\n");
+const headers = rows[0].split(",");
+const columnSelect = document.getElementById("columnSelect");
+columnSelect.innerHTML = "";
 
+headers.forEach((h, index) => {
+  const option = document.createElement("option");
+  option.value = index;
+  option.textContent = h;
+  columnSelect.appendChild(option);
+});
     let labels = [];
     let values = [];
 
     // Skip header row
-    for (let i = 1; i < rows.length; i++) {
-      const cols = rows[i].split(",");
-      labels.push("Row " + i);
-      values.push(parseFloat(cols[1]) || 0);
-    }
+    const selectedIndex = columnSelect.value || 1;
+
+for (let i = 1; i < rows.length; i++) {
+  const cols = rows[i].split(",");
+  labels.push("Row " + i);
+  values.push(parseFloat(cols[selectedIndex]) || 0);
+}
 
     // Forecast (simple trend)
     const lastValue = values[values.length - 1];
