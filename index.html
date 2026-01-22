@@ -9,7 +9,33 @@
 <meta name="theme-color" content="#22c55e">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+function loadCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
 
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const text = e.target.result.trim();
+    const rows = text.split("\n").map(r => r.split(","));
+    const headers = rows[0];
+
+    const dropdown = document.getElementById("columnSelect");
+    dropdown.innerHTML = `<option value="">Select column...</option>`;
+
+    headers.forEach(h => {
+      const opt = document.createElement("option");
+      opt.value = h.trim();
+      opt.textContent = h.trim();
+      dropdown.appendChild(opt);
+    });
+
+    document.getElementById("output").innerHTML =
+      "✅ CSV loaded successfully<br>📊 Columns: " + headers.join(", ");
+  };
+
+  reader.readAsText(file);
+}
 <style>
 body {
   font-family: system-ui, Arial;
@@ -60,7 +86,7 @@ canvas { max-width:100%; margin-top:20px; }
 <h1>🚀 InsightForge AI</h1>
 <p>Upload CSV → Run AI Forecast → Install as App</p>
 
-<input type="file" id="fileInput" accept=".csv"><br><br>
+<input type="file" id="fileInput" accept=".csv" onchange="loadCSV(this)"><br><br>
 
 <select id="columnSelect">
   <option value="">Select column...</option>
