@@ -62,75 +62,68 @@ let chartInstance = null;
 
 function runApp() {
   const file = document.getElementById("fileInput").files[0];
+  const selectedColumn = document.getElementById("columnSelect").value;
+
   if (!file) {
     alert("Please upload a CSV file first.");
     return;
   }
 
   const reader = new FileReader();
+
   reader.onload = function (e) {
     const text = e.target.result.trim();
-    const rows = text.split("\n");
-const headers = rows[0].split(",");
-const columnSelect = document.getElementById("columnSelect");
-columnSelect.innerHTML = "";
+    const rows = text.split("\n").map(r => r.split(","));
 
-headers.forEach((h, index) => {
-  const option = document.createElement("option");
-  option.value = index;
-  option.textContent = h;
-  columnSelect.appendChild(option);
-});
+    const headers = rows[0];
+    const colIndex = headers.indexOf(selectedColumn);
+
+    if (colIndex === -1) {
+      alert("Column not found in CSV.");
+      return;
+    }
+
     let labels = [];
     let values = [];
 
-    // Skip header row
-    const selectedIndex = columnSelect.value || 1;
+    for (let i = 1; i < rows.length; i++) {
+      labels.push("Row " + i);
 
-for (let i = 1; i < rows.length; i++) {
-  const cols = rows[i].split(",");
+      let raw = rows[i][colIndex] || "0";
+      raw = raw.replace(/[^0-9.-]/g, "");
+      const num = parseFloat(raw);
 
-  // Use first column as label (example: Month)
-  labels.push(cols[0]);
+      values.push(isNaN(num) ? 0 : num);
+    }
 
-  // Selected column as numeric value
- 
-let raw = cols[selectedIndex] || "0";
-
-// Remove commas, currency symbols, spaces
-raw = raw.replace(/[^0-9.-]/g, "");
-
-const num = parseFloat(raw);
-values.push(isNaN(num) ? 0 : num);
-    // Forecast (simple trend)
-    const lastValue = values[values.length - 1];
-    const prevValue = values[values.length - 2] || lastValue;
-    const trend = lastValue - prevValue;
-    const forecast = lastValue + trend;
+    // Simple forecast
+    const last = values[values.length - 1] || 0;
+    const prev = values[values.length - 2] || last;
+    const forecast = last + (last - prev);
 
     labels.push("Forecast");
     values.push(forecast);
 
     document.getElementById("output").innerHTML =
       "✅ File loaded successfully<br>" +
-      "📊 Rows detected: " + (rows.length - 1) + "<br>" +
+      "📊 Rows detected: " + values.length + "<br>" +
       "🔮 Forecast generated";
 
     const ctx = document.getElementById("chart").getContext("2d");
 
-    if (chartInstance) {
-      chartInstance.destroy();
+    if (window.chartInstance) {
+      window.chartInstance.destroy();
     }
 
-    chartInstance = new Chart(ctx, {
+    window.chartInstance = new Chart(ctx, {
       type: "line",
       data: {
         labels: labels,
         datasets: [{
-          label: "CSV Values",
+          label: selectedColumn,
           data: values,
-          fill: false,
-          tension: 0.3
+          tension: 0.3,
+          fill: false
         }]
       },
       options: {
@@ -140,7 +133,7 @@ values.push(isNaN(num) ? 0 : num);
   };
 
   reader.readAsText(file);
-}
+  }
 
 function downloadReport() {
   const report = "InsightForge Report\nForecast generated successfully.";
