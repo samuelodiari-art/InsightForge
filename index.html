@@ -37,6 +37,7 @@
       overflow: auto;
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -49,6 +50,8 @@
 <button class="report" onclick="downloadReport()">Download Report</button>
 
 <div id="output">Waiting for data...</div>
+  <canvas id="chart" style="max-width:100%; margin-top:20px;"></canvas>
+  
 
 <script>
 
