@@ -235,11 +235,7 @@ const bands = confidenceBands(values, forecastArray);
 const upper = bands.upper;
 const lower = bands.lower;
 
-// Extend chart arrays
-forecastArray.forEach((v, i) => {
-  forecastValues.push(v);
-  forecastLabels.push("F" + (i + 1));
-});
+
 
 
   // ---------- Anomaly ----------
