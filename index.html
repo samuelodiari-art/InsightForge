@@ -108,8 +108,16 @@ headers.forEach(h => {
 
     // Simple forecast
     const last = values[values.length - 1] || 0;
-    const prev = values[values.length - 2] || last;
-    const forecast = last + (last - prev);
+const prev = values[values.length - 2] || last;
+const trend = last - prev;
+const forecast = last + trend;
+    window._reportData = {
+  column: selectedColumn,
+  rows: values.length,
+  lastValue: last,
+  forecast: forecast,
+  trend: trend
+};
 
     labels.push("Forecast");
     values.push(forecast);
