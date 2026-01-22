@@ -94,10 +94,14 @@ for (let i = 1; i < rows.length; i++) {
   labels.push(cols[0]);
 
   // Selected column as numeric value
-  const num = parseFloat(cols[selectedIndex]);
-  values.push(isNaN(num) ? 0 : num);
-}
+ 
+let raw = cols[selectedIndex] || "0";
 
+// Remove commas, currency symbols, spaces
+raw = raw.replace(/[^0-9.-]/g, "");
+
+const num = parseFloat(raw);
+values.push(isNaN(num) ? 0 : num);
     // Forecast (simple trend)
     const lastValue = values[values.length - 1];
     const prevValue = values[values.length - 2] || lastValue;
