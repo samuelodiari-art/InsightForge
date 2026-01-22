@@ -325,6 +325,36 @@ document.getElementById("installBtn").addEventListener("click", async () => {
   await deferredPrompt.userChoice;
   deferredPrompt = null;
 });
+  // =========================
+// Auto-load CSV when selected
+// =========================
+document.getElementById("fileInput").addEventListener("change", function () {
+  const file = this.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const text = e.target.result.trim();
+    const rows = text.split("\n").map(r => r.split(","));
+    const headers = rows[0];
+
+    const dropdown = document.getElementById("columnSelect");
+    dropdown.innerHTML = `<option value="">Select column...</option>`;
+
+    headers.forEach(h => {
+      const opt = document.createElement("option");
+      opt.value = h.trim();
+      opt.textContent = h.trim();
+      dropdown.appendChild(opt);
+    });
+
+    document.getElementById("output").innerHTML =
+      "✅ CSV loaded<br>📊 Columns detected: " + headers.join(", ");
+  };
+
+  reader.readAsText(file);
+});
 </script>
 
 </body>
