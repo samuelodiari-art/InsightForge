@@ -14,7 +14,6 @@ body {
     font-family: Arial, sans-serif;
     text-align: center;
 }
-h2 { margin-top: 10px; }
 button {
     padding: 10px 18px;
     margin: 6px;
@@ -25,7 +24,10 @@ button {
 }
 .primary { background: gold; color: black; }
 .secondary { background: #333; color: white; }
-
+select {
+    padding: 8px;
+    border-radius: 6px;
+}
 .panel {
     max-width: 1100px;
     margin: auto;
@@ -45,10 +47,7 @@ canvas {
     padding: 10px;
     border-radius: 10px;
 }
-.value {
-    font-size: 18px;
-    font-weight: bold;
-}
+.value { font-size: 18px; font-weight: bold; }
 textarea {
     width: 95%;
     height: 120px;
@@ -63,7 +62,18 @@ textarea {
 <h2>PARAGON ANALYTICS</h2>
 <p>Automated Business Intelligence Platform</p>
 
-<input type="file" id="csvFile">
+<input type="file" id="csvFile"><br>
+
+<select id="columnSelect">
+    <option value="8">Revenue</option>
+    <option value="9">Cost</option>
+    <option value="10">Profit</option>
+    <option value="5">Units Sold</option>
+    <option value="11">Marketing Spend</option>
+    <option value="12">Delivery Days</option>
+    <option value="15">Stock Level</option>
+</select>
+
 <br>
 <button class="primary" onclick="loadCSV()">Load CSV</button>
 <button class="secondary" onclick="runAnalytics()">Run Intelligence</button>
@@ -90,7 +100,7 @@ textarea {
 <script>
 let rawData = [];
 let chart;
-let riskCache, forecastCache, kpiCache, segmentCache;
+let riskCache, forecastCache, kpiCache, segmentCache, accuracyCache;
 
 /* ---------------- CSV LOAD ---------------- */
 
@@ -112,18 +122,20 @@ function loadCSV() {
 function runAnalytics() {
     if (!rawData.length) return alert("Load CSV first.");
 
-    const revenue = rawData.map(r => parseFloat(r[8])).filter(n=>!isNaN(n));
+    const colIndex = parseInt(document.getElementById("columnSelect").value);
+    const values = rawData.map(r => parseFloat(r[colIndex])).filter(n=>!isNaN(n));
     const products = rawData.map(r => r[4]);
 
-    const smooth = movingAverage(revenue,3);
+    const smooth = movingAverage(values,3);
     forecastCache = forecastModel(smooth);
-    riskCache = calculateRisk(revenue);
-    kpiCache = calculateKPIs(revenue);
-    segmentCache = segmentProducts(products,revenue);
+    riskCache = calculateRisk(values);
+    kpiCache = calculateKPIs(values);
+    accuracyCache = forecastAccuracy(values, smooth);
+    segmentCache = segmentProducts(products,values);
 
-    renderChart(revenue,smooth,forecastCache);
-    renderRisk(riskCache);
-    renderKPI(kpiCache);
+    renderChart(values,smooth,forecastCache);
+    renderRisk(riskCache, accuracyCache);
+    renderKPI(kpiCache, accuracyCache);
     renderSegments(segmentCache);
     generateAIText();
 }
@@ -153,6 +165,22 @@ function forecastModel(series){
         upper: values.map(v=>Math.round(v*1.1)),
         lower: values.map(v=>Math.round(v*0.9))
     };
+}
+
+/* ---------------- FORECAST ACCURACY ---------------- */
+
+function forecastAccuracy(actual, smooth){
+    let errors=[];
+    for(let i=3;i<actual.length;i++){
+        let predicted = smooth[i-1];
+        let real = actual[i];
+        if(real>0){
+            errors.push(Math.abs((real-predicted)/real));
+        }
+    }
+    let mape = mean(errors);
+    let accuracy = Math.max(0, (1 - mape) * 100);
+    return accuracy.toFixed(1);
 }
 
 /* ---------------- RISK ENGINE ---------------- */
@@ -193,11 +221,11 @@ function calculateKPIs(data){
 
 /* ---------------- PRODUCT SEGMENTATION ---------------- */
 
-function segmentProducts(products,revenue){
+function segmentProducts(products,values){
     let map={};
     products.forEach((p,i)=>{
         if(!map[p]) map[p]=0;
-        map[p]+=revenue[i];
+        map[p]+=values[i];
     });
     return Object.entries(map)
         .sort((a,b)=>b[1]-a[1]);
@@ -209,16 +237,21 @@ function generateAIText(){
     let text =
 `Paragon Analytics Summary:
 
-Revenue shows ${riskCache.level} operational risk with volatility level ${riskCache.volatility}.
-Average revenue is ${kpiCache.avg} and overall growth is ${kpiCache.growth}.
-Top performing product is ${segmentCache[0][0]}.
-Forecast suggests next revenue values around ${forecastCache.values.join(", ")}.
+Operational Risk Level: ${riskCache.level}
+Forecast Accuracy Score: ${accuracyCache}%
+
+Average Value: ${kpiCache.avg}
+Overall Growth: ${kpiCache.growth}
+Top Performing Product: ${segmentCache[0][0]}
+
+Next Forecast Values:
+${forecastCache.values.join(", ")}
 
 Recommended Actions:
 - Monitor volatility closely.
-- Scale inventory for top product segment.
-- Maintain buffer capacity for risk mitigation.
-- Reinvest in high ROI channels.`;
+- Prioritize top performing products.
+- Maintain buffer capacity for forecast uncertainty.
+- Use accuracy score to guide confidence in planning.`;
 
     document.getElementById("aiText").value = text;
 }
@@ -251,20 +284,21 @@ function renderChart(actual,smooth,forecast){
     });
 }
 
-function renderRisk(r){
+function renderRisk(r, acc){
     document.getElementById("riskPanel").innerHTML=`
     <div class="card">Volatility<div class="value">${r.volatility}</div></div>
     <div class="card">Trend<div class="value">${r.trend}</div></div>
     <div class="card">Data Quality<div class="value">${r.quality}</div></div>
     <div class="card">Risk Score<div class="value">${r.score}</div></div>
     <div class="card">Risk Level<div class="value">${r.level}</div></div>
+    <div class="card">Forecast Accuracy<div class="value">${acc}%</div></div>
     `;
 }
 
-function renderKPI(k){
+function renderKPI(k, acc){
     document.getElementById("kpiPanel").innerHTML=`
-    <div class="card">Max Revenue<div class="value">${k.max}</div></div>
-    <div class="card">Min Revenue<div class="value">${k.min}</div></div>
+    <div class="card">Max<div class="value">${k.max}</div></div>
+    <div class="card">Min<div class="value">${k.min}</div></div>
     <div class="card">Average<div class="value">${k.avg}</div></div>
     <div class="card">Growth<div class="value">${k.growth}</div></div>
     `;
@@ -289,12 +323,13 @@ async function exportPDF(){
     pdf.text("PARAGON ANALYTICS REPORT",10,10);
     pdf.text("Risk Level: "+riskCache.level,10,25);
     pdf.text("Risk Score: "+riskCache.score,10,35);
-    pdf.text("Forecast: "+forecastCache.values.join(", "),10,45);
-    pdf.text("Top Product: "+segmentCache[0][0],10,55);
-    pdf.text("Average Revenue: "+kpiCache.avg,10,65);
+    pdf.text("Forecast Accuracy: "+accuracyCache+"%",10,45);
+    pdf.text("Forecast: "+forecastCache.values.join(", "),10,55);
+    pdf.text("Top Product: "+segmentCache[0][0],10,65);
+    pdf.text("Average Value: "+kpiCache.avg,10,75);
 
-    pdf.text("AI Summary:",10,80);
-    pdf.text(document.getElementById("aiText").value,10,90,{maxWidth:180});
+    pdf.text("AI Summary:",10,90);
+    pdf.text(document.getElementById("aiText").value,10,100,{maxWidth:180});
 
     pdf.save("paragon_report.pdf");
 }
