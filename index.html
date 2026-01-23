@@ -109,7 +109,7 @@ function runAnalytics(){
 
   const smooth = expSmooth(values,0.35);
   const forecast = forecastModel(smooth);
-  const accuracy = forecastAccuracy(values,smooth);   // ⭐ FIXED
+  const accuracy = forecastAccuracy(values,smooth);   // ✅ fixed
   const risk = riskModel(values,accuracy);
   const kpi = kpiCalc(values);
   const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
@@ -177,7 +177,7 @@ function forecastModel(series){
   };
 }
 
-/* ---------- TRUE ACCURACY ENGINE (R² STYLE) ---------- */
+/* ---------- ✅ ACCURACY ENGINE (CONFIDENCE NORMALIZED) ---------- */
 
 function forecastAccuracy(actual, smooth){
   if(actual.length < 8) return "N/A";
@@ -194,10 +194,13 @@ function forecastAccuracy(actual, smooth){
   }
 
   let r2 = 1 - (ssRes / (ssTot || 1));
-  r2 = Math.max(-1, Math.min(1, r2));    // clamp
-  let accuracy = Math.max(0, r2 * 100);  // convert to %
+  r2 = Math.max(-1, Math.min(1, r2));   // clamp
 
-  return accuracy.toFixed(1);
+  // 🔥 Convert R² into confidence score (0–100)
+  let confidence = 50 + (r2 * 50);
+  confidence = Math.max(5, Math.min(100, confidence));
+
+  return confidence.toFixed(1);
 }
 
 /* ---------- RISK ---------- */
@@ -249,7 +252,7 @@ function generateInsights(){
   aiText.value =
 `INSIGHTS RANKING
 
-1. Forecast Accuracy: ${c.accuracy}% 
+1. Forecast Confidence: ${c.accuracy}% 
 2. Risk Level: ${c.risk.level} (Volatility ${c.risk.volatility}%)
 3. Growth Rate: ${c.kpi.growth}%
 4. Top Product: ${c.segments[0][0]}
@@ -302,7 +305,7 @@ function destroy(n){ if(charts[n]) charts[n].destroy(); }
 function renderRisk(r,a){
   riskPanel.innerHTML = `
   <div class="card">Volatility<div class="value">${r.volatility}%</div></div>
-  <div class="card">Accuracy<div class="value">${a}%</div></div>
+  <div class="card">Confidence<div class="value">${a}%</div></div>
   <div class="card">Risk Score<div class="value">${r.riskScore}</div></div>
   <div class="card">Risk Level<div class="value">${r.level}</div></div>`;
 }
@@ -322,7 +325,7 @@ async function exportPDF(){
   let y = 10;
 
   pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=10;
-  pdf.text(`Risk: ${cache.risk.level} | Accuracy: ${cache.accuracy}%`,10,y); y+=10;
+  pdf.text(`Risk: ${cache.risk.level} | Forecast Confidence: ${cache.accuracy}%`,10,y); y+=10;
 
   pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,60); y+=70;
   pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,180,50); y+=60;
