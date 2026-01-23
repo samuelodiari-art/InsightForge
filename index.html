@@ -109,7 +109,7 @@ function runAnalytics(){
 
   const smooth = expSmooth(values,0.35);
   const forecast = forecastModel(smooth);
-  const accuracy = forecastAccuracy(values,smooth);
+  const accuracy = forecastAccuracy(values,smooth);   // ⭐ FIXED
   const risk = riskModel(values,accuracy);
   const kpi = kpiCalc(values);
   const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
@@ -164,7 +164,8 @@ function expSmooth(data,a){
 }
 
 function forecastModel(series){
-  let trend = (series.at(-1) - series.at(-Math.min(6,series.length-1))) / Math.min(6,series.length-1);
+  let lookback = Math.min(6, series.length-1);
+  let trend = (series.at(-1) - series.at(-lookback)) / lookback;
   let base = series.at(-1);
   let vol = std(series) * 0.35;
 
@@ -176,29 +177,25 @@ function forecastModel(series){
   };
 }
 
-/* ---------- ROBUST ACCURACY ENGINE ---------- */
+/* ---------- TRUE ACCURACY ENGINE (R² STYLE) ---------- */
 
 function forecastAccuracy(actual, smooth){
   if(actual.length < 8) return "N/A";
 
-  const window = Math.max(3, Math.floor(actual.length * 0.25));
-  let errors = [];
+  let meanVal = mean(actual);
+  let ssTot = 0;
+  let ssRes = 0;
 
-  for(let i = actual.length - window; i < actual.length; i++){
-    let predicted = smooth[i-1];
-    let real = actual[i];
-    if(isFinite(predicted) && isFinite(real)){
-      errors.push(Math.abs(real - predicted));
-    }
+  for(let i=1;i<actual.length;i++){
+    let y = actual[i];
+    let yhat = smooth[i-1];
+    ssTot += Math.pow(y - meanVal, 2);
+    ssRes += Math.pow(y - yhat, 2);
   }
 
-  let mae = mean(errors);
-  let scale = (std(actual) * 0.7) + (meanAbsDev(actual) * 0.3) || 1;
-
-  let normalized = mae / scale;
-  normalized = Math.min(normalized, 1.2);     // clamp extreme error
-  let accuracy = 100 - (normalized * 100);
-  accuracy = Math.max(25, accuracy);          // never show fake zero
+  let r2 = 1 - (ssRes / (ssTot || 1));
+  r2 = Math.max(-1, Math.min(1, r2));    // clamp
+  let accuracy = Math.max(0, r2 * 100);  // convert to %
 
   return accuracy.toFixed(1);
 }
@@ -341,7 +338,6 @@ async function exportPDF(){
 
 function mean(a){ return a.reduce((x,y)=>x+y,0)/a.length; }
 function std(a){ let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2))); }
-function meanAbsDev(a){ let m=mean(a); return mean(a.map(x=>Math.abs(x-m))); }
 
 </script>
 </body>
