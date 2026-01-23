@@ -9,51 +9,26 @@
 
 <style>
 body {
-    background: radial-gradient(circle at top, #16002b, #040010);
-    color: #ffffff;
+    background: radial-gradient(circle at top, #14002a, #050012);
+    color: white;
     font-family: Arial, sans-serif;
     text-align: center;
 }
-button {
-    padding: 10px 18px;
-    margin: 6px;
+button, select {
+    padding: 10px;
+    margin: 5px;
     border-radius: 6px;
     border: none;
     font-weight: bold;
-    cursor: pointer;
 }
-.primary { background: gold; color: black; }
+.primary { background: gold; }
 .secondary { background: #333; color: white; }
-select {
-    padding: 8px;
-    border-radius: 6px;
-}
-.panel {
-    max-width: 1100px;
-    margin: auto;
-    padding: 10px;
-}
-canvas {
-    background: rgba(255,255,255,0.04);
-    border-radius: 10px;
-}
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit,minmax(160px,1fr));
-    gap: 10px;
-}
-.card {
-    background: rgba(255,255,255,0.08);
-    padding: 10px;
-    border-radius: 10px;
-}
-.value { font-size: 18px; font-weight: bold; }
-textarea {
-    width: 95%;
-    height: 120px;
-    border-radius: 8px;
-    padding: 8px;
-}
+.panel { max-width: 1200px; margin: auto; padding: 10px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 10px; }
+.card { background: rgba(255,255,255,0.08); padding: 10px; border-radius: 10px; }
+.value { font-weight: bold; font-size: 18px; }
+canvas { background: rgba(255,255,255,0.04); border-radius: 10px; margin-top: 15px; }
+textarea { width: 95%; height: 130px; border-radius: 8px; padding: 8px; }
 </style>
 </head>
 
@@ -65,13 +40,10 @@ textarea {
 <input type="file" id="csvFile"><br>
 
 <select id="columnSelect">
-    <option value="8">Revenue</option>
-    <option value="9">Cost</option>
-    <option value="10">Profit</option>
-    <option value="5">Units Sold</option>
-    <option value="11">Marketing Spend</option>
-    <option value="12">Delivery Days</option>
-    <option value="15">Stock Level</option>
+  <option value="8">Revenue</option>
+  <option value="10">Profit</option>
+  <option value="9">Cost</option>
+  <option value="5">Units Sold</option>
 </select>
 
 <br>
@@ -81,259 +53,237 @@ textarea {
 
 <div class="panel">
 
-<canvas id="chart"></canvas>
+<canvas id="lineChart"></canvas>
+<canvas id="kpiChart"></canvas>
+<canvas id="productChart"></canvas>
 
-<h3>Risk Intelligence</h3>
+<h3>Risk & Accuracy</h3>
 <div class="grid" id="riskPanel"></div>
 
-<h3>KPI Ranking</h3>
-<div class="grid" id="kpiPanel"></div>
+<h3>Scenario Forecast</h3>
+<div class="grid" id="scenarioPanel"></div>
 
-<h3>Product Segmentation</h3>
-<div class="grid" id="segmentPanel"></div>
-
-<h3>AI Executive Explanation</h3>
+<h3>AI Insights Ranking</h3>
 <textarea id="aiText"></textarea>
 
 </div>
 
 <script>
-let rawData = [];
-let chart;
-let riskCache, forecastCache, kpiCache, segmentCache, accuracyCache;
+let rawData=[], charts={}, caches={};
 
-/* ---------------- CSV LOAD ---------------- */
+/* ------------ LOAD CSV ------------ */
 
-function loadCSV() {
-    const file = document.getElementById("csvFile").files[0];
-    if (!file) return alert("Upload CSV first.");
-
-    const reader = new FileReader();
-    reader.onload = e => {
-        rawData = e.target.result.trim().split("\n").slice(1)
-            .map(r => r.split(","));
-        alert("CSV Loaded Successfully");
-    };
-    reader.readAsText(file);
+function loadCSV(){
+ const file=document.getElementById("csvFile").files[0];
+ if(!file) return alert("Upload CSV first");
+ const reader=new FileReader();
+ reader.onload=e=>{
+   rawData=e.target.result.trim().split("\n").slice(1).map(r=>r.split(","));
+   alert("CSV Loaded");
+ };
+ reader.readAsText(file);
 }
 
-/* ---------------- RUN ENGINE ---------------- */
+/* ------------ RUN ENGINE ------------ */
 
-function runAnalytics() {
-    if (!rawData.length) return alert("Load CSV first.");
+function runAnalytics(){
+ if(!rawData.length) return alert("Load CSV first");
 
-    const colIndex = parseInt(document.getElementById("columnSelect").value);
-    const values = rawData.map(r => parseFloat(r[colIndex])).filter(n=>!isNaN(n));
-    const products = rawData.map(r => r[4]);
+ const col=parseInt(columnSelect.value);
+ const values=rawData.map(r=>parseFloat(r[col])).filter(n=>!isNaN(n));
+ const products=rawData.map(r=>r[4]);
 
-    const smooth = movingAverage(values,3);
-    forecastCache = forecastModel(smooth);
-    riskCache = calculateRisk(values);
-    kpiCache = calculateKPIs(values);
-    accuracyCache = forecastAccuracy(values, smooth);
-    segmentCache = segmentProducts(products,values);
+ const smooth=expSmooth(values,0.35);
+ const forecast=forecastModel(smooth);
+ const accuracy=forecastAccuracy(values,smooth);
+ const risk=riskModel(values,accuracy);
+ const kpi=kpiCalc(values);
+ const segments=segment(products,values);
+ const scenarios=scenarioForecast(forecast);
 
-    renderChart(values,smooth,forecastCache);
-    renderRisk(riskCache, accuracyCache);
-    renderKPI(kpiCache, accuracyCache);
-    renderSegments(segmentCache);
-    generateAIText();
+ caches={forecast,accuracy,risk,kpi,segments,scenarios};
+
+ renderLine(values,smooth,forecast);
+ renderBars(kpi,segments);
+ renderRisk(risk,accuracy);
+ renderScenarios(scenarios);
+ generateInsights();
 }
 
-/* ---------------- FORECAST ENGINE ---------------- */
+/* ------------ FORECAST ENGINE ------------ */
 
-function movingAverage(data,w){
-    return data.map((v,i)=>{
-        let slice=data.slice(Math.max(0,i-w+1),i+1);
-        return slice.reduce((a,b)=>a+b,0)/slice.length;
-    });
+function expSmooth(data,alpha){
+ let s=[data[0]];
+ for(let i=1;i<data.length;i++){
+   s.push(alpha*data[i]+(1-alpha)*s[i-1]);
+ }
+ return s;
 }
 
 function forecastModel(series){
-    let trend=(series.at(-1)-series[0])/series.length;
-    let volatility=std(series);
-    let base=series.at(-1);
+ let trend=(series.at(-1)-series.at(-5))/5;
+ let base=series.at(-1);
+ let vol=std(series)*0.4;
 
-    let values=[];
-    for(let i=1;i<=3;i++){
-        let value = base + (trend*i) - (volatility*0.25);
-        values.push(Math.round(value));
-    }
-
-    return {
-        values,
-        upper: values.map(v=>Math.round(v*1.1)),
-        lower: values.map(v=>Math.round(v*0.9))
-    };
+ let f=[1,2,3].map(i=>Math.round(base+(trend*i)));
+ return {
+   base:f,
+   upper:f.map(v=>Math.round(v+vol)),
+   lower:f.map(v=>Math.round(v-vol))
+ };
 }
 
-/* ---------------- FORECAST ACCURACY ---------------- */
-
-function forecastAccuracy(actual, smooth){
-    let errors=[];
-    for(let i=3;i<actual.length;i++){
-        let predicted = smooth[i-1];
-        let real = actual[i];
-        if(real>0){
-            errors.push(Math.abs((real-predicted)/real));
-        }
-    }
-    let mape = mean(errors);
-    let accuracy = Math.max(0, (1 - mape) * 100);
-    return accuracy.toFixed(1);
+function forecastAccuracy(actual,smooth){
+ let err=[];
+ for(let i=5;i<actual.length;i++){
+   err.push(Math.abs((actual[i]-smooth[i-1])/actual[i]));
+ }
+ let mape=mean(err);
+ return Math.max(0,(1-mape)*100).toFixed(1);
 }
 
-/* ---------------- RISK ENGINE ---------------- */
+/* ------------ RISK MODEL ------------ */
 
-function calculateRisk(data){
-    const volatility=std(data);
-    const trend=Math.abs((data.at(-1)-data[0])/data.length);
-    const quality=100-(countNaN(data)/data.length)*100;
-
-    const riskScore =
-        (volatility/mean(data))*50 +
-        (1/Math.max(trend,1))*30 +
-        (100-quality)*0.2;
-
-    let level="LOW";
-    if(riskScore>60) level="HIGH";
-    else if(riskScore>35) level="MEDIUM";
-
-    return {
-        volatility:volatility.toFixed(1),
-        trend:trend.toFixed(1),
-        quality:quality.toFixed(1)+"%",
-        score:riskScore.toFixed(1),
-        level
-    };
+function riskModel(data,accuracy){
+ let volatility=std(data)/mean(data)*100;
+ let riskScore=(volatility*0.6)+(100-accuracy)*0.4;
+ let level=riskScore>55?"HIGH":riskScore>35?"MEDIUM":"LOW";
+ return {volatility:volatility.toFixed(1),riskScore:riskScore.toFixed(1),level};
 }
 
-/* ---------------- KPI ENGINE ---------------- */
+/* ------------ KPI ------------ */
 
-function calculateKPIs(data){
-    return {
-        max: Math.max(...data),
-        min: Math.min(...data),
-        avg: mean(data).toFixed(0),
-        growth: (((data.at(-1)-data[0])/data[0])*100).toFixed(1)+"%"
-    };
+function kpiCalc(d){
+ return {
+   max:Math.max(...d),
+   min:Math.min(...d),
+   avg:Math.round(mean(d)),
+   growth:(((d.at(-1)-d[0])/d[0])*100).toFixed(1)
+ };
 }
 
-/* ---------------- PRODUCT SEGMENTATION ---------------- */
+/* ------------ SEGMENT ------------ */
 
-function segmentProducts(products,values){
-    let map={};
-    products.forEach((p,i)=>{
-        if(!map[p]) map[p]=0;
-        map[p]+=values[i];
-    });
-    return Object.entries(map)
-        .sort((a,b)=>b[1]-a[1]);
+function segment(p,v){
+ let map={};
+ p.forEach((x,i)=>map[x]=(map[x]||0)+v[i]);
+ return Object.entries(map).sort((a,b)=>b[1]-a[1]);
 }
 
-/* ---------------- AI TEXT ---------------- */
+/* ------------ SCENARIOS ------------ */
 
-function generateAIText(){
-    let text =
-`Paragon Analytics Summary:
-
-Operational Risk Level: ${riskCache.level}
-Forecast Accuracy Score: ${accuracyCache}%
-
-Average Value: ${kpiCache.avg}
-Overall Growth: ${kpiCache.growth}
-Top Performing Product: ${segmentCache[0][0]}
-
-Next Forecast Values:
-${forecastCache.values.join(", ")}
-
-Recommended Actions:
-- Monitor volatility closely.
-- Prioritize top performing products.
-- Maintain buffer capacity for forecast uncertainty.
-- Use accuracy score to guide confidence in planning.`;
-
-    document.getElementById("aiText").value = text;
+function scenarioForecast(f){
+ return {
+  base:f.base,
+  optimistic:f.base.map(v=>Math.round(v*1.12)),
+  conservative:f.base.map(v=>Math.round(v*0.88))
+ };
 }
 
-/* ---------------- UTILITIES ---------------- */
+/* ------------ INSIGHTS ------------ */
 
-function mean(a){ return a.reduce((x,y)=>x+y,0)/a.length; }
-function std(a){
-    let m=mean(a);
-    return Math.sqrt(mean(a.map(x=>(x-m)**2)));
-}
-function countNaN(a){ return a.filter(x=>isNaN(x)).length; }
+function generateInsights(){
+ let s=caches;
+ let text=`INSIGHTS RANKING:
 
-/* ---------------- UI RENDER ---------------- */
+1. Forecast Accuracy: ${s.accuracy}% (${s.accuracy>80?"Strong":"Needs improvement"})
+2. Risk Level: ${s.risk.level} (Volatility ${s.risk.volatility}%)
+3. Growth Rate: ${s.kpi.growth}%
+4. Top Product: ${s.segments[0][0]}
+5. Scenario Spread Risk: ${(s.scenarios.optimistic[0]-s.scenarios.conservative[0]).toLocaleString()}
 
-function renderChart(actual,smooth,forecast){
-    if(chart) chart.destroy();
-    const labels=[...actual.map((_,i)=>"P"+(i+1)),"F1","F2","F3"];
+Recommendations:
+- Improve accuracy using more data history.
+- Scale capacity cautiously under ${s.risk.level} risk.
+- Prioritize ${s.segments[0][0]} for revenue expansion.
+- Use conservative scenario for budgeting safety.`;
 
-    chart=new Chart(document.getElementById("chart"),{
-        type:"line",
-        data:{
-            labels,
-            datasets:[
-                {label:"Actual",data:actual,borderWidth:2},
-                {label:"Smoothed",data:smooth,borderDash:[5,5]},
-                {label:"Forecast",data:[...Array(actual.length).fill(null),...forecast.values],borderDash:[3,3]}
-            ]
-        }
-    });
+ document.getElementById("aiText").value=text;
 }
 
-function renderRisk(r, acc){
-    document.getElementById("riskPanel").innerHTML=`
-    <div class="card">Volatility<div class="value">${r.volatility}</div></div>
-    <div class="card">Trend<div class="value">${r.trend}</div></div>
-    <div class="card">Data Quality<div class="value">${r.quality}</div></div>
-    <div class="card">Risk Score<div class="value">${r.score}</div></div>
-    <div class="card">Risk Level<div class="value">${r.level}</div></div>
-    <div class="card">Forecast Accuracy<div class="value">${acc}%</div></div>
-    `;
+/* ------------ CHARTS ------------ */
+
+function renderLine(actual,smooth,f){
+ destroy("line");
+ charts.line=new Chart(lineChart,{
+  type:"line",
+  data:{
+   labels:[...actual.map((_,i)=>"P"+(i+1)),"F1","F2","F3"],
+   datasets:[
+    {label:"Actual",data:actual},
+    {label:"Smoothed",data:smooth,borderDash:[4,4]},
+    {label:"Forecast",data:[...Array(actual.length).fill(null),...f.base],borderDash:[2,2]},
+    {label:"Upper Band",data:[...Array(actual.length).fill(null),...f.upper],borderDash:[1,3]},
+    {label:"Lower Band",data:[...Array(actual.length).fill(null),...f.lower],borderDash:[1,3]}
+   ]
+  }
+ });
 }
 
-function renderKPI(k, acc){
-    document.getElementById("kpiPanel").innerHTML=`
-    <div class="card">Max<div class="value">${k.max}</div></div>
-    <div class="card">Min<div class="value">${k.min}</div></div>
-    <div class="card">Average<div class="value">${k.avg}</div></div>
-    <div class="card">Growth<div class="value">${k.growth}</div></div>
-    `;
+function renderBars(kpi,segments){
+ destroy("kpi"); destroy("prod");
+
+ charts.kpi=new Chart(kpiChart,{
+  type:"bar",
+  data:{
+   labels:["Max","Min","Avg","Growth%"],
+   datasets:[{data:[kpi.max,kpi.min,kpi.avg,kpi.growth]}]
+  }
+ });
+
+ charts.prod=new Chart(productChart,{
+  type:"bar",
+  data:{
+   labels:segments.map(s=>s[0]),
+   datasets:[{data:segments.map(s=>s[1])}]
+  }
+ });
 }
 
-function renderSegments(seg){
-    document.getElementById("segmentPanel").innerHTML =
-        seg.map(s=>`
-        <div class="card">
-            ${s[0]}
-            <div class="value">${Math.round(s[1])}</div>
-        </div>
-        `).join("");
+function destroy(name){ if(charts[name]) charts[name].destroy(); }
+
+/* ------------ UI ------------ */
+
+function renderRisk(r,a){
+ riskPanel.innerHTML=`
+ <div class="card">Volatility<div class="value">${r.volatility}%</div></div>
+ <div class="card">Accuracy<div class="value">${a}%</div></div>
+ <div class="card">Risk Score<div class="value">${r.riskScore}</div></div>
+ <div class="card">Risk Level<div class="value">${r.level}</div></div>`;
 }
 
-/* ---------------- PDF EXPORT ---------------- */
+function renderScenarios(s){
+ scenarioPanel.innerHTML=`
+ <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
+ <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
+ <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
+}
+
+/* ------------ PDF EXPORT ------------ */
 
 async function exportPDF(){
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF();
+ const {jsPDF}=window.jspdf;
+ const pdf=new jsPDF();
 
-    pdf.text("PARAGON ANALYTICS REPORT",10,10);
-    pdf.text("Risk Level: "+riskCache.level,10,25);
-    pdf.text("Risk Score: "+riskCache.score,10,35);
-    pdf.text("Forecast Accuracy: "+accuracyCache+"%",10,45);
-    pdf.text("Forecast: "+forecastCache.values.join(", "),10,55);
-    pdf.text("Top Product: "+segmentCache[0][0],10,65);
-    pdf.text("Average Value: "+kpiCache.avg,10,75);
+ let y=10;
+ pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=10;
+ pdf.text(`Risk: ${caches.risk.level} | Accuracy: ${caches.accuracy}%`,10,y); y+=10;
 
-    pdf.text("AI Summary:",10,90);
-    pdf.text(document.getElementById("aiText").value,10,100,{maxWidth:180});
+ pdf.addImage(lineChart.toDataURL(), "PNG", 10, y, 180, 60); y+=70;
+ pdf.addImage(kpiChart.toDataURL(), "PNG", 10, y, 180, 50); y+=60;
+ pdf.addImage(productChart.toDataURL(), "PNG", 10, y, 180, 50); y+=60;
 
-    pdf.save("paragon_report.pdf");
+ pdf.text("Insights:",10,y); y+=8;
+ pdf.text(aiText.value,10,y,{maxWidth:180});
+
+ pdf.save("paragon_report.pdf");
 }
-</script>
 
+/* ------------ MATH ------------ */
+
+function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
+function std(a){let m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
+
+</script>
 </body>
 </html>
