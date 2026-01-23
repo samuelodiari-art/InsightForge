@@ -39,11 +39,11 @@ textarea { width:95%; height:140px; border-radius:8px; padding:8px; }
 
 <input type="file" id="csvFile"><br>
 
-<select id="columnSelect">
-  <option value="8">Revenue</option>
-  <option value="10">Profit</option>
-  <option value="9">Cost</option>
-  <option value="5">Units Sold</option>
+<select id="metricSelect">
+  <option value="Revenue">Revenue</option>
+  <option value="Profit">Profit</option>
+  <option value="Cost">Cost</option>
+  <option value="UnitsSold">Units Sold</option>
 </select>
 
 <select id="aggregationSelect">
@@ -74,33 +74,46 @@ textarea { width:95%; height:140px; border-radius:8px; padding:8px; }
 </div>
 
 <script>
-let rawData=[], charts={}, cache={};
+let rawRows = [];
+let headers = [];
+let charts = {}, cache = {};
 
 /* ---------- LOAD CSV ---------- */
 
 function loadCSV(){
   const file = csvFile.files[0];
   if(!file) return alert("Upload CSV first.");
+
   const reader = new FileReader();
   reader.onload = e => {
-    rawData = e.target.result.trim().split("\n").slice(1).map(r=>r.split(","));
+    const lines = e.target.result.trim().split("\n");
+    headers = lines[0].split(",").map(h=>h.trim());
+    rawRows = lines.slice(1).map(r=>r.split(","));
     alert("CSV Loaded Successfully");
   };
   reader.readAsText(file);
 }
 
-/* ---------- MAIN ---------- */
+/* ---------- MAIN ENGINE ---------- */
 
 function runAnalytics(){
-  if(!rawData.length) return alert("Load CSV first.");
+  if(!rawRows.length) return alert("Load CSV first.");
 
-  const col = parseInt(columnSelect.value);
+  const metric = metricSelect.value;
   const agg = aggregationSelect.value;
 
-  const parsed = rawData.map(r=>({
-    date: new Date(r[0]),
-    value: parseFloat(r[col]),
-    product: r[4]
+  const colIndex = headers.indexOf(metric);
+  const dateIndex = headers.indexOf("Date");
+  const productIndex = headers.indexOf("Product");
+
+  if(colIndex === -1 || dateIndex === -1 || productIndex === -1){
+    return alert("CSV must contain columns: Date, Product, " + metric);
+  }
+
+  const parsed = rawRows.map(r=>({
+    date: new Date(r[dateIndex]),
+    value: parseFloat(r[colIndex]),
+    product: r[productIndex]
   })).filter(r=>isFinite(r.value) && !isNaN(r.date));
 
   const aggregated = aggregateData(parsed, agg);
@@ -109,17 +122,17 @@ function runAnalytics(){
 
   const smooth = expSmooth(values,0.35);
   const forecast = forecastModel(smooth);
-  const accuracy = forecastAccuracy(values,smooth);   // ✅ fixed
-  const risk = riskModel(values,accuracy);
+  const confidence = forecastConfidence(values,smooth);
+  const risk = riskModel(values,confidence);
   const kpi = kpiCalc(values);
   const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
   const scenarios = scenarioForecast(forecast);
 
-  cache = {forecast,accuracy,risk,kpi,segments,scenarios};
+  cache = {forecast,confidence,risk,kpi,segments,scenarios};
 
   renderLine(labels,values,smooth,forecast);
   renderBars(kpi,segments);
-  renderRisk(risk,accuracy);
+  renderRisk(risk,confidence);
   renderScenarios(scenarios);
   generateInsights();
 }
@@ -177,9 +190,9 @@ function forecastModel(series){
   };
 }
 
-/* ---------- ✅ ACCURACY ENGINE (CONFIDENCE NORMALIZED) ---------- */
+/* ---------- CONFIDENCE ---------- */
 
-function forecastAccuracy(actual, smooth){
+function forecastConfidence(actual, smooth){
   if(actual.length < 8) return "N/A";
 
   let meanVal = mean(actual);
@@ -187,16 +200,13 @@ function forecastAccuracy(actual, smooth){
   let ssRes = 0;
 
   for(let i=1;i<actual.length;i++){
-    let y = actual[i];
-    let yhat = smooth[i-1];
-    ssTot += Math.pow(y - meanVal, 2);
-    ssRes += Math.pow(y - yhat, 2);
+    ssTot += (actual[i] - meanVal) ** 2;
+    ssRes += (actual[i] - smooth[i-1]) ** 2;
   }
 
   let r2 = 1 - (ssRes / (ssTot || 1));
-  r2 = Math.max(-1, Math.min(1, r2));   // clamp
+  r2 = Math.max(-1, Math.min(1, r2));
 
-  // 🔥 Convert R² into confidence score (0–100)
   let confidence = 50 + (r2 * 50);
   confidence = Math.max(5, Math.min(100, confidence));
 
@@ -205,9 +215,9 @@ function forecastAccuracy(actual, smooth){
 
 /* ---------- RISK ---------- */
 
-function riskModel(data, accuracy){
+function riskModel(data, confidence){
   let volatility = (std(data) / mean(data)) * 100;
-  let riskScore = (volatility * 0.6) + ((100 - accuracy) * 0.4);
+  let riskScore = (volatility * 0.6) + ((100 - confidence) * 0.4);
   let level = riskScore > 55 ? "HIGH" : riskScore > 35 ? "MEDIUM" : "LOW";
   return {
     volatility: volatility.toFixed(1),
@@ -252,7 +262,7 @@ function generateInsights(){
   aiText.value =
 `INSIGHTS RANKING
 
-1. Forecast Confidence: ${c.accuracy}% 
+1. Forecast Confidence: ${c.confidence}% 
 2. Risk Level: ${c.risk.level} (Volatility ${c.risk.volatility}%)
 3. Growth Rate: ${c.kpi.growth}%
 4. Top Product: ${c.segments[0][0]}
@@ -302,10 +312,10 @@ function destroy(n){ if(charts[n]) charts[n].destroy(); }
 
 /* ---------- UI ---------- */
 
-function renderRisk(r,a){
+function renderRisk(r,c){
   riskPanel.innerHTML = `
   <div class="card">Volatility<div class="value">${r.volatility}%</div></div>
-  <div class="card">Confidence<div class="value">${a}%</div></div>
+  <div class="card">Confidence<div class="value">${c}%</div></div>
   <div class="card">Risk Score<div class="value">${r.riskScore}</div></div>
   <div class="card">Risk Level<div class="value">${r.level}</div></div>`;
 }
@@ -325,7 +335,7 @@ async function exportPDF(){
   let y = 10;
 
   pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=10;
-  pdf.text(`Risk: ${cache.risk.level} | Forecast Confidence: ${cache.accuracy}%`,10,y); y+=10;
+  pdf.text(`Risk: ${cache.risk.level} | Forecast Confidence: ${cache.confidence}%`,10,y); y+=10;
 
   pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,60); y+=70;
   pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,180,50); y+=60;
@@ -344,4 +354,4 @@ function std(a){ let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2))); }
 
 </script>
 </body>
-</html>
+  </html>
