@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <title>PARAGON ANALYTICS</title>
 
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -13,6 +15,7 @@ body {
   color: white;
   font-family: Arial, sans-serif;
   text-align: center;
+  margin:0;
 }
 button, select {
   padding: 10px;
@@ -59,18 +62,18 @@ textarea { width:95%; height:140px; border-radius:8px; padding:8px; }
 <button class="secondary" onclick="exportPDF()">Export PDF</button>
 
 <div class="panel">
-<canvas id="lineChart"></canvas>
-<canvas id="kpiChart"></canvas>
-<canvas id="productChart"></canvas>
+  <canvas id="lineChart"></canvas>
+  <canvas id="kpiChart"></canvas>
+  <canvas id="productChart"></canvas>
 
-<h3>Risk & Accuracy</h3>
-<div class="grid" id="riskPanel"></div>
+  <h3>Risk & Accuracy</h3>
+  <div class="grid" id="riskPanel"></div>
 
-<h3>Scenario Forecast</h3>
-<div class="grid" id="scenarioPanel"></div>
+  <h3>Scenario Forecast</h3>
+  <div class="grid" id="scenarioPanel"></div>
 
-<h3>AI Insights Ranking</h3>
-<textarea id="aiText"></textarea>
+  <h3>AI Insights Ranking</h3>
+  <textarea id="aiText"></textarea>
 </div>
 
 <script>
@@ -78,7 +81,7 @@ let rawRows = [];
 let headers = [];
 let charts = {}, cache = {};
 
-/* ---------- LOAD CSV ---------- */
+/* ================= LOAD CSV ================= */
 
 function loadCSV(){
   const file = csvFile.files[0];
@@ -94,7 +97,7 @@ function loadCSV(){
   reader.readAsText(file);
 }
 
-/* ---------- MAIN ENGINE ---------- */
+/* ================= MAIN ENGINE ================= */
 
 function runAnalytics(){
   if(!rawRows.length) return alert("Load CSV first.");
@@ -107,7 +110,7 @@ function runAnalytics(){
   const productIndex = headers.indexOf("Product");
 
   if(colIndex === -1 || dateIndex === -1 || productIndex === -1){
-    return alert("CSV must contain columns: Date, Product, " + metric);
+    return alert("CSV must contain Date, Product and " + metric + " columns.");
   }
 
   const parsed = rawRows.map(r=>({
@@ -137,7 +140,7 @@ function runAnalytics(){
   generateInsights();
 }
 
-/* ---------- AGGREGATION ---------- */
+/* ================= AGGREGATION ================= */
 
 function aggregateData(data, mode){
   if(mode === "raw"){
@@ -166,7 +169,7 @@ function getWeek(d){
   return Math.ceil((((d - onejan) / 86400000) + onejan.getDay()+1)/7);
 }
 
-/* ---------- FORECAST ---------- */
+/* ================= FORECAST ================= */
 
 function expSmooth(data,a){
   let s=[data[0]];
@@ -190,7 +193,7 @@ function forecastModel(series){
   };
 }
 
-/* ---------- CONFIDENCE ---------- */
+/* ================= CONFIDENCE ================= */
 
 function forecastConfidence(actual, smooth){
   if(actual.length < 8) return "N/A";
@@ -213,7 +216,7 @@ function forecastConfidence(actual, smooth){
   return confidence.toFixed(1);
 }
 
-/* ---------- RISK ---------- */
+/* ================= RISK ================= */
 
 function riskModel(data, confidence){
   let volatility = (std(data) / mean(data)) * 100;
@@ -226,7 +229,7 @@ function riskModel(data, confidence){
   };
 }
 
-/* ---------- KPI ---------- */
+/* ================= KPI ================= */
 
 function kpiCalc(d){
   return {
@@ -237,7 +240,7 @@ function kpiCalc(d){
   };
 }
 
-/* ---------- SEGMENT ---------- */
+/* ================= SEGMENT ================= */
 
 function segment(p,v){
   let map={};
@@ -245,7 +248,7 @@ function segment(p,v){
   return Object.entries(map).sort((a,b)=>b[1]-a[1]);
 }
 
-/* ---------- SCENARIO ---------- */
+/* ================= SCENARIO ================= */
 
 function scenarioForecast(f){
   return {
@@ -255,7 +258,7 @@ function scenarioForecast(f){
   };
 }
 
-/* ---------- INSIGHTS ---------- */
+/* ================= INSIGHTS ================= */
 
 function generateInsights(){
   let c = cache;
@@ -275,7 +278,7 @@ RECOMMENDATIONS
 - Monitor volatility trend monthly.`;
 }
 
-/* ---------- CHARTS ---------- */
+/* ================= CHARTS ================= */
 
 function renderLine(labels,actual,smooth,f){
   destroy("line");
@@ -310,7 +313,7 @@ function renderBars(kpi,segments){
 
 function destroy(n){ if(charts[n]) charts[n].destroy(); }
 
-/* ---------- UI ---------- */
+/* ================= UI ================= */
 
 function renderRisk(r,c){
   riskPanel.innerHTML = `
@@ -327,27 +330,68 @@ function renderScenarios(s){
   <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
 }
 
-/* ---------- PDF EXPORT ---------- */
+/* ================= MULTI-PAGE PDF EXPORT ================= */
 
 async function exportPDF(){
-  const {jsPDF} = window.jspdf;
-  const pdf = new jsPDF();
-  let y = 10;
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF("p","mm","a4");
 
-  pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=10;
-  pdf.text(`Risk: ${cache.risk.level} | Forecast Confidence: ${cache.confidence}%`,10,y); y+=10;
+  const margin = 12;
+  const pageWidth = 210 - margin*2;
+  const imgHeight = 90;
 
-  pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,60); y+=70;
-  pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,180,50); y+=60;
-  pdf.addImage(productChart.toDataURL(),"PNG",10,y,180,50); y+=60;
+  function title(t){
+    pdf.setFontSize(16);
+    pdf.text(t, margin, 18);
+  }
 
-  pdf.text("Insights:",10,y); y+=8;
-  pdf.text(aiText.value,10,y,{maxWidth:180});
+  function subtitle(t){
+    pdf.setFontSize(11);
+    pdf.text(t, margin, 28);
+  }
+
+  /* PAGE 1 — SUMMARY */
+  title("PARAGON ANALYTICS REPORT");
+  subtitle(`Risk: ${cache.risk.level} | Forecast Confidence: ${cache.confidence}%`);
+
+  pdf.setFontSize(11);
+  pdf.text("Executive Insights:", margin, 45);
+  pdf.setFontSize(10);
+  pdf.text(aiText.value, margin, 55, { maxWidth: 180 });
+
+  /* PAGE 2 — FORECAST */
+  pdf.addPage();
+  title("Forecast Analysis");
+  pdf.addImage(lineChart.toDataURL("image/png"),"PNG",margin,40,pageWidth,imgHeight);
+
+  /* PAGE 3 — KPI */
+  pdf.addPage();
+  title("KPI Summary");
+  pdf.addImage(kpiChart.toDataURL("image/png"),"PNG",margin,40,pageWidth,imgHeight);
+
+  /* PAGE 4 — PRODUCT */
+  pdf.addPage();
+  title("Product Segmentation");
+  pdf.addImage(productChart.toDataURL("image/png"),"PNG",margin,40,pageWidth,imgHeight);
+
+  /* PAGE 5 — RISK */
+  pdf.addPage();
+  title("Risk & Scenario Summary");
+  pdf.setFontSize(11);
+  pdf.text(`Volatility: ${cache.risk.volatility}%`, margin, 45);
+  pdf.text(`Risk Score: ${cache.risk.riskScore}`, margin, 55);
+  pdf.text(`Risk Level: ${cache.risk.level}`, margin, 65);
+  pdf.text(`Forecast Confidence: ${cache.confidence}%`, margin, 75);
+
+  pdf.text("Scenario Forecast:", margin, 95);
+  pdf.text(`Base: ${cache.scenarios.base.join(", ")}`, margin, 105);
+  pdf.text(`Optimistic: ${cache.scenarios.optimistic.join(", ")}`, margin, 115);
+  pdf.text(`Conservative: ${cache.scenarios.conservative.join(", ")}`, margin, 125);
 
   pdf.save("paragon_report.pdf");
 }
 
-/* ---------- MATH ---------- */
+/* ================= MATH ================= */
 
 function mean(a){ return a.reduce((x,y)=>x+y,0)/a.length; }
 function std(a){ let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2))); }
