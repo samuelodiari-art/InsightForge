@@ -5,28 +5,21 @@
 <title>PARAGON ANALYTICS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- Charts + PDF -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-body{
-  font-family: system-ui, Arial;
-  background: linear-gradient(135deg,#1b0028,#3c1d5c,#8a6a10);
-  color:white;
-  text-align:center;
-  padding:12px;
-}
-h1{letter-spacing:2px;color:#ffd700;}
-button{padding:12px 18px;border-radius:10px;border:none;font-weight:bold;margin:4px;}
+body{font-family:system-ui;background:linear-gradient(135deg,#160022,#3c1d5c,#6d5408);color:white;text-align:center;padding:10px;}
+h1{color:gold;letter-spacing:2px;}
+button{padding:10px 16px;border-radius:10px;border:none;font-weight:bold;margin:4px;}
 .load{background:#5e2ea5;color:white;}
 .run{background:gold;color:black;}
 .pdf{background:#3b1c64;color:white;}
 select,input{padding:8px;border-radius:8px;border:none;margin:4px;}
-.panel{background:rgba(0,0,0,0.35);padding:10px;border-radius:10px;margin-top:10px;}
-canvas{max-width:100%;margin-top:12px;}
-.grid{display:grid;grid-template-columns:1fr;gap:12px;}
-footer{margin-top:15px;font-size:12px;opacity:.6;}
+.panel{background:rgba(0,0,0,.35);padding:10px;border-radius:10px;margin-top:10px;}
+canvas{max-width:100%;margin-top:10px;}
+.grid{display:grid;grid-template-columns:1fr;gap:10px;}
+footer{opacity:.6;font-size:12px;margin-top:10px;}
 </style>
 </head>
 
@@ -35,21 +28,20 @@ footer{margin-top:15px;font-size:12px;opacity:.6;}
 <h1>PARAGON ANALYTICS</h1>
 <div>SMART BUSINESS INTELLIGENCE & FORECASTING</div>
 
-<input type="file" id="fileInput" accept=".csv">
-<br>
-<button class="load" onclick="loadCSV()">Load CSV</button>
-<br>
-<select id="columnSelect"></select>
-<br>
+<input type="file" id="fileInput" accept=".csv"><br>
+<button class="load" onclick="loadCSV()">Load CSV</button><br>
+
+<select id="columnSelect"></select><br>
+
 <button class="run" onclick="runAnalysis()">Run Intelligence</button>
 <button class="pdf" onclick="downloadPDF()">Download Report PDF</button>
 
 <div id="status" class="panel">Waiting for CSV...</div>
 
 <div class="grid">
-  <canvas id="lineChart"></canvas>
-  <canvas id="barChart"></canvas>
-  <canvas id="histChart"></canvas>
+<canvas id="lineChart"></canvas>
+<canvas id="barChart"></canvas>
+<canvas id="histChart"></canvas>
 </div>
 
 <div id="insights" class="panel" style="display:none;"></div>
@@ -57,25 +49,19 @@ footer{margin-top:15px;font-size:12px;opacity:.6;}
 <footer>PARAGON ANALYTICS — Automated Forecast Intelligence</footer>
 
 <script>
-let rawCSV="", headers=[], rows=[];
-let charts={}, report=null;
+let rawCSV="", headers=[], rows=[], charts={}, report=null;
 
-// ---------------- CORE UTILS ----------------
-const cleanNumber = v =>
-  parseFloat(String(v||"").replace(/[^0-9.-]/g,"")) || NaN;
-
-const mean = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
-const stddev = arr => {
-  const m = mean(arr);
-  return Math.sqrt(mean(arr.map(v=>(v-m)**2)));
-};
+// ---------- Utilities ----------
+const cleanNumber=v=>parseFloat(String(v||"").replace(/[^0-9.-]/g,""));
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const std=a=>Math.sqrt(mean(a.map(v=>(v-mean(a))**2)));
 const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
 
-// ---------------- CSV ----------------
+// ---------- CSV ----------
 function loadCSV(){
-  const f = fileInput.files[0];
-  if(!f) return alert("Select a CSV file");
-  const r = new FileReader();
+  const f=fileInput.files[0];
+  if(!f) return alert("Select a CSV file.");
+  const r=new FileReader();
   r.onload=e=>{
     rawCSV=e.target.result.trim();
     rows=rawCSV.split("\n").map(r=>r.split(","));
@@ -91,79 +77,84 @@ function loadCSV(){
   r.readAsText(f);
 }
 
-// ---------------- ANALYSIS ----------------
+// ---------- ANALYSIS ----------
 function runAnalysis(){
-  const col = columnSelect.value;
-  const idx = headers.indexOf(col);
+  const idx=headers.indexOf(columnSelect.value);
   let values=[];
   for(let i=1;i<rows.length;i++){
-    const n = cleanNumber(rows[i][idx]);
+    const n=cleanNumber(rows[i][idx]);
     if(isFinite(n)) values.push(n);
   }
-  if(values.length<12) return alert("Not enough valid numeric data.");
+  if(values.length<12) return alert("Not enough numeric data.");
 
-  // ---- Smoothing ----
-  const smooth = values.map((v,i,arr)=>{
-    const a=arr[i-1]||v, b=arr[i+1]||v;
-    return (a+v+b)/3;
-  });
+  // Smoothing
+  const smooth=values.map((v,i,a)=>( (a[i-1]||v)+v+(a[i+1]||v) )/3 );
 
-  // ---- Outlier Dampening ----
-  const m=mean(smooth), sd=stddev(smooth);
-  const filtered = smooth.map(v=>clamp(v,m-2*sd,m+2*sd));
+  // Outlier dampening
+  const m=mean(smooth), s=std(smooth);
+  const filtered=smooth.map(v=>clamp(v,m-2*s,m+2*s));
 
-  // ---- Trend Regression ----
+  // Trend regression
   const n=filtered.length;
   const x=filtered.map((_,i)=>i+1);
   const sx=x.reduce((a,b)=>a+b,0);
   const sy=filtered.reduce((a,b)=>a+b,0);
-  const sxy=x.reduce((s,xi,i)=>s+xi*filtered[i],0);
-  const sx2=x.reduce((s,xi)=>s+xi*xi,0);
+  const sxy=x.reduce((t,xi,i)=>t+xi*filtered[i],0);
+  const sx2=x.reduce((t,xi)=>t+xi*xi,0);
   const slope=(n*sxy-sx*sy)/(n*sx2-sx*sx);
   const intercept=(sy-slope*sx)/n;
 
-  // ---- Auto Season Detection ----
+  // Season detection
   let bestSeason=1, bestVar=Infinity;
-  for(let s=2;s<=Math.min(12,n/2);s++){
-    let groups=Array.from({length:s},()=>[]);
-    filtered.forEach((v,i)=>groups[i%s].push(v));
-    const vars=groups.map(g=>stddev(g)||0);
-    const avgVar=mean(vars);
-    if(avgVar<bestVar){bestVar=avgVar;bestSeason=s;}
+  for(let sLen=2;sLen<=Math.min(12,n/2);sLen++){
+    let g=[...Array(sLen)].map(()=>[]);
+    filtered.forEach((v,i)=>g[i%sLen].push(v));
+    const avgVar=mean(g.map(a=>std(a)||0));
+    if(avgVar<bestVar){bestVar=avgVar;bestSeason=sLen;}
   }
 
-  const seasonal = Array(bestSeason).fill(0);
-  const count = Array(bestSeason).fill(0);
+  let seasonal=Array(bestSeason).fill(0), count=Array(bestSeason).fill(0);
   filtered.forEach((v,i)=>{
     seasonal[i%bestSeason]+=v;
     count[i%bestSeason]++;
   });
-  for(let i=0;i<bestSeason;i++) seasonal[i]/=count[i];
+  seasonal=seasonal.map((v,i)=>v/count[i]);
 
-  // ---- Forecast ----
-  const steps=6;
+  // Volatility
+  const volatility=s/mean(filtered);
+  const risk=volatility<0.1?"LOW":volatility<0.25?"MEDIUM":"HIGH";
+
+  // Auto horizon
+  const horizon = risk==="LOW"?6:risk==="MEDIUM"?4:2;
+
+  // Ensemble Forecast
   let forecast=[];
-  for(let i=1;i<=steps;i++){
-    const t = slope*(n+i)+intercept;
-    const s = seasonal[(n+i-1)%bestSeason]||0;
-    forecast.push(Math.round((t+s)/2));
+  for(let i=1;i<=horizon;i++){
+    const trend=slope*(n+i)+intercept;
+    const season=seasonal[(n+i-1)%bestSeason]||0;
+    const momentum=mean(filtered.slice(-Math.min(5,filtered.length)));
+    const blended=(trend*0.4 + season*0.2 + momentum*0.4);
+    forecast.push(Math.round(blended));
   }
 
-  const volatility = sd/mean(filtered);
-  const risk = volatility<0.1?"LOW":volatility<0.25?"MEDIUM":"HIGH";
-
-  const upper = forecast.map(v=>Math.round(v*(1+volatility)));
-  const lower = forecast.map(v=>Math.round(v*(1-volatility)));
+  // Backtest accuracy
+  const testSize=Math.min(6,Math.floor(n/4));
+  let errors=[];
+  for(let i=1;i<=testSize;i++){
+    const actual=filtered[n-i];
+    const pred=slope*(n-i)+intercept;
+    errors.push(Math.abs(actual-pred)/actual);
+  }
+  const accuracy=Math.max(0,100-(mean(errors)*100));
 
   report={
-    col,
     avg:mean(filtered),
     min:Math.min(...filtered),
     max:Math.max(...filtered),
     growth:((filtered.at(-1)-filtered[0])/filtered[0])*100,
-    forecast, upper, lower,
-    season:bestSeason,
-    risk
+    forecast, risk, season:bestSeason,
+    accuracy:accuracy.toFixed(1),
+    horizon
   };
 
   drawCharts(filtered,forecast);
@@ -171,19 +162,15 @@ function runAnalysis(){
   status.innerHTML="INTELLIGENCE COMPLETE ✅";
 }
 
-// ---------------- CHARTS ----------------
-function destroyCharts(){
-  Object.values(charts).forEach(c=>c.destroy());
-  charts={};
-}
+// ---------- Charts ----------
+function destroyCharts(){Object.values(charts).forEach(c=>c.destroy());charts={};}
 
 function drawCharts(values,forecast){
   destroyCharts();
-  const labels = values.map((_,i)=>"R"+(i+1))
-    .concat(forecast.map((_,i)=>"F"+(i+1)));
-  const padded = new Array(values.length-1).fill(null).concat(forecast);
+  const labels=values.map((_,i)=>"R"+(i+1)).concat(forecast.map((_,i)=>"F"+(i+1)));
+  const padded=new Array(values.length-1).fill(null).concat(forecast);
 
-  charts.line = new Chart(lineChart,{
+  charts.line=new Chart(lineChart,{
     type:"line",
     data:{labels,datasets:[
       {label:"Actual",data:values,borderWidth:3,tension:.3},
@@ -192,74 +179,59 @@ function drawCharts(values,forecast){
     options:{responsive:true}
   });
 
-  charts.bar = new Chart(barChart,{
+  charts.bar=new Chart(barChart,{
     type:"bar",
-    data:{labels:["Min","Avg","Max"],
-      datasets:[{label:"Summary",data:[
-        report.min, report.avg, report.max
-      ]}]},
+    data:{labels:["Min","Avg","Max"],datasets:[{label:"Summary",data:[report.min,report.avg,report.max]}]},
     options:{responsive:true}
   });
 
-  charts.hist = new Chart(histChart,{
+  charts.hist=new Chart(histChart,{
     type:"bar",
-    data:{
-      labels:["Low","Mid","High"],
-      datasets:[{label:"Distribution",data:[
-        values.filter(v=>v<report.avg*.8).length,
-        values.filter(v=>v>=report.avg*.8&&v<=report.avg*1.2).length,
-        values.filter(v=>v>report.avg*1.2).length
-      ]}]},
+    data:{labels:["Low","Mid","High"],datasets:[{label:"Distribution",data:[
+      values.filter(v=>v<report.avg*.8).length,
+      values.filter(v=>v>=report.avg*.8&&v<=report.avg*1.2).length,
+      values.filter(v=>v>report.avg*1.2).length
+    ]}]},
     options:{responsive:true}
   });
 }
 
-// ---------------- INSIGHTS ----------------
+// ---------- Insights ----------
 function renderInsights(r){
   insights.style.display="block";
   insights.innerHTML=`
 <b>EXECUTIVE SUMMARY</b><br>
-Average value is <b>${r.avg.toFixed(0)}</b> with growth of <b>${r.growth.toFixed(1)}%</b>.
-Risk level is <b>${r.risk}</b> based on volatility.
-Seasonal cycle detected every <b>${r.season}</b> periods.<hr>
+Average: <b>${r.avg.toFixed(0)}</b> | Growth: <b>${r.growth.toFixed(1)}%</b><br>
+Risk Level: <b>${r.risk}</b> | Accuracy Score: <b>${r.accuracy}%</b><br>
+Forecast Horizon: <b>${r.horizon} periods</b> | Season Cycle: <b>${r.season}</b><hr>
 
 <b>FORECAST OUTLOOK</b><br>
-Next projections: <b>${r.forecast.join(", ")}</b><hr>
+${r.forecast.join(", ")}<hr>
 
 <b>ACTION GUIDANCE</b><br>
-${r.risk==="HIGH"?"Expect fluctuations — keep buffer stock or cash reserves.":
-"Stable trend — plan confidently for inventory, staffing and budgets."}
+${r.risk==="HIGH"?"Expect volatility. Keep buffer capacity and monitor frequently.":
+"Stable outlook. Plan inventory and staffing confidently."}
 `;
 }
 
-// ---------------- PDF ----------------
+// ---------- PDF ----------
 async function downloadPDF(){
   if(!report) return alert("Run analysis first.");
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF();
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF();
+  pdf.setFontSize(16);
+  pdf.text("PARAGON ANALYTICS REPORT",10,15);
+  pdf.setFontSize(11);
+  pdf.text(`Accuracy Score: ${report.accuracy}%`,10,25);
+  pdf.text(`Risk Level: ${report.risk}`,10,32);
+  pdf.text(`Forecast Horizon: ${report.horizon} periods`,10,39);
+  pdf.text(`Forecast: ${report.forecast.join(", ")}`,10,46);
 
-  function brand(pageY){
-    pdf.setFontSize(16);
-    pdf.text("PARAGON ANALYTICS",10,pageY);
-    pdf.setFontSize(10);
-    pdf.text("SMART BUSINESS INTELLIGENCE REPORT",10,pageY+6);
-  }
-
-  brand(10);
-  pdf.text(`Column: ${report.col}`,10,30);
-  pdf.text(`Average: ${report.avg.toFixed(0)}`,10,38);
-  pdf.text(`Growth: ${report.growth.toFixed(1)}%`,10,46);
-  pdf.text(`Risk Level: ${report.risk}`,10,54);
-  pdf.text(`Forecast: ${report.forecast.join(", ")}`,10,62);
-
-  const chartsList=[lineChart,barChart,histChart];
-  chartsList.forEach((c,i)=>{
+  [lineChart,barChart,histChart].forEach(c=>{
     pdf.addPage();
-    brand(10);
     const img=c.toDataURL("image/png",1);
-    pdf.addImage(img,"PNG",10,25,180,90);
+    pdf.addImage(img,"PNG",10,20,180,90);
   });
-
   pdf.save("PARAGON_REPORT.pdf");
 }
 </script>
