@@ -126,7 +126,7 @@ function runAnalytics(){
   const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
   const scenarios = scenarioForecast(forecast);
 
-  cache = {confidence,mape,seasonality,anomalies,validation,kpi,risk,scenarios};
+  cache = {confidence,mape,seasonality,anomalies,validation,kpi,risk,scenarios,segments};
 
   renderLine(labels,values,smooth,forecast);
   renderBars(kpi,segments);
@@ -195,7 +195,7 @@ function detectAnomalies(d){
   return d.filter(v=>Math.abs(v-m)>3*s).length;
 }
 
-/* ---------------- ✅ RE-CALIBRATED CONFIDENCE ENGINE ---------------- */
+/* ---------------- CONFIDENCE ENGINE ---------------- */
 
 function computeConfidence(values, mape, seasonality, anomalies){
   let n = values.length;
@@ -218,7 +218,7 @@ function computeConfidence(values, mape, seasonality, anomalies){
   return confidence;
 }
 
-/* ---------------- ✅ SOFTENED RISK MODEL ---------------- */
+/* ---------------- RISK MODEL ---------------- */
 
 function riskModel(d, conf){
   let vol = (std(d)/mean(d))*100;
@@ -283,8 +283,7 @@ function renderLine(labels,actual,smooth,f){
         {label:"Upper",data:[...Array(actual.length).fill(null),...f.upper],borderDash:[2,4]},
         {label:"Lower",data:[...Array(actual.length).fill(null),...f.lower],borderDash:[2,4]}
       ]
-    },
-    options:{responsive:true}
+    }
   });
 }
 
@@ -299,20 +298,7 @@ function renderAccuracy(conf,error,validation){
   accuracyPanel.innerHTML=`
   <div class="card">Confidence<div class="value">${conf.toFixed(1)}%</div></div>
   <div class="card">MAPE<div class="value">${error.toFixed(1)}%</div></div>
-  <div class="card">Validation<div class="badge ${cls}" onclick="explainValidation()">${validation}</div></div>`;
-}
-
-function explainValidation(){
-  alert(
-`Validation Logic:
-Confidence > 70% and MAPE < 35% → VALIDATED
-Confidence > 55% and MAPE < 50% → MONITOR
-Else → UNSTABLE
-
-Current:
-Confidence: ${cache.confidence?.toFixed(1)}%
-MAPE: ${cache.mape?.toFixed(1)}%`
-  );
+  <div class="card">Validation<div class="badge ${cls}">${validation}</div></div>`;
 }
 
 function renderRisk(r){
@@ -344,24 +330,42 @@ STRATEGY
 
 function destroy(n){ if(charts[n]) charts[n].destroy(); }
 
-/* ---------------- PDF ---------------- */
+/* ---------------- ⭐ PROFESSIONAL PDF EXPORT ---------------- */
 
 async function exportPDF(){
   const {jsPDF}=window.jspdf;
   const pdf=new jsPDF("p","mm","a4");
   let y=12;
 
-  pdf.setFontSize(16);
-  pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=10;
+  pdf.setFontSize(18);
+  pdf.text("PARAGON ANALYTICS REPORT",10,y);
+  y+=10;
 
   pdf.setFontSize(11);
-  pdf.text(`Confidence: ${cache.confidence.toFixed(1)}%   Validation: ${cache.validation}`,10,y); y+=8;
-  pdf.text(`Volatility: ${cache.risk.volatility}%   Risk: ${cache.risk.level}`,10,y); y+=10;
+  pdf.text(`Confidence: ${cache.confidence.toFixed(1)}%   Validation: ${cache.validation}`,10,y);
+  y+=6;
+  pdf.text(`Volatility: ${cache.risk.volatility}%   Risk Level: ${cache.risk.level}`,10,y);
+  y+=10;
 
-  pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,60); y+=70;
-  pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,180,45); y+=55;
+  pdf.text("Forecast Overview",10,y); 
+  y+=5;
+  pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,55);
+  y+=65;
 
-  pdf.text("Executive Summary:",10,y); y+=6;
+  pdf.text("KPI Summary",10,y); 
+  y+=5;
+  pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,85,45);
+  pdf.addImage(productChart.toDataURL(),"PNG",105,y,85,45);
+  y+=55;
+
+  pdf.text("Scenario Forecast",10,y); 
+  y+=6;
+  pdf.text(`Base: ${cache.scenarios.base.join(", ")}`,10,y); y+=6;
+  pdf.text(`Optimistic: ${cache.scenarios.optimistic.join(", ")}`,10,y); y+=6;
+  pdf.text(`Conservative: ${cache.scenarios.conservative.join(", ")}`,10,y); y+=10;
+
+  pdf.text("AI Strategy Summary",10,y); 
+  y+=6;
   pdf.text(aiText.value,10,y,{maxWidth:180});
 
   pdf.save("paragon_report.pdf");
