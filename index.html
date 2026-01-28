@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PARAGON ANALYTICS</title>
+<title>PARAGON ANALYTICS v1.0</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -29,7 +29,7 @@ button, select {
 .value { font-size:18px; font-weight:bold; }
 canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
 textarea { width:96%; height:200px; border-radius:8px; padding:8px; }
-.badge { padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; }
+.badge { padding:8px; border-radius:8px; font-weight:bold; }
 .good { background:#2ecc71; color:black; }
 .warn { background:#f1c40f; color:black; }
 .bad { background:#e74c3c; color:white; }
@@ -39,7 +39,7 @@ textarea { width:96%; height:200px; border-radius:8px; padding:8px; }
 <body>
 
 <h2>PARAGON ANALYTICS</h2>
-<p>Autonomous Business Intelligence Engine</p>
+<p>Autonomous Business Intelligence Engine — v1.0</p>
 
 <input type="file" id="csvFile"><br>
 
@@ -51,9 +51,7 @@ textarea { width:96%; height:200px; border-radius:8px; padding:8px; }
 </select>
 
 <select id="aggregationSelect">
-  <option value="raw">Raw</option>
   <option value="month" selected>Monthly</option>
-  <option value="quarter">Quarterly</option>
 </select>
 
 <br>
@@ -82,8 +80,6 @@ textarea { width:96%; height:200px; border-radius:8px; padding:8px; }
 <script>
 let rawData=[], charts={}, cache={};
 
-/* ---------------- LOAD CSV ---------------- */
-
 function loadCSV(){
   const file = csvFile.files[0];
   if(!file) return alert("Upload CSV first.");
@@ -94,8 +90,6 @@ function loadCSV(){
   };
   reader.readAsText(file);
 }
-
-/* ---------------- MAIN ---------------- */
 
 function runAnalytics(){
   if(!rawData.length) return alert("Load CSV first.");
@@ -126,17 +120,17 @@ function runAnalytics(){
   const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
   const scenarios = scenarioForecast(forecast);
 
-  cache = {confidence,mape,seasonality,anomalies,validation,kpi,risk,scenarios,segments};
+  cache = {confidence,mape,seasonality,validation,kpi,risk,scenarios};
 
   renderLine(labels,values,smooth,forecast);
   renderBars(kpi,segments);
-  renderAccuracy(confidence,mape,validation);
-  renderRisk(risk);
+  renderAccuracy(confidence,mape,validation,kpi.growth,seasonality);
+  renderRisk(risk,seasonality,kpi.growth);
   renderScenarios(scenarios);
   renderExplanation();
 }
 
-/* ---------------- DATA ---------------- */
+/* ---------- Core Engines ---------- */
 
 function aggregateData(data){
   let map={};
@@ -151,8 +145,6 @@ function clampOutliers(d){
   let m=mean(d), s=std(d);
   return d.map(v=>Math.min(m+2.5*s,Math.max(m-2.5*s,v)));
 }
-
-/* ---------------- FORECAST ---------------- */
 
 function expSmooth(d,a){
   let s=[d[0]];
@@ -174,8 +166,6 @@ function buildForecast(values){
   };
 }
 
-/* ---------------- METRICS ---------------- */
-
 function backtestMAPE(actual,smooth){
   let e=[];
   for(let i=1;i<actual.length;i++){
@@ -195,7 +185,7 @@ function detectAnomalies(d){
   return d.filter(v=>Math.abs(v-m)>3*s).length;
 }
 
-/* ---------------- CONFIDENCE ENGINE ---------------- */
+/* ---------- Confidence Engine ---------- */
 
 function computeConfidence(values, mape, seasonality, anomalies){
   let n = values.length;
@@ -214,28 +204,17 @@ function computeConfidence(values, mape, seasonality, anomalies){
       depthScore     * 0.15 +
       anomalyScore   * 0.15;
 
-  confidence = Math.max(55, Math.min(95, confidence));
-  return confidence;
+  return Math.max(55, Math.min(95, confidence));
 }
 
-/* ---------------- RISK MODEL ---------------- */
+/* ---------- Risk ---------- */
 
 function riskModel(d, conf){
   let vol = (std(d)/mean(d))*100;
   let riskScore = vol*0.5 + (100-conf)*0.5;
-
-  let level =
-      riskScore > 60 ? "HIGH" :
-      riskScore > 40 ? "MEDIUM" :
-      "LOW";
-
-  return {
-    volatility: vol.toFixed(1),
-    level
-  };
+  let level = riskScore > 60 ? "HIGH" : riskScore > 40 ? "MEDIUM" : "LOW";
+  return { volatility: vol.toFixed(1), level };
 }
-
-/* ---------------- VALIDATION ---------------- */
 
 function automatedValidation(conf,error){
   if(conf > 70 && error < 35) return "VALIDATED";
@@ -243,7 +222,7 @@ function automatedValidation(conf,error){
   return "UNSTABLE";
 }
 
-/* ---------------- KPI ---------------- */
+/* ---------- KPI ---------- */
 
 function kpiCalc(d){
   return {
@@ -268,7 +247,47 @@ function scenarioForecast(f){
   };
 }
 
-/* ---------------- UI ---------------- */
+/* ---------- UI ---------- */
+
+function renderAccuracy(conf,error,validation,growth,season){
+  let cls = validation==="VALIDATED"?"good":validation==="MONITOR"?"warn":"bad";
+  accuracyPanel.innerHTML=`
+  <div class="card">Confidence<div class="value">${conf.toFixed(1)}%</div></div>
+  <div class="card">MAPE<div class="value">${error.toFixed(1)}%</div></div>
+  <div class="card">Growth<div class="value">${growth}%</div></div>
+  <div class="card">Seasonality<div class="value">${season.toFixed(1)}%</div></div>
+  <div class="card">Validation<div class="badge ${cls}">${validation}</div></div>`;
+}
+
+function renderRisk(risk,season,growth){
+  riskPanel.innerHTML=`
+  <div class="card">Volatility<div class="value">${risk.volatility}%</div></div>
+  <div class="card">Risk Level<div class="value">${risk.level}</div></div>
+  <div class="card">Seasonality<div class="value">${season.toFixed(1)}%</div></div>
+  <div class="card">Growth<div class="value">${growth}%</div></div>`;
+}
+
+function renderScenarios(s){
+  scenarioPanel.innerHTML=`
+  <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
+  <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
+  <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
+}
+
+function renderExplanation(){
+  aiText.value =
+`SYSTEM EXPLANATION
+
+Seasonality shows recurring demand cycles.
+Growth indicates long-term trend direction.
+Confidence reflects forecast reliability.
+Validation summarizes system health.
+
+STRATEGY
+- VALIDATED → Safe to scale.
+- MONITOR → Observe trends.
+- UNSTABLE → Improve data quality.`;
+}
 
 function renderLine(labels,actual,smooth,f){
   destroy("line");
@@ -277,7 +296,7 @@ function renderLine(labels,actual,smooth,f){
     data:{
       labels:[...labels,"F1","F2","F3"],
       datasets:[
-        {label:"Actual",data:actual,borderWidth:2},
+        {label:"Actual",data:actual},
         {label:"Smoothed",data:smooth,borderDash:[5,5]},
         {label:"Forecast",data:[...Array(actual.length).fill(null),...f.base],borderDash:[3,3]},
         {label:"Upper",data:[...Array(actual.length).fill(null),...f.upper],borderDash:[2,4]},
@@ -293,44 +312,9 @@ function renderBars(kpi,segments){
   charts.prod=new Chart(productChart,{type:"bar",data:{labels:segments.map(s=>s[0]),datasets:[{data:segments.map(s=>s[1])}]}});
 }
 
-function renderAccuracy(conf,error,validation){
-  let cls = validation==="VALIDATED"?"good":validation==="MONITOR"?"warn":"bad";
-  accuracyPanel.innerHTML=`
-  <div class="card">Confidence<div class="value">${conf.toFixed(1)}%</div></div>
-  <div class="card">MAPE<div class="value">${error.toFixed(1)}%</div></div>
-  <div class="card">Validation<div class="badge ${cls}">${validation}</div></div>`;
-}
-
-function renderRisk(r){
-  riskPanel.innerHTML=`
-  <div class="card">Volatility<div class="value">${r.volatility}%</div></div>
-  <div class="card">Risk Level<div class="value">${r.level}</div></div>`;
-}
-
-function renderScenarios(s){
-  scenarioPanel.innerHTML=`
-  <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
-  <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
-  <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
-}
-
-function renderExplanation(){
-  aiText.value =
-`SYSTEM EXPLANATION
-
-Confidence reflects reliability after correcting volatility and forecast error.
-Validation summarizes system health automatically.
-Risk blends volatility with confidence.
-
-STRATEGY
-- VALIDATED → Safe to scale.
-- MONITOR → Observe trends before scaling.
-- UNSTABLE → Improve data quality.`;
-}
-
 function destroy(n){ if(charts[n]) charts[n].destroy(); }
 
-/* ---------------- ⭐ PROFESSIONAL PDF EXPORT ---------------- */
+/* ---------- PDF ---------- */
 
 async function exportPDF(){
   const {jsPDF}=window.jspdf;
@@ -338,40 +322,28 @@ async function exportPDF(){
   let y=12;
 
   pdf.setFontSize(18);
-  pdf.text("PARAGON ANALYTICS REPORT",10,y);
-  y+=10;
+  pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=10;
 
   pdf.setFontSize(11);
-  pdf.text(`Confidence: ${cache.confidence.toFixed(1)}%   Validation: ${cache.validation}`,10,y);
-  y+=6;
-  pdf.text(`Volatility: ${cache.risk.volatility}%   Risk Level: ${cache.risk.level}`,10,y);
-  y+=10;
+  pdf.text(`Confidence: ${cache.confidence.toFixed(1)}%   Validation: ${cache.validation}`,10,y); y+=6;
+  pdf.text(`Seasonality: ${cache.seasonality.toFixed(1)}%`,10,y); y+=6;
 
-  pdf.text("Forecast Overview",10,y); 
-  y+=5;
-  pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,55);
-  y+=65;
-
-  pdf.text("KPI Summary",10,y); 
-  y+=5;
+  pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,55); y+=65;
   pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,85,45);
-  pdf.addImage(productChart.toDataURL(),"PNG",105,y,85,45);
-  y+=55;
+  pdf.addImage(productChart.toDataURL(),"PNG",105,y,85,45); y+=55;
 
-  pdf.text("Scenario Forecast",10,y); 
-  y+=6;
+  pdf.text("Scenario Forecast",10,y); y+=6;
   pdf.text(`Base: ${cache.scenarios.base.join(", ")}`,10,y); y+=6;
   pdf.text(`Optimistic: ${cache.scenarios.optimistic.join(", ")}`,10,y); y+=6;
   pdf.text(`Conservative: ${cache.scenarios.conservative.join(", ")}`,10,y); y+=10;
 
-  pdf.text("AI Strategy Summary",10,y); 
-  y+=6;
+  pdf.text("AI Strategy Summary",10,y); y+=6;
   pdf.text(aiText.value,10,y,{maxWidth:180});
 
   pdf.save("paragon_report.pdf");
 }
 
-/* ---------------- MATH ---------------- */
+/* ---------- Math ---------- */
 
 function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
 function std(a){let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
