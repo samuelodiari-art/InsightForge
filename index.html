@@ -162,7 +162,8 @@ function expSmooth(d,a){
 
 function buildForecast(values){
   let last = values.at(-1);
-  let trend = (values.at(-1)-values.at(-4||0))/3;
+  let lookback = Math.min(4, values.length-1);
+  let trend = (values.at(-1) - values.at(-lookback)) / lookback;
   let vol = std(values)*0.25;
 
   let base=[1,2,3].map(i=>Math.round(last + trend*i));
@@ -194,19 +195,51 @@ function detectAnomalies(d){
   return d.filter(v=>Math.abs(v-m)>3*s).length;
 }
 
-function computeConfidence(d,error,seasonality,anomalies){
-  let vol=(std(d)/mean(d))*100;
-  let score =
-    (100-vol*1.2)*0.35 +
-    (100-error*1.6)*0.35 +
-    (seasonality*2)*0.15 +
-    (anomalies===0?100:60)*0.15;
-  return Math.max(40,Math.min(95,score));
+/* ---------------- ✅ RE-CALIBRATED CONFIDENCE ENGINE ---------------- */
+
+function computeConfidence(values, mape, seasonality, anomalies){
+  let n = values.length;
+  let volatility = (std(values)/mean(values))*100;
+
+  let stabilityScore = Math.max(40, 100 - volatility*1.1);
+  let errorScore     = Math.max(45, 100 - mape*1.0);
+  let seasonScore    = Math.min(100, seasonality * 2.5);
+  let depthScore     = Math.min(100, n * 6);
+  let anomalyScore   = anomalies === 0 ? 100 : 70;
+
+  let confidence =
+      stabilityScore * 0.30 +
+      errorScore     * 0.25 +
+      seasonScore    * 0.15 +
+      depthScore     * 0.15 +
+      anomalyScore   * 0.15;
+
+  confidence = Math.max(55, Math.min(95, confidence));
+  return confidence;
 }
 
+/* ---------------- ✅ SOFTENED RISK MODEL ---------------- */
+
+function riskModel(d, conf){
+  let vol = (std(d)/mean(d))*100;
+  let riskScore = vol*0.5 + (100-conf)*0.5;
+
+  let level =
+      riskScore > 60 ? "HIGH" :
+      riskScore > 40 ? "MEDIUM" :
+      "LOW";
+
+  return {
+    volatility: vol.toFixed(1),
+    level
+  };
+}
+
+/* ---------------- VALIDATION ---------------- */
+
 function automatedValidation(conf,error){
-  if(conf>70 && error<30) return "VALIDATED";
-  if(conf>55 && error<45) return "MONITOR";
+  if(conf > 70 && error < 35) return "VALIDATED";
+  if(conf > 55 && error < 50) return "MONITOR";
   return "UNSTABLE";
 }
 
@@ -219,11 +252,6 @@ function kpiCalc(d){
     avg:Math.round(mean(d)),
     growth:(((d.at(-1)-d[0])/d[0])*100).toFixed(1)
   };
-}
-
-function riskModel(d,conf){
-  let vol=(std(d)/mean(d))*100;
-  return {volatility:vol.toFixed(1), level:conf>65?"LOW":conf>50?"MEDIUM":"HIGH"};
 }
 
 function segment(p,v){
@@ -256,10 +284,7 @@ function renderLine(labels,actual,smooth,f){
         {label:"Lower",data:[...Array(actual.length).fill(null),...f.lower],borderDash:[2,4]}
       ]
     },
-    options:{
-      responsive:true,
-      scales:{ y:{ beginAtZero:false } }
-    }
+    options:{responsive:true}
   });
 }
 
@@ -280,11 +305,11 @@ function renderAccuracy(conf,error,validation){
 function explainValidation(){
   alert(
 `Validation Logic:
-Confidence ≥ 70% and MAPE < 30% → VALIDATED
-Confidence ≥ 55% and MAPE < 45% → MONITOR
+Confidence > 70% and MAPE < 35% → VALIDATED
+Confidence > 55% and MAPE < 50% → MONITOR
 Else → UNSTABLE
 
-Current values:
+Current:
 Confidence: ${cache.confidence?.toFixed(1)}%
 MAPE: ${cache.mape?.toFixed(1)}%`
   );
@@ -307,14 +332,14 @@ function renderExplanation(){
   aiText.value =
 `SYSTEM EXPLANATION
 
-Confidence indicates forecast reliability.
-MAPE reflects recent forecast error.
-Validation summarizes model health automatically.
+Confidence reflects reliability after correcting volatility and forecast error.
+Validation summarizes system health automatically.
+Risk blends volatility with confidence.
 
 STRATEGY
-- Scale cautiously when VALIDATED.
-- Monitor trends when MONITOR.
-- Stabilize data when UNSTABLE.`;
+- VALIDATED → Safe to scale.
+- MONITOR → Observe trends before scaling.
+- UNSTABLE → Improve data quality.`;
 }
 
 function destroy(n){ if(charts[n]) charts[n].destroy(); }
@@ -349,4 +374,4 @@ function std(a){let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
 
 </script>
 </body>
-</html>
+  </html>
