@@ -23,13 +23,13 @@ button, select {
 }
 .primary { background: gold; color:black; }
 .secondary { background: #333; color:white; }
-.panel { max-width:1300px; margin:auto; padding:10px; }
+.panel { max-width:1200px; margin:auto; padding:10px; }
 .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
-.card { background:rgba(255,255,255,0.08); padding:10px; border-radius:10px; }
+.card { background:rgba(255,255,255,0.08); padding:12px; border-radius:10px; }
 .value { font-size:18px; font-weight:bold; }
 canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
 textarea { width:96%; height:200px; border-radius:8px; padding:8px; }
-.badge { padding:6px; border-radius:6px; font-weight:bold; }
+.badge { padding:8px; border-radius:8px; font-weight:bold; cursor:pointer; }
 .good { background:#2ecc71; color:black; }
 .warn { background:#f1c40f; color:black; }
 .bad { background:#e74c3c; color:white; }
@@ -52,7 +52,6 @@ textarea { width:96%; height:200px; border-radius:8px; padding:8px; }
 
 <select id="aggregationSelect">
   <option value="raw">Raw</option>
-  <option value="week">Weekly</option>
   <option value="month" selected>Monthly</option>
   <option value="quarter">Quarterly</option>
 </select>
@@ -81,9 +80,9 @@ textarea { width:96%; height:200px; border-radius:8px; padding:8px; }
 </div>
 
 <script>
-let rawData=[], charts={}, cache={}, confidenceHistory=[];
+let rawData=[], charts={}, cache={};
 
-/* ---------- LOAD CSV ---------- */
+/* ---------------- LOAD CSV ---------------- */
 
 function loadCSV(){
   const file = csvFile.files[0];
@@ -96,13 +95,12 @@ function loadCSV(){
   reader.readAsText(file);
 }
 
-/* ---------- MAIN ---------- */
+/* ---------------- MAIN ---------------- */
 
 function runAnalytics(){
   if(!rawData.length) return alert("Load CSV first.");
 
   const col = parseInt(columnSelect.value);
-  const agg = aggregationSelect.value;
 
   const parsed = rawData.map(r=>({
     date: new Date(r[0]),
@@ -110,124 +108,84 @@ function runAnalytics(){
     product: r[4]
   })).filter(r=>isFinite(r.value) && !isNaN(r.date));
 
-  const aggregated = aggregateData(parsed, agg);
+  const aggregated = aggregateData(parsed);
   let values = clampOutliers(aggregated.map(r=>r.value));
   let labels = aggregated.map(r=>r.label);
 
   const smooth = expSmooth(values,0.35);
-  const ds = doubleSmooth(values);
-  const forecast = buildForecast(ds, values);
+  const forecast = buildForecast(values);
 
-  const backtest = backtestMAPE(values, smooth);
-  const anomalies = detectAnomalies(values);
+  const mape = backtestMAPE(values,smooth);
   const seasonality = detectSeasonality(parsed);
-
-  const confidence = computeConfidence(values, backtest, seasonality, anomalies);
-  confidenceHistory.push(confidence);
+  const anomalies = detectAnomalies(values);
+  const confidence = computeConfidence(values,mape,seasonality,anomalies);
+  const validation = automatedValidation(confidence,mape);
 
   const kpi = kpiCalc(values);
-  const dataQuality = computeDataQuality(values, anomalies);
-  const risk = riskModel(values, confidence);
-  const validation = automatedValidation(confidence, backtest, dataQuality);
-  const explanation = generateExplanation(confidence, risk, seasonality, validation);
+  const risk = riskModel(values,confidence);
   const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
   const scenarios = scenarioForecast(forecast);
 
-  cache = {forecast,confidence,risk,kpi,segments,scenarios,backtest,seasonality,dataQuality,validation};
+  cache = {confidence,mape,seasonality,anomalies,validation,kpi,risk,scenarios};
 
   renderLine(labels,values,smooth,forecast);
   renderBars(kpi,segments);
-  renderAccuracy(confidence, backtest, dataQuality, validation);
+  renderAccuracy(confidence,mape,validation);
   renderRisk(risk);
   renderScenarios(scenarios);
-  aiText.value = explanation;
+  renderExplanation();
 }
 
-/* ---------- VALIDATION ENGINE ---------- */
+/* ---------------- DATA ---------------- */
 
-function automatedValidation(conf, error, quality){
-  if(conf > 70 && error < 30 && quality > 70) return "VALIDATED";
-  if(conf > 50 && error < 45) return "MONITOR";
-  return "UNSTABLE";
-}
-
-function generateExplanation(conf, risk, seasonality, validation){
-  return `
-SYSTEM EXPLANATION
-
-Forecast Confidence is ${conf.toFixed(1)}%, indicating ${conf>70?"high reliability":"moderate reliability"}.
-Seasonality strength is ${seasonality.toFixed(1)}%, meaning demand has ${seasonality>25?"strong cyclic patterns":"stable patterns"}.
-Risk level is ${risk.level}, driven by volatility and confidence balance.
-Automated Validation Status: ${validation}.
-
-STRATEGY GUIDANCE
-- ${validation==="VALIDATED"?"Scaling is safe with controlled expansion.":"Monitor performance before scaling."}
-- ${seasonality>25?"Plan inventory and staffing seasonally.":"Maintain steady operations."}
-- ${risk.level==="LOW"?"Low operational risk detected.":"Apply conservative budgeting controls."}
-`;
-}
-
-/* ---------- ACCURACY PANEL ---------- */
-
-function renderAccuracy(conf, error, quality, validation){
-  let badge = validation==="VALIDATED"?"good":validation==="MONITOR"?"warn":"bad";
-  accuracyPanel.innerHTML = `
-  <div class="card">Confidence<div class="value">${conf.toFixed(1)}%</div></div>
-  <div class="card">MAPE Error<div class="value">${error.toFixed(1)}%</div></div>
-  <div class="card">Data Quality<div class="value">${quality}/100</div></div>
-  <div class="card">Validation<div class="badge ${badge}">${validation}</div></div>
-  `;
-}
-
-/* ---------- CORE FUNCTIONS ---------- */
-
-function aggregateData(data, mode){
-  if(mode==="raw") return data.map((d,i)=>({label:"P"+(i+1),value:d.value}));
+function aggregateData(data){
   let map={};
   data.forEach(d=>{
-    let dt=d.date, key="";
-    if(mode==="month") key=dt.getFullYear()+"-"+(dt.getMonth()+1);
-    if(mode==="quarter") key=dt.getFullYear()+"-Q"+(Math.floor(dt.getMonth()/3)+1);
-    map[key]=(map[key]||0)+d.value;
+    let k = d.date.getFullYear()+"-"+(d.date.getMonth()+1);
+    map[k]=(map[k]||0)+d.value;
   });
   return Object.entries(map).map(([k,v])=>({label:k,value:v}));
 }
 
 function clampOutliers(d){
   let m=mean(d), s=std(d);
-  return d.map(v=>Math.min(m+2.5*s, Math.max(m-2.5*s, v)));
+  return d.map(v=>Math.min(m+2.5*s,Math.max(m-2.5*s,v)));
 }
 
-function expSmooth(d,a){ let s=[d[0]]; for(let i=1;i<d.length;i++) s.push(a*d[i]+(1-a)*s[i-1]); return s; }
+/* ---------------- FORECAST ---------------- */
 
-function doubleSmooth(d){
-  let level=d[0], trend=d[1]-d[0];
-  d.forEach(v=>{ level=0.3*v+0.7*(level+trend); trend=0.15*(level-v)+0.85*trend; });
-  return {level,trend};
+function expSmooth(d,a){
+  let s=[d[0]];
+  for(let i=1;i<d.length;i++) s.push(a*d[i]+(1-a)*s[i-1]);
+  return s;
 }
 
-function buildForecast(ds,d){
-  let vol=std(d)*0.35;
-  let base=[1,2,3].map(i=>Math.round(ds.level+ds.trend*i));
-  return {base, upper:base.map(v=>v+vol), lower:base.map(v=>v-vol)};
+function buildForecast(values){
+  let last = values.at(-1);
+  let trend = (values.at(-1)-values.at(-4||0))/3;
+  let vol = std(values)*0.25;
+
+  let base=[1,2,3].map(i=>Math.round(last + trend*i));
+  return {
+    base,
+    upper: base.map(v=>Math.round(v+vol)),
+    lower: base.map(v=>Math.round(v-vol))
+  };
 }
 
-function computeConfidence(d,error,seasonality,anomalies){
-  let vol=(std(d)/mean(d))*100;
-  let stability=Math.max(0,100-vol*1.2);
-  let errScore=Math.max(0,100-error*1.8);
-  let seasonScore=Math.min(100,seasonality*3);
-  let anomalyScore=anomalies===0?100:60;
-  let depth=Math.min(100,d.length*8);
-  return Math.max(35,Math.min(95,(stability+errScore+seasonScore+anomalyScore+depth)/5));
-}
+/* ---------------- METRICS ---------------- */
 
-function computeDataQuality(d,anomalies){
-  return Math.round((d.length*5 + (anomalies===0?50:30))/2);
+function backtestMAPE(actual,smooth){
+  let e=[];
+  for(let i=1;i<actual.length;i++){
+    if(actual[i]!==0) e.push(Math.abs((actual[i]-smooth[i-1])/actual[i]));
+  }
+  return mean(e)*100;
 }
 
 function detectSeasonality(data){
-  let m={}; data.forEach(d=>m[d.date.getMonth()]=(m[d.date.getMonth()]||0)+d.value);
+  let m={};
+  data.forEach(d=>m[d.date.getMonth()]=(m[d.date.getMonth()]||0)+d.value);
   return (std(Object.values(m))/mean(Object.values(m)))*100;
 }
 
@@ -236,39 +194,73 @@ function detectAnomalies(d){
   return d.filter(v=>Math.abs(v-m)>3*s).length;
 }
 
-function backtestMAPE(actual,smooth){
-  let e=[]; for(let i=1;i<actual.length;i++) e.push(Math.abs((actual[i]-smooth[i-1])/actual[i]));
-  return mean(e)*100;
+function computeConfidence(d,error,seasonality,anomalies){
+  let vol=(std(d)/mean(d))*100;
+  let score =
+    (100-vol*1.2)*0.35 +
+    (100-error*1.6)*0.35 +
+    (seasonality*2)*0.15 +
+    (anomalies===0?100:60)*0.15;
+  return Math.max(40,Math.min(95,score));
 }
 
+function automatedValidation(conf,error){
+  if(conf>70 && error<30) return "VALIDATED";
+  if(conf>55 && error<45) return "MONITOR";
+  return "UNSTABLE";
+}
+
+/* ---------------- KPI ---------------- */
+
 function kpiCalc(d){
-  return {max:Math.max(...d), min:Math.min(...d), avg:Math.round(mean(d)), growth:(((d.at(-1)-d[0])/d[0])*100).toFixed(1)};
+  return {
+    max:Math.max(...d),
+    min:Math.min(...d),
+    avg:Math.round(mean(d)),
+    growth:(((d.at(-1)-d[0])/d[0])*100).toFixed(1)
+  };
 }
 
 function riskModel(d,conf){
   let vol=(std(d)/mean(d))*100;
-  let score=(vol*0.6)+((100-conf)*0.4);
-  return {volatility:vol.toFixed(1), level: score>55?"HIGH":score>35?"MEDIUM":"LOW"};
+  return {volatility:vol.toFixed(1), level:conf>65?"LOW":conf>50?"MEDIUM":"HIGH"};
 }
 
 function segment(p,v){
-  let map={}; p.forEach((x,i)=>map[x]=(map[x]||0)+v[i]);
+  let map={};
+  p.forEach((x,i)=>map[x]=(map[x]||0)+v[i]);
   return Object.entries(map).sort((a,b)=>b[1]-a[1]);
 }
 
 function scenarioForecast(f){
-  return {base:f.base, optimistic:f.base.map(v=>v*1.12), conservative:f.base.map(v=>v*0.88)};
+  return {
+    base:f.base,
+    optimistic:f.base.map(v=>Math.round(v*1.12)),
+    conservative:f.base.map(v=>Math.round(v*0.88))
+  };
 }
 
-/* ---------- UI ---------- */
+/* ---------------- UI ---------------- */
 
 function renderLine(labels,actual,smooth,f){
   destroy("line");
-  charts.line=new Chart(lineChart,{type:"line",data:{labels:[...labels,"F1","F2","F3"],datasets:[
-    {label:"Actual",data:actual},
-    {label:"Smoothed",data:smooth,borderDash:[5,5]},
-    {label:"Forecast",data:[...Array(actual.length).fill(null),...f.base],borderDash:[3,3]},
-  ]}});
+  charts.line=new Chart(lineChart,{
+    type:"line",
+    data:{
+      labels:[...labels,"F1","F2","F3"],
+      datasets:[
+        {label:"Actual",data:actual,borderWidth:2},
+        {label:"Smoothed",data:smooth,borderDash:[5,5]},
+        {label:"Forecast",data:[...Array(actual.length).fill(null),...f.base],borderDash:[3,3]},
+        {label:"Upper",data:[...Array(actual.length).fill(null),...f.upper],borderDash:[2,4]},
+        {label:"Lower",data:[...Array(actual.length).fill(null),...f.lower],borderDash:[2,4]}
+      ]
+    },
+    options:{
+      responsive:true,
+      scales:{ y:{ beginAtZero:false } }
+    }
+  });
 }
 
 function renderBars(kpi,segments){
@@ -277,34 +269,80 @@ function renderBars(kpi,segments){
   charts.prod=new Chart(productChart,{type:"bar",data:{labels:segments.map(s=>s[0]),datasets:[{data:segments.map(s=>s[1])}]}});
 }
 
+function renderAccuracy(conf,error,validation){
+  let cls = validation==="VALIDATED"?"good":validation==="MONITOR"?"warn":"bad";
+  accuracyPanel.innerHTML=`
+  <div class="card">Confidence<div class="value">${conf.toFixed(1)}%</div></div>
+  <div class="card">MAPE<div class="value">${error.toFixed(1)}%</div></div>
+  <div class="card">Validation<div class="badge ${cls}" onclick="explainValidation()">${validation}</div></div>`;
+}
+
+function explainValidation(){
+  alert(
+`Validation Logic:
+Confidence ≥ 70% and MAPE < 30% → VALIDATED
+Confidence ≥ 55% and MAPE < 45% → MONITOR
+Else → UNSTABLE
+
+Current values:
+Confidence: ${cache.confidence?.toFixed(1)}%
+MAPE: ${cache.mape?.toFixed(1)}%`
+  );
+}
+
 function renderRisk(r){
-  riskPanel.innerHTML=`<div class="card">Volatility<div class="value">${r.volatility}%</div></div>
+  riskPanel.innerHTML=`
+  <div class="card">Volatility<div class="value">${r.volatility}%</div></div>
   <div class="card">Risk Level<div class="value">${r.level}</div></div>`;
 }
 
 function renderScenarios(s){
-  scenarioPanel.innerHTML=`<div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
+  scenarioPanel.innerHTML=`
+  <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
   <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
   <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
 }
 
+function renderExplanation(){
+  aiText.value =
+`SYSTEM EXPLANATION
+
+Confidence indicates forecast reliability.
+MAPE reflects recent forecast error.
+Validation summarizes model health automatically.
+
+STRATEGY
+- Scale cautiously when VALIDATED.
+- Monitor trends when MONITOR.
+- Stabilize data when UNSTABLE.`;
+}
+
 function destroy(n){ if(charts[n]) charts[n].destroy(); }
 
-/* ---------- PDF EXPORT ---------- */
+/* ---------------- PDF ---------------- */
 
 async function exportPDF(){
   const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF();
-  let y=10;
-  pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=8;
-  pdf.text(`Confidence: ${cache.confidence.toFixed(1)}% | Validation: ${cache.validation}`,10,y); y+=10;
+  const pdf=new jsPDF("p","mm","a4");
+  let y=12;
+
+  pdf.setFontSize(16);
+  pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=10;
+
+  pdf.setFontSize(11);
+  pdf.text(`Confidence: ${cache.confidence.toFixed(1)}%   Validation: ${cache.validation}`,10,y); y+=8;
+  pdf.text(`Volatility: ${cache.risk.volatility}%   Risk: ${cache.risk.level}`,10,y); y+=10;
+
   pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,60); y+=70;
   pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,180,45); y+=55;
+
+  pdf.text("Executive Summary:",10,y); y+=6;
   pdf.text(aiText.value,10,y,{maxWidth:180});
+
   pdf.save("paragon_report.pdf");
 }
 
-/* ---------- MATH ---------- */
+/* ---------------- MATH ---------------- */
 
 function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
 function std(a){let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
