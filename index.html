@@ -1,3 +1,4 @@
+<!-- PARAGON ANALYTICS v1.0 FINAL PATCH -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -115,7 +116,7 @@ function runAnalytics(){
   const confidence = computeConfidence(values,mape,seasonality,anomalies);
   const validation = automatedValidation(confidence,mape);
 
-  const kpi = kpiCalc(values);
+  const kpi = kpiCalc(values, smooth);   // ✅ patched growth
   const risk = riskModel(values,confidence);
   const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
   const scenarios = scenarioForecast(forecast);
@@ -130,7 +131,7 @@ function runAnalytics(){
   renderExplanation();
 }
 
-/* ---------- Core Engines ---------- */
+/* ---------- Engines ---------- */
 
 function aggregateData(data){
   let map={};
@@ -185,7 +186,7 @@ function detectAnomalies(d){
   return d.filter(v=>Math.abs(v-m)>3*s).length;
 }
 
-/* ---------- Confidence Engine ---------- */
+/* ---------- Confidence ---------- */
 
 function computeConfidence(values, mape, seasonality, anomalies){
   let n = values.length;
@@ -222,14 +223,18 @@ function automatedValidation(conf,error){
   return "UNSTABLE";
 }
 
-/* ---------- KPI ---------- */
+/* ---------- KPI (PATCHED) ---------- */
 
-function kpiCalc(d){
+function kpiCalc(d, smooth){
+  let start = smooth[0];
+  let end = smooth.at(-1);
+  let growth = ((end - start) / Math.abs(start || 1)) * 100;
+
   return {
-    max:Math.max(...d),
-    min:Math.min(...d),
-    avg:Math.round(mean(d)),
-    growth:(((d.at(-1)-d[0])/d[0])*100).toFixed(1)
+    max: Math.max(...d),
+    min: Math.min(...d),
+    avg: Math.round(mean(d)),
+    growth: growth.toFixed(1)
   };
 }
 
@@ -279,7 +284,7 @@ function renderExplanation(){
 `SYSTEM EXPLANATION
 
 Seasonality shows recurring demand cycles.
-Growth indicates long-term trend direction.
+Growth reflects long-term trend direction.
 Confidence reflects forecast reliability.
 Validation summarizes system health.
 
@@ -326,7 +331,7 @@ async function exportPDF(){
 
   pdf.setFontSize(11);
   pdf.text(`Confidence: ${cache.confidence.toFixed(1)}%   Validation: ${cache.validation}`,10,y); y+=6;
-  pdf.text(`Seasonality: ${cache.seasonality.toFixed(1)}%`,10,y); y+=6;
+  pdf.text(`Seasonality: ${cache.seasonality.toFixed(1)}%   Growth: ${cache.kpi.growth}%`,10,y); y+=6;
 
   pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,55); y+=65;
   pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,85,45);
@@ -350,4 +355,4 @@ function std(a){let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
 
 </script>
 </body>
-</html>
+  </html>
