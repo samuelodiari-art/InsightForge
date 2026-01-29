@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PARAGON ANALYTICS v1.1</title>
+<title>PARAGON ANALYTICS v1.2</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -28,14 +28,18 @@ button, select {
 .card { background:rgba(255,255,255,0.08); padding:10px; border-radius:10px; }
 .value { font-size:18px; font-weight:bold; }
 canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
-textarea { width:95%; height:190px; border-radius:8px; padding:8px; }
-.status { margin-top:6px; font-size:13px; opacity:0.9; }
+textarea { width:95%; height:160px; border-radius:8px; padding:8px; }
+.badge { padding:6px 14px; border-radius:20px; font-weight:bold; display:inline-block; }
+.ok { background:#16a34a; }
+.stable { background:#22c55e; }
+.monitor { background:#f59e0b; }
+.bad { background:#dc2626; }
 </style>
 </head>
 
 <body>
 
-<h2>PARAGON ANALYTICS v1.1</h2>
+<h2>PARAGON ANALYTICS v1.2</h2>
 <p>Production-Grade Autonomous Business Intelligence Engine</p>
 
 <input type="file" id="csvFile"><br>
@@ -59,12 +63,16 @@ textarea { width:95%; height:190px; border-radius:8px; padding:8px; }
 <button class="secondary" onclick="runAnalytics()">Run Intelligence</button>
 <button class="secondary" onclick="exportPDF()">Export PDF</button>
 
-<div class="status" id="status"></div>
+<div id="validationBadge"></div>
 
 <div class="panel">
 <canvas id="lineChart"></canvas>
 <canvas id="kpiChart"></canvas>
 <canvas id="productChart"></canvas>
+<canvas id="confidenceChart"></canvas>
+
+<h3>Top Insights</h3>
+<div class="grid" id="insightPanel"></div>
 
 <h3>Risk & Intelligence</h3>
 <div class="grid" id="riskPanel"></div>
@@ -77,435 +85,299 @@ textarea { width:95%; height:190px; border-radius:8px; padding:8px; }
 </div>
 
 <script>
-/* ================= GLOBAL ================= */
+let rawRows=[], headers=[], columnMap={}, charts={}, confidenceHistory=[];
 
-let rawRows = [];
-let headers = [];
-let columnMap = {};
-let charts = {};
-let confidenceHistory = [];
+/* ---------------- UTILITIES ---------------- */
 
-const MAX_ROWS = 50000;
-
-/* ================= UTILITIES ================= */
-
-function normalizeHeader(h){
-  return h.toLowerCase().replace(/[^a-z0-9]/g,"");
-}
+function normalizeHeader(h){ return h.toLowerCase().replace(/[^a-z0-9]/g,""); }
 
 function detectColumnMap(headers){
-  const map = {};
+  const map={};
   headers.forEach((h,i)=>{
-    const n = normalizeHeader(h);
-    if(n.includes("date") || n.includes("time")) map.date = i;
-    if(n.includes("product") || n.includes("item") || n.includes("sku")) map.product = i;
-    if(n.includes("unit") || n.includes("qty") || n.includes("quantity")) map.units = i;
-    if(n.includes("revenue") || n.includes("sales")) map.revenue = i;
-    if(n.includes("cost") || n.includes("expense") || n.includes("cogs")) map.cost = i;
-    if(n.includes("profit") || n.includes("margin") || n.includes("net")) map.profit = i;
+    const n=normalizeHeader(h);
+    if(n.includes("date")) map.date=i;
+    if(n.includes("product")||n.includes("item")) map.product=i;
+    if(n.includes("unit")||n.includes("qty")) map.units=i;
+    if(n.includes("revenue")||n.includes("sales")) map.revenue=i;
+    if(n.includes("cost")||n.includes("expense")) map.cost=i;
+    if(n.includes("profit")||n.includes("margin")) map.profit=i;
   });
   return map;
 }
 
 function sanitizeCell(v){
-  if(v === undefined || v === null) return "";
-  v = String(v).trim();
-
-  // CSV Injection Protection
-  if(/^[=+\-@]/.test(v)) v = v.replace(/^[=+\-@]/,"");
-
+  if(v==null) return "";
+  v=String(v).trim();
+  if(/^[=+\-@]/.test(v)) v=v.replace(/^[=+\-@]/,"");
   return v;
 }
 
 function parseNumber(v){
-  if(v === "" || v === null) return null;
-  let s = String(v).toLowerCase();
-  s = s.replace(/[^0-9.\-k]/g,"");
-  if(s.endsWith("k")) s = parseFloat(s)*1000;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  if(v===""||v==null) return null;
+  let s=String(v).toLowerCase().replace(/[^0-9.\-k]/g,"");
+  if(s.endsWith("k")) s=parseFloat(s)*1000;
+  const n=Number(s);
+  return Number.isFinite(n)?n:null;
 }
 
-function safeDivide(a,b){
-  if(!Number.isFinite(a) || !Number.isFinite(b) || b === 0) return 0;
-  return a/b;
-}
-
-function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+function safeDiv(a,b){ return (!b||!isFinite(a)||!isFinite(b))?0:(a/b); }
+function mean(a){ return a.length?a.reduce((x,y)=>x+y,0)/a.length:0; }
 function std(a){ let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2))); }
 
-/* ================= LOAD CSV ================= */
+/* ---------------- CSV LOAD ---------------- */
 
 function loadCSV(){
-  const file = csvFile.files[0];
-  if(!file) return alert("Upload CSV first.");
-  if(file.size > 5*1024*1024) return alert("File too large for mobile stability.");
-
-  const reader = new FileReader();
-  reader.onload = e => {
-    let text = e.target.result.trim();
-    let rows = text.split(/\r?\n/);
-    if(rows.length > MAX_ROWS) return alert("Too many rows.");
-
-    headers = rows[0].split(",").map(h=>sanitizeCell(h));
-    rawRows = rows.slice(1).map(r=>r.split(",").map(sanitizeCell));
-    columnMap = detectColumnMap(headers);
-
-    status.innerHTML = `
-      Detected Columns →
-      Date: ${columnMap.date!==undefined?"✔":"✖"} |
-      Product: ${columnMap.product!==undefined?"✔":"✖"} |
-      Units: ${columnMap.units!==undefined?"✔":"✖"} |
-      Revenue: ${columnMap.revenue!==undefined?"✔":"✖"} |
-      Cost: ${columnMap.cost!==undefined?"✔":"✖"} |
-      Profit: ${columnMap.profit!==undefined?"✔":"✖"}
-    `;
-
-    alert("CSV Loaded Successfully");
+  const f=csvFile.files[0];
+  if(!f) return alert("Upload CSV first.");
+  const r=new FileReader();
+  r.onload=e=>{
+    const rows=e.target.result.trim().split(/\r?\n/);
+    headers=rows[0].split(",").map(sanitizeCell);
+    rawRows=rows.slice(1).map(r=>r.split(",").map(sanitizeCell));
+    columnMap=detectColumnMap(headers);
+    alert("CSV Loaded.");
   };
-  reader.readAsText(file);
+  r.readAsText(f);
 }
 
-/* ================= MAIN PIPELINE ================= */
+/* ---------------- MAIN ---------------- */
 
 function runAnalytics(){
   try{
-    if(!rawRows.length) return alert("Load CSV first.");
+    const metric=metricSelect.value;
+    const col=columnMap[metric];
+    if(col===undefined||columnMap.date===undefined)
+      return alert("Required column missing.");
 
-    const metric = metricSelect.value;
-    const agg = aggregationSelect.value;
-    const colIndex = columnMap[metric];
-
-    if(colIndex === undefined){
-      return alert(`"${metric}" column not found in this file.`);
-    }
-    if(columnMap.date === undefined){
-      return alert("Date column not detected.");
-    }
-
-    // Parse rows safely
-    let parsed = rawRows.map(r=>{
-      const date = new Date(r[columnMap.date]);
-      let val = parseNumber(r[colIndex]);
-      const product = columnMap.product!==undefined ? r[columnMap.product] : "All";
-
-      return {date,value:val,product};
+    let parsed=rawRows.map(r=>{
+      return {
+        date:new Date(r[columnMap.date]),
+        value:parseNumber(r[col]),
+        product:columnMap.product!==undefined?r[columnMap.product]:"All"
+      };
     }).filter(r=>!isNaN(r.date));
 
-    // Missing data repair
-    let last = null;
+    // Missing repair
+    let last=null;
     parsed.forEach(p=>{
-      if(p.value === null){
-        p.value = last;
-      } else {
-        last = p.value;
-      }
+      if(p.value==null) p.value=last;
+      else last=p.value;
     });
-    const fallbackMean = mean(parsed.filter(p=>p.value!==null).map(p=>p.value));
-    parsed.forEach(p=>{
-      if(p.value === null) p.value = fallbackMean || 0;
-    });
+    const fallback=mean(parsed.map(p=>p.value).filter(v=>v!=null));
+    parsed.forEach(p=>{ if(p.value==null) p.value=fallback||0; });
 
-    if(parsed.length < 6) return alert("Not enough clean data for analysis.");
+    const agg=aggregate(parsed);
+    const values=agg.values;
+    const labels=agg.labels;
 
-    const aggregated = aggregateData(parsed, agg);
-    let values = aggregated.map(r=>r.value);
-    let labels = aggregated.map(r=>r.label);
+    const smooth=expSmooth(values,0.35);
+    const forecast=buildForecast(values,metric);
 
-    values = winsorize(values);
-
-    const smooth = expSmooth(values,0.35);
-    const ds = doubleSmooth(values);
-    const forecast = buildForecast(ds, values, metric);
-
-    const backtest = backtestMAPE(values, smooth);
-    const anomalies = detectAnomalies(values);
-    const seasonality = detectSeasonality(parsed);
-
-    let confidence = computeConfidence(values, smooth, backtest, seasonality, anomalies);
+    const mape=calcMAPE(values,smooth);
+    const seasonality=detectSeasonality(parsed);
+    const volatility=safeDiv(std(values),mean(values))*100;
+    const confidence=calcConfidence(volatility,mape,seasonality,values.length);
     confidenceHistory.push(confidence);
 
-    const kpi = kpiCalc(values);
-    const dataQuality = computeDataQuality(values, anomalies);
-    const risk = riskModel(values, confidence);
-    const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
-    const scenarios = scenarioForecast(forecast);
-    const score3D = compute3DScore(confidence, risk.volatility, kpi.growth);
+    const kpi=kpiCalc(values);
+    const validation=validationEngine(confidence,mape,values.length);
+
+    renderValidation(validation);
+    renderConfidenceChart();
+    renderInsights(confidence,mape,seasonality,validation);
 
     renderLine(labels,values,smooth,forecast);
-    renderBars(kpi,segments);
-    renderRisk(risk,confidence,backtest,seasonality,score3D,dataQuality);
-    renderScenarios(scenarios);
-    generateInsights({confidence,dataQuality,backtest,seasonality,anomalies,segments,risk,kpi,score3D});
+    renderBars(kpi,segment(parsed));
 
-  }catch(err){
-    console.error(err);
-    alert("Analysis failed safely. Please check file quality.");
+    renderRisk(confidence,mape,seasonality,volatility);
+    renderScenarios(forecast);
+    renderAI(confidence,mape,seasonality,validation);
+
+  }catch(e){
+    console.error(e);
+    alert("Safe failure – check file quality.");
   }
 }
 
-/* ================= AGGREGATION ================= */
+/* ---------------- AGGREGATION ---------------- */
 
-function aggregateData(data, mode){
-  if(mode === "raw"){
-    return data.map((d,i)=>({ label:"P"+(i+1), value:d.value }));
-  }
-  let map = {};
+function aggregate(data){
+  let map={};
   data.forEach(d=>{
-    let key;
-    const dt = d.date;
-    if(mode === "week") key = dt.getFullYear()+"-W"+getWeek(dt);
-    if(mode === "month") key = dt.getFullYear()+"-"+(dt.getMonth()+1);
-    if(mode === "quarter") key = dt.getFullYear()+"-Q"+(Math.floor(dt.getMonth()/3)+1);
-    map[key] = (map[key] || 0) + d.value;
+    const k=d.date.getFullYear()+"-"+(d.date.getMonth()+1);
+    map[k]=(map[k]||0)+d.value;
   });
-  return Object.entries(map)
-    .sort((a,b)=>a[0].localeCompare(b[0]))
-    .map(([k,v])=>({ label:k, value:v }));
+  const entries=Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0]));
+  return {
+    labels:entries.map(e=>e[0]),
+    values:entries.map(e=>e[1])
+  };
 }
 
-function getWeek(d){
-  const onejan = new Date(d.getFullYear(),0,1);
-  return Math.ceil((((d - onejan) / 86400000) + onejan.getDay()+1)/7);
-}
+/* ---------------- MODELS ---------------- */
 
-/* ================= DATA STABILITY ================= */
-
-function winsorize(data){
-  let m = mean(data), s = std(data);
-  if(s === 0) return data;
-  let upper = m + 3*s;
-  let lower = m - 3*s;
-  return data.map(v=>Math.min(upper, Math.max(lower, v)));
-}
-
-/* ================= FORECAST ================= */
-
-function expSmooth(data,a){
-  let s=[data[0]];
-  for(let i=1;i<data.length;i++){
-    s.push(a*data[i] + (1-a)*s[i-1]);
-  }
+function expSmooth(d,a){
+  let s=[d[0]];
+  for(let i=1;i<d.length;i++) s.push(a*d[i]+(1-a)*s[i-1]);
   return s;
 }
 
-function doubleSmooth(data, alpha=0.3, beta=0.15){
-  let level = data[0];
-  let trend = data[1] - data[0];
-  for(let i=1;i<data.length;i++){
-    let prev = level;
-    level = alpha * data[i] + (1 - alpha) * (level + trend);
-    trend = beta * (level - prev) + (1 - beta) * trend;
-  }
-  return { level, trend };
-}
-
-function buildForecast(ds, values, metric){
-  let scale = (metric==="units") ? 0.25 : 0.15;
-  let vol = std(values)*scale;
-  let base = [1,2,3].map(i=>Math.round(ds.level + ds.trend*i));
+function buildForecast(values,metric){
+  let t=(values.at(-1)-values.at(-2))||0;
+  let scale=(metric==="units")?0.25:0.15;
+  let vol=std(values)*scale;
+  let base=[1,2,3].map(i=>Math.round(values.at(-1)+t*i));
   return {
     base,
-    upper: base.map(v=>Math.round(v+vol)),
-    lower: base.map(v=>Math.round(v-vol))
+    upper:base.map(v=>Math.round(v+vol)),
+    lower:base.map(v=>Math.round(v-vol))
   };
 }
 
-/* ================= QUALITY ================= */
-
-function computeConfidence(values, smooth, backtest, seasonality, anomalies){
-  let volatility = safeDivide(std(values),mean(values))*100;
-  let stabilityScore = Math.max(0, 100 - volatility*1.1);
-  let errorScore = Math.max(0, 100 - backtest*1.5);
-  let seasonScore = Math.min(100, seasonality * 2.5);
-  let depthScore = Math.min(100, values.length * 7);
-  let anomalyScore = anomalies === 0 ? 100 : Math.max(50, 100 - anomalies*15);
-
-  let confidence =
-      stabilityScore * 0.25 +
-      errorScore     * 0.25 +
-      seasonScore    * 0.15 +
-      depthScore     * 0.15 +
-      anomalyScore   * 0.20;
-
-  return Math.max(40, Math.min(95, confidence));
+function calcMAPE(a,s){
+  let e=[];
+  for(let i=1;i<a.length;i++)
+    if(a[i]!==0) e.push(Math.abs((a[i]-s[i-1])/a[i]));
+  return mean(e)*100;
 }
 
-function computeDataQuality(values, anomalies){
-  let completeness = Math.min(100, values.length * 10);
-  let stability = Math.max(0, 100 - safeDivide(std(values),mean(values))*120);
-  let anomalyHealth = anomalies === 0 ? 100 : 80;
-  return Math.round((completeness*0.3)+(stability*0.4)+(anomalyHealth*0.3));
-}
-
-/* ================= BACKTEST ================= */
-
-function backtestMAPE(actual, smooth){
-  let errors=[];
-  for(let i=1;i<actual.length;i++){
-    if(actual[i] !== 0){
-      errors.push(Math.abs((actual[i]-smooth[i-1])/actual[i]));
-    }
-  }
-  return mean(errors)*100;
-}
-
-/* ================= SMART ANALYTICS ================= */
-
-function detectAnomalies(data){
-  let m = mean(data), s = std(data);
-  return data.filter(v=>Math.abs(v-m) > 3*s).length;
-}
-
-function detectSeasonality(data){
-  let months={};
-  data.forEach(d=>{
-    let m=d.date.getMonth();
-    months[m]=(months[m]||0)+d.value;
+function detectSeasonality(d){
+  let m={};
+  d.forEach(x=>{
+    let k=x.date.getMonth();
+    m[k]=(m[k]||0)+x.value;
   });
-  let vals=Object.values(months);
-  return safeDivide(std(vals),mean(vals))*100;
+  let v=Object.values(m);
+  return safeDiv(std(v),mean(v))*100;
 }
 
-/* ================= KPI ================= */
-
-function rollingGrowth(d){
-  let g=[];
-  for(let i=1;i<d.length;i++){
-    if(d[i-1]!==0) g.push((d[i]-d[i-1])/Math.abs(d[i-1]));
-  }
-  return mean(g)*100;
+function calcConfidence(vol,mape,season,n){
+  let score=100-(vol*0.6+mape*0.8+season*0.3);
+  score+=Math.min(30,n*2);
+  return Math.max(35,Math.min(95,score));
 }
 
-function kpiCalc(d){
-  return {
-    max: Math.max(...d),
-    min: Math.min(...d),
-    avg: Math.round(mean(d)),
-    growth: rollingGrowth(d).toFixed(1)
-  };
+/* ---------------- VALIDATION ENGINE ---------------- */
+
+function validationEngine(conf,mape,n){
+  if(conf>=75 && mape<=15 && n>=8) return "VALIDATED";
+  if(conf>=65 && mape<=25) return "STABLE";
+  if(conf>=50 || mape<=40) return "MONITOR";
+  return "UNSTABLE";
 }
 
-/* ================= RISK ================= */
-
-function riskModel(data, confidence){
-  let volatility = safeDivide(std(data),mean(data))*100;
-  let riskScore = (volatility*0.6)+((100-confidence)*0.4);
-  let level = riskScore>55?"HIGH":riskScore>35?"MEDIUM":"LOW";
-  return {volatility:volatility.toFixed(1),riskScore:riskScore.toFixed(1),level};
+function renderValidation(v){
+  let cls="ok";
+  if(v==="STABLE") cls="stable";
+  if(v==="MONITOR") cls="monitor";
+  if(v==="UNSTABLE") cls="bad";
+  validationBadge.innerHTML=`<span class="badge ${cls}">${v}</span>`;
 }
 
-function compute3DScore(conf, vol, growth){
-  let stability = Math.max(0,100-vol);
-  return Math.round((conf*0.4)+(stability*0.3)+(growth*0.3));
+/* ---------------- INSIGHT RANKING ---------------- */
+
+function renderInsights(conf,mape,season,validation){
+  let insights=[];
+  insights.push({score:mape, text:"Forecast error detected – improve data quality."});
+  insights.push({score:season, text:"Strong seasonality – optimize inventory planning."});
+  insights.push({score:100-conf, text:"Confidence trending lower – monitor stability."});
+  insights.push({score:validation==="UNSTABLE"?80:10, text:"Validation risk – review dataset."});
+
+  insights.sort((a,b)=>b.score-a.score);
+  insightPanel.innerHTML = insights.slice(0,3)
+    .map(i=>`<div class="card">${i.text}</div>`).join("");
 }
 
-/* ================= SEGMENT ================= */
+/* ---------------- CHARTS ---------------- */
 
-function segment(p,v){
-  let map={};
-  p.forEach((x,i)=> map[x]=(map[x]||0)+v[i]);
-  return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+function renderConfidenceChart(){
+  if(charts.conf) charts.conf.destroy();
+  charts.conf=new Chart(confidenceChart,{
+    type:"line",
+    data:{
+      labels:confidenceHistory.map((_,i)=>"Run "+(i+1)),
+      datasets:[{label:"Confidence Strength",data:confidenceHistory}]
+    }
+  });
 }
 
-/* ================= SCENARIO ================= */
-
-function scenarioForecast(f){
-  return {
-    base:f.base,
-    optimistic:f.base.map(v=>Math.round(v*1.12)),
-    conservative:f.base.map(v=>Math.round(v*0.88))
-  };
-}
-
-/* ================= INSIGHTS ================= */
-
-function generateInsights(c){
-  let trend = confidenceHistory.length > 1 ?
-      (confidenceHistory.at(-1) - confidenceHistory.at(-2)).toFixed(1) : "0.0";
-
-  aiText.value =
-`INTELLIGENCE SUMMARY
-
-Confidence: ${c.confidence.toFixed(1)}%  (Trend: ${trend}%)
-Data Quality Score: ${c.dataQuality}/100
-Forecast Error (MAPE): ${c.backtest.toFixed(1)}%
-Seasonality Strength: ${c.seasonality.toFixed(1)}%
-Anomalies Detected: ${c.anomalies}
-
-Top Product: ${c.segments[0]?.[0] || "N/A"}
-Risk Level: ${c.risk.level}
-Growth Rate: ${c.kpi.growth}%
-3D Client Score: ${c.score3D}/100`;
-}
-
-/* ================= CHARTS ================= */
-
-function renderLine(labels,actual,smooth,f){
-  destroy("line");
-  charts.line = new Chart(lineChart,{
+function renderLine(labels,a,s,f){
+  if(charts.line) charts.line.destroy();
+  charts.line=new Chart(lineChart,{
     type:"line",
     data:{
       labels:[...labels,"F1","F2","F3"],
       datasets:[
-        {label:"Actual",data:actual},
-        {label:"Smoothed",data:smooth,borderDash:[5,5]},
-        {label:"Forecast",data:[...Array(actual.length).fill(null),...f.base],borderDash:[3,3]},
-        {label:"Upper Band",data:[...Array(actual.length).fill(null),...f.upper],borderDash:[2,4]},
-        {label:"Lower Band",data:[...Array(actual.length).fill(null),...f.lower],borderDash:[2,4]}
+        {label:"Actual",data:a},
+        {label:"Smoothed",data:s,borderDash:[5,5]},
+        {label:"Forecast",data:[...Array(a.length).fill(null),...f.base]}
       ]
     }
   });
 }
 
 function renderBars(kpi,segments){
-  destroy("kpi"); destroy("prod");
-  charts.kpi = new Chart(kpiChart,{
+  if(charts.kpi) charts.kpi.destroy();
+  if(charts.prod) charts.prod.destroy();
+  charts.kpi=new Chart(kpiChart,{
     type:"bar",
-    data:{ labels:["Max","Min","Avg","Growth%"], datasets:[{data:[kpi.max,kpi.min,kpi.avg,kpi.growth]}] }
+    data:{labels:["Max","Min","Avg","Growth%"],datasets:[{data:[kpi.max,kpi.min,kpi.avg,kpi.growth]}]}
   });
-  charts.prod = new Chart(productChart,{
+  charts.prod=new Chart(productChart,{
     type:"bar",
-    data:{ labels:segments.map(s=>s[0]), datasets:[{data:segments.map(s=>s[1])}] }
+    data:{labels:segments.labels,datasets:[{data:segments.values}]}
   });
 }
 
-function destroy(n){ if(charts[n]) charts[n].destroy(); }
+/* ---------------- SUPPORT ---------------- */
 
-/* ================= UI ================= */
-
-function renderRisk(r,c,b,s,score,quality){
-  riskPanel.innerHTML = `
-  <div class="card">Volatility<div class="value">${r.volatility}%</div></div>
-  <div class="card">Confidence<div class="value">${c.toFixed(1)}%</div></div>
-  <div class="card">Data Quality<div class="value">${quality}/100</div></div>
-  <div class="card">MAPE Error<div class="value">${b.toFixed(1)}%</div></div>
-  <div class="card">Seasonality<div class="value">${s.toFixed(1)}%</div></div>
-  <div class="card">3D Score<div class="value">${score}</div></div>
-  <div class="card">Risk Level<div class="value">${r.level}</div></div>`;
+function kpiCalc(d){
+  return {
+    max:Math.max(...d),
+    min:Math.min(...d),
+    avg:Math.round(mean(d)),
+    growth:((d.at(-1)-d[0])/Math.abs(d[0])*100||0).toFixed(1)
+  };
 }
 
-function renderScenarios(s){
-  scenarioPanel.innerHTML = `
-  <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
-  <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
-  <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
+function segment(parsed){
+  let m={};
+  parsed.forEach(p=>m[p.product]=(m[p.product]||0)+p.value);
+  return {labels:Object.keys(m),values:Object.values(m)};
 }
 
-/* ================= PDF ================= */
+function renderRisk(conf,mape,season,vol){
+  riskPanel.innerHTML=`
+  <div class="card">Confidence<div class="value">${conf.toFixed(1)}%</div></div>
+  <div class="card">MAPE<div class="value">${mape.toFixed(1)}%</div></div>
+  <div class="card">Seasonality<div class="value">${season.toFixed(1)}%</div></div>
+  <div class="card">Volatility<div class="value">${vol.toFixed(1)}%</div></div>`;
+}
+
+function renderScenarios(f){
+  scenarioPanel.innerHTML=`
+  <div class="card">Base<div class="value">${f.base.join(", ")}</div></div>
+  <div class="card">Upper<div class="value">${f.upper.join(", ")}</div></div>
+  <div class="card">Lower<div class="value">${f.lower.join(", ")}</div></div>`;
+}
+
+function renderAI(conf,mape,season,validation){
+  aiText.value=
+`Confidence: ${conf.toFixed(1)}%
+MAPE: ${mape.toFixed(1)}%
+Seasonality: ${season.toFixed(1)}%
+Validation Status: ${validation}`;
+}
+
+/* ---------------- PDF ---------------- */
 
 async function exportPDF(){
-  const {jsPDF} = window.jspdf;
-  const pdf = new jsPDF("p","mm","a4");
-  let y = 10;
-
-  pdf.text("PARAGON ANALYTICS v1.1 REPORT",10,y); y+=8;
-  pdf.addImage(lineChart.toDataURL("image/png"),"PNG",10,y,180,60); y+=70;
-  pdf.addImage(kpiChart.toDataURL("image/png"),"PNG",10,y,180,45); y+=55;
-  pdf.addImage(productChart.toDataURL("image/png"),"PNG",10,y,180,45); y+=55;
-  pdf.text(aiText.value,10,y,{maxWidth:180});
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF();
+  pdf.text("PARAGON ANALYTICS v1.2 REPORT",10,10);
+  pdf.addImage(lineChart.toDataURL("image/png"),"PNG",10,20,180,60);
   pdf.save("paragon_report.pdf");
 }
 </script>
 </body>
-</html>
+  </html>
