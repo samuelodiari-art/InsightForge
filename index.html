@@ -25,14 +25,14 @@ button,select{
 .card{background:rgba(255,255,255,0.08);padding:12px;border-radius:10px;}
 .value{font-size:18px;font-weight:bold;}
 canvas{background:rgba(255,255,255,0.05);border-radius:10px;margin-top:18px;}
-textarea{width:96%;height:280px;border-radius:8px;padding:10px;}
+textarea{width:96%;height:320px;border-radius:8px;padding:12px;}
 </style>
 </head>
 
 <body>
 
 <h2>PARAGON ANALYTICS — v3.0</h2>
-<p>Virtual Business Consultant (Phase 1)</p>
+<p>Virtual Business Consultant</p>
 
 <input type="file" id="csvFile"><br>
 
@@ -45,6 +45,7 @@ textarea{width:96%;height:280px;border-radius:8px;padding:10px;}
 <br>
 <button class="primary" onclick="loadCSV()">Load CSV</button>
 <button class="secondary" onclick="runAnalytics()">Run Analysis</button>
+<button class="secondary" onclick="exportPDF()">Export Consultant PDF</button>
 
 <div class="panel">
 
@@ -53,15 +54,15 @@ textarea{width:96%;height:280px;border-radius:8px;padding:10px;}
 <h3>Key Metrics</h3>
 <div class="grid" id="kpiPanel"></div>
 
-<h3>Consultant Assessment</h3>
+<h3>Consultant Brief</h3>
 <textarea id="insightText"></textarea>
 
 </div>
 
 <script>
-let headers=[], rows=[], chart;
+let headers=[], rows=[], chart, cache={};
 
-/* ---------------- CSV ---------------- */
+/* ================= CSV ================= */
 
 function loadCSV(){
   const f=csvFile.files[0];
@@ -71,12 +72,12 @@ function loadCSV(){
     const l=e.target.result.trim().split("\n");
     headers=l[0].split(",").map(x=>x.trim());
     rows=l.slice(1).map(x=>x.split(","));
-    alert("CSV loaded");
+    alert("CSV loaded successfully");
   };
   r.readAsText(f);
 }
 
-/* ---------------- CORE ---------------- */
+/* ================= MAIN ================= */
 
 function runAnalytics(){
   if(!rows.length) return alert("Load CSV first");
@@ -84,8 +85,7 @@ function runAnalytics(){
   const metric=metricSelect.value;
   const dI=headers.indexOf("Date");
   const mI=headers.indexOf(metric);
-
-  if(dI===-1||mI===-1) return alert("CSV needs Date + metric");
+  if(dI===-1||mI===-1) return alert("CSV must contain Date and selected metric");
 
   const data=rows.map(r=>({
     date:new Date(r[dI]),
@@ -93,28 +93,27 @@ function runAnalytics(){
   })).filter(x=>isFinite(x.value)&&!isNaN(x.date));
 
   const values=data.map(d=>d.value);
-
   const stats=analyzeSignals(values);
   const forecast=consultantForecast(values,stats);
   const verdict=businessVerdict(stats);
   const confidence=confidenceLogic(stats);
-  const recommendation=recommendationLogic(verdict,confidence);
+  const recommendation=recommendationLogic(verdict);
+
+  cache={values,stats,forecast,verdict,confidence,recommendation};
 
   renderChart(values,forecast.base);
   renderKPIs(stats);
-  renderNarrative(verdict,confidence,forecast,recommendation,stats);
+  renderNarrative();
 }
 
-/* ---------------- ANALYSIS ---------------- */
+/* ================= ANALYSIS ================= */
 
 function analyzeSignals(v){
   const m=mean(v);
   const s=std(v);
   const vol=(s/(Math.abs(m)||1))*100;
   const growth=((v[v.length-1]-v[0])/(Math.abs(v[0])||1))*100;
-
   const anomalies=v.filter(x=>Math.abs(x-m)>2*s).length;
-
   return{
     mean:m,
     volatility:vol,
@@ -124,22 +123,19 @@ function analyzeSignals(v){
   };
 }
 
-/* ---------------- FORECAST (CONSERVATIVE) ---------------- */
+/* ================= FORECAST ================= */
 
-function consultantForecast(v,stats){
+function consultantForecast(v,s){
   const last=v[v.length-1];
   const trend=(last-v[Math.max(0,v.length-6)])/(Math.min(6,v.length-1)||1);
-
   let base=[1,2,3].map(i=>round(last+trend*i));
-
-  let usability="Suitable for planning";
-  if(stats.volatility>40||stats.anomalies>3) usability="Use with caution";
-  if(v.length<8) usability="Indicative only";
-
+  let usability="Suitable for short-term planning";
+  if(s.volatility>40||s.anomalies>3) usability="Use with caution due to instability";
+  if(v.length<8) usability="Indicative only (limited data)";
   return{base,usability};
 }
 
-/* ---------------- VERDICT ---------------- */
+/* ================= VERDICT ================= */
 
 function businessVerdict(s){
   if(s.stability && s.growth>0) return "Strong & Stable";
@@ -148,29 +144,28 @@ function businessVerdict(s){
   return "Operationally Fragile";
 }
 
-/* ---------------- CONFIDENCE ---------------- */
+/* ================= CONFIDENCE ================= */
 
 function confidenceLogic(s){
-  let c=80;
+  let c=85;
   if(s.volatility>40) c-=20;
   if(s.anomalies>2) c-=15;
-  if(Math.abs(s.growth)>50) c-=10;
-  return Math.max(30,Math.min(90,c));
+  return Math.max(35,Math.min(90,c));
 }
 
-/* ---------------- RECOMMENDATION ---------------- */
+/* ================= RECOMMENDATION ================= */
 
-function recommendationLogic(v,c){
+function recommendationLogic(v){
   if(v==="Strong & Stable")
-    return "Maintain current strategy and consider modest expansion.";
+    return "Maintain current strategy and consider modest, controlled expansion.";
   if(v==="Growth with Elevated Risk")
-    return "Proceed cautiously; prioritize stabilizing volatility before scaling.";
+    return "Proceed cautiously. Focus on stabilizing operations before scaling.";
   if(v==="Stable with Watchpoints")
-    return "Hold course while monitoring early warning indicators.";
-  return "Focus on stabilization before pursuing growth.";
+    return "Hold course while monitoring emerging risk indicators.";
+  return "Prioritize operational stabilization before pursuing growth.";
 }
 
-/* ---------------- RENDER ---------------- */
+/* ================= RENDER ================= */
 
 function renderChart(actual,forecast){
   if(chart) chart.destroy();
@@ -194,29 +189,74 @@ function renderKPIs(s){
   `;
 }
 
-function renderNarrative(v,c,f,r,s){
+function renderNarrative(){
+  const c=cache;
   insightText.value=
 `EXECUTIVE VERDICT
-${v}
+${c.verdict}
 
-ASSESSMENT
-The business shows ${s.stability?"stable":"unstable"} operating patterns with ${round(s.growth)}% growth and ${round(s.volatility)}% volatility.
+BUSINESS HEALTH ASSESSMENT
+The business exhibits ${c.stats.stability?"stable":"unstable"} operating patterns, with ${round(c.stats.growth)}% growth and ${round(c.stats.volatility)}% volatility. Performance reliability is ${c.stats.stability?"high":"moderate to low"}.
+
+KEY DRIVERS
+Performance is primarily driven by trend direction and volatility levels, with anomaly frequency indicating ${c.stats.anomalies>2?"execution risk":"controlled operations"}.
 
 FORECAST OUTLOOK
-Short-term projections are ${f.usability.toLowerCase()}.
+${c.forecast.usability}. Forecast projections indicate a conservative continuation of recent patterns.
 
-RECOMMENDATION
-${r}
+STRATEGIC RECOMMENDATION
+${c.recommendation}
 
-CAVEATS
-This assessment assumes current demand patterns persist and volatility does not materially increase.
+RISKS & CAVEATS
+This assessment assumes demand patterns remain consistent and volatility does not materially increase. Unexpected cost shocks or market disruptions may affect outcomes.
 
-CONFIDENCE
-Overall confidence is ${c}%, reflecting ${s.stability?"signal agreement":"signal contradictions"} in the data.
+CONFIDENCE STATEMENT
+Overall confidence is ${c.confidence}%, reflecting signal agreement and data stability.
 `;
 }
 
-/* ---------------- MATH ---------------- */
+/* ================= PDF ================= */
+
+async function exportPDF(){
+  if(!cache.values) return alert("Run analysis first");
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF();
+  let y=14;
+
+  function section(title,text){
+    pdf.setFontSize(14); pdf.text(title,10,y); y+=6;
+    pdf.setFontSize(10); pdf.text(text,10,y,{maxWidth:180}); y+=text.split("\n").length*5+6;
+  }
+
+  section("EXECUTIVE OVERVIEW",
+`Verdict: ${cache.verdict}
+Overall confidence: ${cache.confidence}%
+
+${cache.recommendation}`);
+
+  section("BUSINESS HEALTH ASSESSMENT",
+`Growth: ${round(cache.stats.growth)}%
+Volatility: ${round(cache.stats.volatility)}%
+Anomalies: ${cache.stats.anomalies}
+
+The business shows ${cache.stats.stability?"stable":"unstable"} operational characteristics.`);
+
+  section("FORECAST OUTLOOK",
+`${cache.forecast.usability}
+Projected values: ${cache.forecast.base.join(", ")}`);
+
+  section("RISKS & ASSUMPTIONS",
+`Assumes demand consistency and no major operational disruptions.
+Volatility and anomaly trends should be monitored closely.`);
+
+  pdf.addPage();
+  pdf.text("ANALYTICAL EVIDENCE",10,14);
+  pdf.addImage(trendChart.toDataURL(),"PNG",10,20,180,80);
+
+  pdf.save("paragon_consultant_report.pdf");
+}
+
+/* ================= MATH ================= */
 
 function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
 function std(a){let m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
@@ -224,4 +264,4 @@ function round(x){return Math.round(x*100)/100;}
 
 </script>
 </body>
-  </html>
+</html>
