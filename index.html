@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PARAGON ANALYTICS v2</title>
+<title>PARAGON ANALYTICS v2.1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -25,29 +25,28 @@ button, select {
 .primary { background: gold; color:black; }
 .secondary { background: #333; color:white; }
 .panel { max-width:1200px; margin:auto; padding:10px; }
-.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
-.card { background:rgba(255,255,255,0.08); padding:10px; border-radius:10px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+.card { background:rgba(255,255,255,0.08); padding:12px; border-radius:10px; }
 .value { font-size:18px; font-weight:bold; }
-.alert { background:#b30000; padding:8px; border-radius:6px; margin:4px; }
-.warn { background:#8a6d00; padding:8px; border-radius:6px; margin:4px; }
-.good { background:#006b2d; padding:8px; border-radius:6px; margin:4px; }
-canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
-textarea { width:95%; height:260px; border-radius:8px; padding:8px; }
+.alert-critical { background:#9b0000; padding:8px; border-radius:6px; margin:6px; }
+.alert-warning { background:#8a6d00; padding:8px; border-radius:6px; margin:6px; }
+.alert-info { background:#006b2d; padding:8px; border-radius:6px; margin:6px; }
+canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:18px; }
+textarea { width:96%; height:260px; border-radius:8px; padding:10px; }
 </style>
 </head>
 
 <body>
 
-<h2>PARAGON ANALYTICS — BUSINESS AI v2</h2>
-<p>Validated Business Intelligence & Decision Engine</p>
+<h2>PARAGON ANALYTICS — BUSINESS AI v2.1</h2>
+<p>Validated, Explainable Business Intelligence Engine</p>
 
 <input type="file" id="csvFile"><br>
 
 <select id="metricSelect">
-  <option value="Revenue">Revenue</option>
-  <option value="Profit">Profit</option>
-  <option value="Cost">Cost</option>
-  <option value="UnitsSold">Units Sold</option>
+  <option value="revenue">Revenue</option>
+  <option value="cost">Cost</option>
+  <option value="units">Units Sold</option>
 </select>
 
 <select id="aggregationSelect">
@@ -63,6 +62,7 @@ textarea { width:95%; height:260px; border-radius:8px; padding:8px; }
 <button class="secondary" onclick="exportPDF()">Export Executive PDF</button>
 
 <div class="panel">
+
 <div id="alertPanel"></div>
 
 <canvas id="lineChart"></canvas>
@@ -81,25 +81,30 @@ textarea { width:95%; height:260px; border-radius:8px; padding:8px; }
 
 <h3>Executive Intelligence</h3>
 <textarea id="aiText"></textarea>
+
 </div>
 
 <script>
 let rawRows=[], headers=[], charts={}, cache={}, alerts=[];
+let colMap={};
 
-/* ================= VALIDATION ENGINE ================= */
+/* ================= SMART COLUMN MAPPING ================= */
 
-function validateData(parsed){
-  let issues=[], warnings=[];
-  let negatives = parsed.filter(r=>r.value <= 0).length;
-  if(negatives > 0) issues.push("Negative or zero values detected in metric.");
-  let badDates = parsed.filter(r=>isNaN(r.date)).length;
-  if(badDates > 0) issues.push("Invalid date rows detected.");
-  let missingProduct = parsed.filter(r=>!r.product).length;
-  if(missingProduct > 0) warnings.push("Missing product labels detected.");
-  if(parsed.length < 12) warnings.push("Dataset is small for reliable forecasting.");
+function normalize(h){
+  return h.toLowerCase().replace(/[^a-z0-9]/g,"");
+}
 
-  let score = Math.max(40,100 - issues.length*30 - warnings.length*10);
-  return {issues,warnings,score};
+function mapColumns(headers){
+  let map={};
+  headers.forEach((h,i)=>{
+    let n=normalize(h);
+    if(n.includes("date")) map.date=i;
+    if(n.includes("product")||n.includes("item")||n.includes("sku")) map.product=i;
+    if(n.includes("revenue")||n.includes("sales")||n.includes("turnover")) map.revenue=i;
+    if(n.includes("cost")||n.includes("expense")||n.includes("cogs")) map.cost=i;
+    if(n.includes("unit")||n.includes("qty")||n.includes("quantity")) map.units=i;
+  });
+  return map;
 }
 
 /* ================= LOAD CSV ================= */
@@ -112,385 +117,169 @@ function loadCSV(){
     const lines = e.target.result.trim().split("\n");
     headers = lines[0].split(",").map(h=>h.trim());
     rawRows = lines.slice(1).map(r=>r.split(","));
-    alert("CSV Loaded Successfully");
+    colMap = mapColumns(headers);
+    alert("CSV loaded & columns auto-mapped.");
   };
   reader.readAsText(file);
+}
+
+/* ================= VALIDATION ================= */
+
+function validate(parsed){
+  let issues=[], warnings=[];
+  if(parsed.length<12) warnings.push("Dataset is small for forecasting.");
+  if(parsed.some(r=>r.value<=0)) issues.push("Negative or zero values detected.");
+  return {issues,warnings,score:Math.max(50,100-issues.length*30-warnings.length*10)};
 }
 
 /* ================= MAIN ENGINE ================= */
 
 function runAnalytics(){
-  alerts=[]; alertPanel.innerHTML="";
-  if(!rawRows.length) return alert("Load CSV first.");
-
+  alertPanel.innerHTML=""; alerts=[];
   const metric = metricSelect.value;
-  const agg = aggregationSelect.value;
 
-  const colIndex = headers.indexOf(metric);
-  const dateIndex = headers.indexOf("Date");
-  const productIndex = headers.indexOf("Product");
-  const costIndex = headers.indexOf("Cost");
-
-  if(colIndex === -1 || dateIndex === -1 || productIndex === -1){
-    return alert("CSV must contain Date, Product and selected metric.");
-  }
+  if(!colMap.date || !colMap.product || !colMap[metric])
+    return alert("Required columns not detected automatically.");
 
   const parsed = rawRows.map(r=>({
-    date: new Date(r[dateIndex]),
-    value: parseFloat(r[colIndex]),
-    cost: costIndex>-1 ? parseFloat(r[costIndex]) : null,
-    product: r[productIndex]
-  })).filter(r=>isFinite(r.value) && !isNaN(r.date));
+    date:new Date(r[colMap.date]),
+    value:parseFloat(r[colMap[metric]]),
+    product:r[colMap.product],
+    revenue:colMap.revenue!=null?parseFloat(r[colMap.revenue]):null,
+    cost:colMap.cost!=null?parseFloat(r[colMap.cost]):null
+  })).filter(r=>isFinite(r.value)&&!isNaN(r.date));
 
-  const validation = validateData(parsed);
-  if(validation.issues.length){
-    showAlerts(validation.issues,"alert");
-    return;
-  }
-  showAlerts(validation.warnings,"warn");
+  const v=validate(parsed);
+  if(v.issues.length){show(v.issues,"critical");return;}
+  show(v.warnings,"warning");
 
-  const aggregated = aggregateData(parsed, agg);
-  const values = aggregated.map(r=>r.value);
-  const labels = aggregated.map(r=>r.label);
+  const values=parsed.map(p=>p.value);
+  const smooth=exp(values,0.35);
+  const forecast=forecastModel(smooth);
+  const season=seasonality(parsed);
+  const anomalies=detectAnomalies(values);
+  const confidence=calcConfidence(values,season,anomalies,v.score);
+  const risk=riskModel(values,confidence);
+  const kpi=kpis(values);
+  const segments=segment(parsed);
+  const finance=financeModel(parsed,metric);
 
-  const smooth = expSmooth(values,0.35);
-  const forecast = forecastModel(smooth);
-  const baseConfidence = forecastConfidence(values,smooth);
-  const risk = riskModel(values,baseConfidence);
-  const kpi = kpiCalc(values);
-  const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
-  const scenarios = scenarioForecast(forecast);
-  const seasonality = detectSeasonality(parsed);
-  const anomalies = detectAnomalies(values);
-  const finance = financeModel(parsed);
+  cache={confidence,risk,kpi,segments,finance,season,anomalies,v};
 
-  const confidence = rebuildConfidence(baseConfidence,validation.score,risk,seasonality);
-
-  cache = {forecast,confidence,risk,kpi,segments,scenarios,seasonality,anomalies,finance,validation};
-
-  renderLine(labels,values,smooth,forecast);
-  renderBars(kpi);
-  renderProductPie(segments);
-  renderFinancePie(finance);
+  renderCharts(values,smooth,forecast,kpi,segments,finance);
   renderRisk(risk,confidence);
-  renderScenarios(scenarios);
-
-  generateAlerts();
-  generateExecutiveInsights();
+  renderScenarios(forecast);
+  renderText(metric);
 }
 
-/* ================= CONFIDENCE REBUILD ================= */
+/* ================= CORE LOGIC ================= */
 
-function rebuildConfidence(base,quality,risk,season){
-  let score = base*0.35 + quality*0.25 + (100-risk.riskScore)*0.25 + (100-season.strength)*0.15;
-  return Math.max(30, Math.min(92, score));
+function exp(d,a){let s=[d[0]];for(let i=1;i<d.length;i++)s.push(a*d[i]+(1-a)*s[i-1]);return s;}
+
+function forecastModel(s){
+  let t=(s[s.length-1]-s[Math.max(0,s.length-6)])/6;
+  let b=s[s.length-1];
+  return {base:[b+t,b+2*t,b+3*t]};
 }
 
-/* ================= ALERT ENGINE ================= */
-
-function generateAlerts(){
-  let c=cache;
-  if(c.risk.level==="HIGH") alerts.push("High operational risk detected.");
-  if(c.finance.margin < 15) alerts.push("Profit margin is weak.");
-  if(c.seasonality.label==="Strong Seasonality") alerts.push("Demand is strongly seasonal.");
-  if(c.anomalies.length>0) alerts.push("Anomalies detected in historical data.");
-  if(c.validation.score < 70) alerts.push("Data quality issues may impact reliability.");
-  showAlerts(alerts,"alert");
+function seasonality(d){
+  let m={};d.forEach(x=>{let k=x.date.getMonth();m[k]=(m[k]||0)+x.value});
+  let v=Object.values(m);return std(v)/mean(v)*100;
 }
 
-function showAlerts(list,type){
-  list.forEach(t=>{
-    const div=document.createElement("div");
-    div.className= type==="alert" ? "alert" : "warn";
-    div.innerText=t;
-    alertPanel.appendChild(div);
-  });
+function calcConfidence(v,season,anom,q){
+  let c=100 - season*0.4 - anom.length*5;
+  return Math.max(30,Math.min(90,(c+q)/2));
 }
 
-/* ================= HEALTH SCORE v2 ================= */
-
-function computeHealth(){
-  let c=cache;
-  let concentration = c.segments[0][1] / c.segments.reduce((a,b)=>a+b[1],0) * 100;
-
-  let score =
-    (parseFloat(c.kpi.growth) * 0.25) +
-    (parseFloat(c.finance.margin) * 0.25) +
-    (c.confidence * 0.2) -
-    (parseFloat(c.risk.riskScore) * 0.15) -
-    (concentration * 0.15);
-
-  return Math.max(20, Math.min(88, Math.round(score)));
+function riskModel(v,c){
+  let vol=std(v)/mean(v)*100;
+  let score=vol*0.6+(100-c)*0.4;
+  return {vol:vol.toFixed(1),score:score.toFixed(1),level:score>60?"HIGH":score>40?"MEDIUM":"LOW"};
 }
 
-/* ================= EXECUTIVE AI ================= */
-
-function generateExecutiveInsights(){
-  let c = cache;
-  let health = computeHealth();
-  let concentration = (c.segments[0][1] / c.segments.reduce((a,b)=>a+b[1],0) *100).toFixed(1);
-
-  aiText.value =
-`EXECUTIVE BUSINESS INTELLIGENCE REPORT
-
-Business Health Score: ${health}/100
-Data Quality Score: ${c.validation.score}/100
-Forecast Confidence: ${c.confidence.toFixed(1)}%
-
-Financial Performance
-- Revenue: ${c.finance.totalRev.toLocaleString()}
-- Cost: ${c.finance.totalCost.toLocaleString()}
-- Profit: ${c.finance.profit.toLocaleString()}
-- Margin: ${c.finance.margin}%
-
-Growth & Risk
-- Growth Rate: ${c.kpi.growth}%
-- Risk Level: ${c.risk.level}
-- Volatility: ${c.risk.volatility}%
-
-Market Structure
-- Top Product: ${c.segments[0][0]}
-- Product Concentration: ${concentration}%
-
-Seasonality
-- ${c.seasonality.label}
-
-Operational Signals
-- Anomalies: ${c.anomalies.length || "None"}
-
-Strategic Guidance
-- ${health<50 ? "Stabilize operations and reduce exposure." : "Controlled growth recommended."}
-- ${c.finance.margin<20 ? "Improve pricing and cost efficiency." : "Margins are healthy."}
-- ${c.confidence<60 ? "Forecast reliability is moderate — avoid aggressive bets." : "Forecast reliability is strong."}
-- ${concentration>60 ? "Reduce dependency on single product." : "Product diversification is healthy."}
-`;
+function kpis(v){
+  return {max:Math.max(...v),min:Math.min(...v),avg:mean(v),growth:((v[v.length-1]-v[0])/Math.abs(v[0])*100).toFixed(1)};
 }
 
-/* ================= PDF EXPORT ================= */
-
-async function exportPDF(){
-  const {jsPDF} = window.jspdf;
-  const pdf = new jsPDF();
-  let y = 10;
-
-  pdf.text("PARAGON ANALYTICS — EXECUTIVE REPORT",10,y); y+=10;
-  pdf.text(aiText.value,10,y,{maxWidth:180});
-  pdf.addPage();
-  pdf.addImage(lineChart.toDataURL(),"PNG",10,10,180,70);
-  pdf.addImage(productChart.toDataURL(),"PNG",10,90,180,50);
-  pdf.addImage(financeChart.toDataURL(),"PNG",10,150,180,50);
-
-  pdf.save("paragon_executive_report_v2.pdf");
+function segment(p){
+  let m={};p.forEach(x=>m[x.product]=(m[x.product]||0)+x.value);
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]);
 }
 
-/* ================= CORE ANALYTICS ================= */
-
-function aggregateData(data, mode){
-  if(mode === "raw"){
-    return data.map((d,i)=>({ label:"P"+(i+1), value:d.value }));
-  }
-
-  let map = {};
-  data.forEach(d=>{
-    let key;
-    const dt = d.date;
-    if(mode === "week") key = dt.getFullYear()+"-W"+getWeek(dt);
-    if(mode === "month") key = dt.getFullYear()+"-"+(dt.getMonth()+1);
-    if(mode === "quarter") key = dt.getFullYear()+"-Q"+(Math.floor(dt.getMonth()/3)+1);
-    map[key] = (map[key] || 0) + d.value;
-  });
-
-  return Object.entries(map)
-    .sort((a,b)=>a[0].localeCompare(b[0]))
-    .map(([k,v])=>({ label:k, value:v }));
+function financeModel(p,metric){
+  if(metric!=="revenue"||!colMap.cost) return null;
+  let rev=p.reduce((a,b)=>a+b.revenue,0);
+  let cost=p.reduce((a,b)=>a+b.cost,0);
+  return {rev,cost,profit:rev-cost};
 }
 
-function getWeek(d){
-  const onejan = new Date(d.getFullYear(),0,1);
-  return Math.ceil((((d - onejan) / 86400000) + onejan.getDay()+1)/7);
-}
+/* ================= RENDER ================= */
 
-/* ---------------- FORECAST ---------------- */
-
-function expSmooth(data,a){
-  let s=[data[0]];
-  for(let i=1;i<data.length;i++){
-    s.push(a*data[i] + (1-a)*s[i-1]);
-  }
-  return s;
-}
-
-function forecastModel(series){
-  let lookback = Math.min(6, series.length-1);
-  let last = series[series.length - 1];
-  let past = series[series.length - 1 - lookback] || series[0];
-  let trend = (last - past) / lookback;
-  let base = last;
-  let vol = std(series) * 0.35;
-
-  let baseF = [1,2,3].map(i=>Math.round(base + trend*i));
-  return {
-    base: baseF,
-    upper: baseF.map(v=>Math.round(v + vol)),
-    lower: baseF.map(v=>Math.round(v - vol))
-  };
-}
-
-function scenarioForecast(f){
-  return {
-    base: f.base,
-    optimistic: f.base.map(v=>Math.round(v * 1.12)),
-    conservative: f.base.map(v=>Math.round(v * 0.88))
-  };
-}
-
-/* ---------------- CONFIDENCE BASE ---------------- */
-
-function forecastConfidence(actual, smooth){
-  if(actual.length < 8) return 50;
-  let meanVal = mean(actual);
-  let ssTot=0, ssRes=0;
-  for(let i=1;i<actual.length;i++){
-    ssTot += (actual[i] - meanVal) ** 2;
-    ssRes += (actual[i] - smooth[i-1]) ** 2;
-  }
-  let r2 = 1 - (ssRes / (ssTot || 1));
-  r2 = Math.max(-1, Math.min(1, r2));
-  let confidence = 50 + (r2 * 50);
-  return Math.max(20, Math.min(90, confidence));
-}
-
-/* ---------------- RISK ---------------- */
-
-function riskModel(data, confidence){
-  let safeMean = Math.abs(mean(data)) < 1 ? 1 : Math.abs(mean(data));
-  let volatility = (std(data) / safeMean) * 100;
-  volatility = Math.min(volatility, 250);
-  let riskScore = (volatility * 0.6) + ((100 - confidence) * 0.4);
-  let level = riskScore > 60 ? "HIGH" : riskScore > 40 ? "MEDIUM" : "LOW";
-  return { volatility: volatility.toFixed(1), riskScore: riskScore.toFixed(1), level };
-}
-
-/* ---------------- KPI ---------------- */
-
-function kpiCalc(d){
-  return {
-    max: Math.max(...d),
-    min: Math.min(...d),
-    avg: Math.round(mean(d)),
-    growth: (((d[d.length - 1] - d[0]) / Math.abs(d[0] || 1)) * 100).toFixed(1)
-  };
-}
-
-/* ---------------- SEGMENT ---------------- */
-
-function segment(p,v){
-  let map={};
-  p.forEach((x,i)=> map[x] = (map[x]||0) + v[i]);
-  return Object.entries(map).sort((a,b)=>b[1] - a[1]);
-}
-
-/* ---------------- SEASONALITY ---------------- */
-
-function detectSeasonality(data){
-  if(data.length < 12) return { strength:0, label:"Insufficient data" };
-  let months = {};
-  data.forEach(d=>{
-    let m = d.date.getMonth();
-    months[m] = (months[m]||0) + d.value;
-  });
-  let vals = Object.values(months);
-  let strength = (std(vals)/mean(vals))*100;
-  return {
-    strength: strength.toFixed(1),
-    label: strength > 30 ? "Strong Seasonality" : strength > 15 ? "Moderate Seasonality" : "Weak Seasonality"
-  };
-}
-
-/* ---------------- ANOMALIES ---------------- */
-
-function detectAnomalies(v){
-  let m = mean(v), s = std(v);
-  return v.map((x,i)=> Math.abs(x-m) > 2*s ? i+1 : null).filter(Boolean);
-}
-
-/* ---------------- FINANCE ---------------- */
-
-function financeModel(parsed){
-  let revenue = parsed.map(r=>r.value);
-  let cost = parsed.filter(r=>r.cost!=null).map(r=>r.cost);
-  let totalRev = revenue.reduce((a,b)=>a+b,0);
-  let totalCost = cost.length ? cost.reduce((a,b)=>a+b,0) : totalRev * 0.65;
-  let profit = totalRev - totalCost;
-  let margin = (profit / (totalRev||1)) * 100;
-  return { totalRev, totalCost, profit, margin: margin.toFixed(1) };
-}
-
-/* ---------------- CHARTS ---------------- */
-
-function renderLine(labels,actual,smooth,f){
+function renderCharts(v,s,f,k,seg,fin){
   destroy("line");
-  charts.line = new Chart(lineChart,{
-    type:"line",
-    data:{
-      labels:[...labels,"F1","F2","F3"],
-      datasets:[
-        {label:"Actual",data:actual},
-        {label:"Smoothed",data:smooth,borderDash:[5,5]},
-        {label:"Forecast",data:[...Array(actual.length).fill(null),...f.base],borderDash:[3,3]},
-        {label:"Upper Band",data:[...Array(actual.length).fill(null),...f.upper],borderDash:[2,4]},
-        {label:"Lower Band",data:[...Array(actual.length).fill(null),...f.lower],borderDash:[2,4]}
-      ]
-    }
-  });
-}
+  charts.line=new Chart(lineChart,{type:"line",data:{labels:v.map((_,i)=>i+1),datasets:[
+    {label:"Actual",data:v},
+    {label:"Smoothed",data:s,borderDash:[4,4]},
+    {label:"Forecast",data:[...Array(v.length).fill(null),...f.base],borderDash:[3,3]}
+  ]}});
 
-function renderBars(kpi){
   destroy("kpi");
-  charts.kpi = new Chart(kpiChart,{
-    type:"bar",
-    data:{ labels:["Max","Min","Avg","Growth%"], datasets:[{data:[kpi.max,kpi.min,kpi.avg,kpi.growth]}] }
-  });
-}
+  charts.kpi=new Chart(kpiChart,{type:"bar",data:{labels:["Max","Min","Avg","Growth"],datasets:[{data:Object.values(k)}]}});
 
-function renderProductPie(segments){
   destroy("prod");
-  charts.prod = new Chart(productChart,{
-    type:"pie",
-    data:{ labels:segments.map(s=>s[0]), datasets:[{data:segments.map(s=>s[1])}] }
-  });
-}
+  charts.prod=new Chart(productChart,{type:"pie",data:{labels:seg.map(s=>s[0]),datasets:[{data:seg.map(s=>s[1])}]}});
 
-function renderFinancePie(f){
-  destroy("finance");
-  charts.finance = new Chart(financeChart,{
-    type:"pie",
-    data:{ labels:["Revenue","Cost","Profit"], datasets:[{data:[f.totalRev,f.totalCost,f.profit]}] }
-  });
+  if(fin){
+    destroy("fin");
+    charts.fin=new Chart(financeChart,{type:"pie",data:{labels:["Revenue","Cost","Profit"],datasets:[{data:[fin.rev,fin.cost,fin.profit]}]}})
+  }
 }
 
 function renderRisk(r,c){
-  riskPanel.innerHTML = `
-  <div class="card">Volatility<div class="value">${r.volatility}%</div></div>
-  <div class="card">Confidence<div class="value">${c.toFixed(1)}%</div></div>
-  <div class="card">Risk Score<div class="value">${r.riskScore}</div></div>
-  <div class="card">Risk Level<div class="value">${r.level}</div></div>`;
+  riskPanel.innerHTML=
+  `<div class="card">Volatility<div class="value">${r.vol}%</div></div>
+   <div class="card">Confidence<div class="value">${c.toFixed(1)}%</div></div>
+   <div class="card">Risk Level<div class="value">${r.level}</div></div>`;
 }
 
-function renderScenarios(s){
-  scenarioPanel.innerHTML = `
-  <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
-  <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
-  <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
+function renderScenarios(f){
+  scenarioPanel.innerHTML=
+  `<div class="card">Base<div class="value">${f.base.join(", ")}</div></div>`;
 }
 
-function destroy(n){ if(charts[n]) charts[n].destroy(); }
+function renderText(metric){
+  let t=`EXECUTIVE SUMMARY\n\n`;
+  t+=`Confidence: ${cache.confidence.toFixed(1)}%\n`;
+  t+=`Risk Level: ${cache.risk.level}\n`;
+  t+=`Seasonality Strength: ${cache.season.toFixed(1)}%\n`;
+  if(metric==="revenue"&&cache.finance)
+    t+=`Profit Margin: ${(cache.finance.profit/cache.finance.rev*100).toFixed(1)}%\n`;
+  else
+    t+=`Profit Margin: Not applicable for selected metric\n`;
+  aiText.value=t;
+}
 
-/* ---------------- MATH ---------------- */
+function show(list,type){
+  list.forEach(t=>{
+    let d=document.createElement("div");
+    d.className=type==="critical"?"alert-critical":type==="warning"?"alert-warning":"alert-info";
+    d.innerText=t;alertPanel.appendChild(d);
+  });
+}
 
-function mean(a){ return a.reduce((x,y)=>x+y,0)/a.length; }
-function std(a){ let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2))); }
+function destroy(n){if(charts[n])charts[n].destroy();}
 
+function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
+function std(a){let m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
+
+async function exportPDF(){
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF();
+  pdf.text("PARAGON ANALYTICS — EXECUTIVE REPORT",10,10);
+  pdf.text(aiText.value,10,20,{maxWidth:180});
+  pdf.save("paragon_executive_v2_1.pdf");
+}
 </script>
 </body>
-  </html>
+</html>
