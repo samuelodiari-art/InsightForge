@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PARAGON ANALYTICS v1.4</title>
+<title>PARAGON ANALYTICS v2.0</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -28,6 +28,7 @@ button, select {
 .card { background:rgba(255,255,255,0.08); padding:10px; border-radius:10px; }
 .value { font-size:18px; font-weight:bold; }
 canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
+
 .badge {
   display:inline-block;
   padding:6px 14px;
@@ -44,7 +45,7 @@ canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px;
 
 <body>
 
-<h2>PARAGON ANALYTICS v1.4</h2>
+<h2>PARAGON ANALYTICS v2.0</h2>
 <p>Production-Grade Autonomous Business Intelligence Engine</p>
 
 <input type="file" id="csvFile"><br>
@@ -70,51 +71,56 @@ canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px;
 <div id="statusBadge"></div>
 
 <div class="panel">
-<canvas id="lineChart"></canvas>
-<canvas id="kpiChart"></canvas>
-<canvas id="productChart"></canvas>
-<canvas id="pieChart"></canvas>
-<canvas id="confidenceChart"></canvas>
+  <canvas id="lineChart"></canvas>
+  <canvas id="kpiChart"></canvas>
+  <canvas id="productChart"></canvas>
+  <canvas id="pieChart"></canvas>
+  <canvas id="confidenceChart"></canvas>
 
-<h3>Top Insights</h3>
-<div class="grid" id="insightPanel"></div>
+  <h3>Top Insights</h3>
+  <div class="grid" id="insightPanel"></div>
 
-<h3>Risk & Intelligence</h3>
-<div class="grid" id="riskPanel"></div>
+  <h3>Risk & Intelligence</h3>
+  <div class="grid" id="riskPanel"></div>
 
-<h3>Scenario Forecast</h3>
-<div class="grid" id="scenarioPanel"></div>
+  <h3>Scenario Forecast</h3>
+  <div class="grid" id="scenarioPanel"></div>
 </div>
 
 <script>
+/* ================= GLOBAL ================= */
+
 let rawRows=[], headers={}, charts={}, confidenceHistory=[];
+let cache={};
 
-/* ---------------- SAFE HELPERS ---------------- */
+/* ================= SAFETY ================= */
 
-const safeNum = v => {
-  if(v === null || v === undefined) return null;
-  let x = String(v).replace(/[,$₦£€\s]/g,"");
-  if(/^[=+\-@]/.test(x)) return null;
+function safeNum(v){
+  if(v===null||v===undefined) return null;
+  let x = String(v).trim();
+  if(/^[=+\-@]/.test(x)) return null;           // CSV injection block
+  x = x.replace(/[,$₦£€\s]/g,"");
   let n = parseFloat(x);
   return isFinite(n) ? n : null;
-};
+}
 
 const mean = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
 const std  = a => {
   if(a.length<2) return 0;
-  let m = mean(a);
+  let m=mean(a);
   return Math.sqrt(mean(a.map(x=>(x-m)**2)));
 };
 
-/* ---------------- LOAD CSV ---------------- */
+/* ================= CSV LOAD ================= */
 
 function loadCSV(){
   const file = csvFile.files[0];
   if(!file) return alert("Upload CSV first.");
+
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = e=>{
     const rows = e.target.result.trim().split("\n").map(r=>r.split(","));
-    headers = {};
+    headers={};
     rows[0].forEach((h,i)=>{
       headers[h.toLowerCase().replace(/\W/g,"")] = i;
     });
@@ -124,7 +130,7 @@ function loadCSV(){
   reader.readAsText(file);
 }
 
-/* ---------------- MAIN ---------------- */
+/* ================= MAIN ================= */
 
 function runAnalytics(){
   if(!rawRows.length) return alert("Load CSV first.");
@@ -143,38 +149,178 @@ function runAnalytics(){
       value: safeNum(r[colIndex]),
       product: r[productIndex] || "Unknown"
     };
-  }).filter(r=>r.value !== null && !isNaN(r.date));
+  }).filter(r=>r.value!==null && !isNaN(r.date));
 
-  if(parsed.length < 5) return alert("Not enough valid data.");
+  if(parsed.length<8) return alert("Not enough clean data.");
+
+  parsed = aggregate(parsed, aggregationSelect.value);
 
   let values = parsed.map(r=>r.value);
+  values = clampOutliers(values);
 
-  const volatility = (std(values)/(mean(values)||1))*100;
-  const growth = computeGrowth(values);
-  const seasonality = computeSeasonality(parsed);
-  const mape = Math.min(100, volatility*0.8);
+  if(std(values)<0.0001){
+    alert("Dataset appears flat or corrupted.");
+  }
 
-  const confidence = Math.max(40,
-    100 - volatility*0.7 - mape*0.4 + seasonality*0.2
-  );
+  const smooth = expSmooth(values,0.35);
+  const ds = doubleSmooth(values);
+  const forecast = buildForecast(ds,values);
 
+  const mape = backtestMAPE(values,smooth);
+  const anomalies = detectAnomalies(values);
+  const seasonality = detectSeasonality(parsed);
+  const confidence = computeConfidence(values,smooth,mape,seasonality,anomalies);
   confidenceHistory.push(confidence);
 
-  const status = computeStatus(confidence,mape,values.length,volatility);
-
+  const status = computeStatus(confidence,mape,values.length,std(values));
   renderStatus(status);
-  renderCharts(parsed, values);
-  renderInsights(confidence,mape,seasonality,volatility);
-  renderRisk(confidence,mape,seasonality,volatility);
-  renderScenario(values);
+
+  const kpi = kpiCalc(values);
+  const segments = segment(parsed.map(p=>p.product),parsed.map(p=>p.value));
+  const scenarios = scenarioForecast(forecast);
+
+  cache={parsed,values,smooth,forecast,mape,anomalies,seasonality,confidence,kpi,segments,scenarios,status};
+
+  renderCharts(parsed,values,smooth,forecast,segments);
   renderConfidence();
+  renderInsights(confidence,mape,seasonality,std(values));
+  renderRisk(confidence,mape,seasonality,std(values));
+  renderScenario(scenarios);
 }
 
-/* ---------------- VALIDATION ---------------- */
+/* ================= AGGREGATION ================= */
+
+function aggregate(data,mode){
+  if(mode==="raw") return data;
+  let map={};
+  data.forEach(d=>{
+    let k;
+    const dt=d.date;
+    if(mode==="month") k=dt.getFullYear()+"-"+(dt.getMonth()+1);
+    if(mode==="quarter") k=dt.getFullYear()+"-Q"+(Math.floor(dt.getMonth()/3)+1);
+    map[k]=(map[k]||0)+d.value;
+  });
+  return Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0]))
+    .map(([k,v])=>({date:new Date(k),value:v,product:"ALL"}));
+}
+
+/* ================= STABILITY ================= */
+
+function clampOutliers(data){
+  let m=mean(data), s=std(data);
+  if(!s) return data;
+  let u=m+2.5*s, l=m-2.5*s;
+  return data.map(v=>Math.min(u,Math.max(l,v)));
+}
+
+/* ================= FORECAST ================= */
+
+function expSmooth(data,a){
+  let s=[data[0]];
+  for(let i=1;i<data.length;i++){
+    s.push(a*data[i]+(1-a)*s[i-1]);
+  }
+  return s;
+}
+
+function doubleSmooth(data,alpha=0.3,beta=0.15){
+  let level=data[0];
+  let trend=data[1]-data[0];
+  for(let i=1;i<data.length;i++){
+    let prev=level;
+    level = alpha*data[i] + (1-alpha)*(level+trend);
+    trend = beta*(level-prev)+(1-beta)*trend;
+  }
+  return {level,trend};
+}
+
+function buildForecast(ds,values){
+  let vol = std(values)*0.4;
+  let base=[1,2,3].map(i=>Math.round(ds.level+ds.trend*i));
+  return {
+    base,
+    upper:base.map(v=>Math.round(v+vol)),
+    lower:base.map(v=>Math.round(v-vol))
+  };
+}
+
+/* ================= QUALITY ================= */
+
+function backtestMAPE(actual,smooth){
+  let err=[];
+  for(let i=1;i<actual.length;i++){
+    if(actual[i]!==0){
+      err.push(Math.abs((actual[i]-smooth[i-1])/actual[i]));
+    }
+  }
+  return mean(err)*100;
+}
+
+function detectAnomalies(data){
+  let m=mean(data), s=std(data);
+  return data.filter(v=>Math.abs(v-m)>2.8*s).length;
+}
+
+function detectSeasonality(data){
+  let m={};
+  data.forEach(d=>{
+    let k=d.date.getMonth();
+    m[k]=(m[k]||0)+d.value;
+  });
+  let vals=Object.values(m);
+  return (std(vals)/(mean(vals)||1))*100;
+}
+
+function computeConfidence(values,smooth,mape,season,anom){
+  let volatility=(std(values)/(mean(values)||1))*100;
+  let stability=Math.max(0,100-volatility*1.2);
+  let error=Math.max(0,100-mape*1.6);
+  let seasonScore=Math.min(100,season*3);
+  let depth=Math.min(100,values.length*8);
+  let anomalyScore=anom===0?100:Math.max(40,100-anom*20);
+  return Math.max(35,Math.min(95,
+    stability*0.25+
+    error*0.25+
+    seasonScore*0.15+
+    depth*0.15+
+    anomalyScore*0.20
+  ));
+}
+
+/* ================= KPI ================= */
+
+function kpiCalc(d){
+  return {
+    max:Math.max(...d),
+    min:Math.min(...d),
+    avg:Math.round(mean(d)),
+    growth:((d.at(-1)-d[0])/(Math.abs(d[0])||1)*100).toFixed(1)
+  };
+}
+
+/* ================= SEGMENT ================= */
+
+function segment(p,v){
+  let map={};
+  p.forEach((x,i)=>map[x]=(map[x]||0)+v[i]);
+  return Object.entries(map);
+}
+
+/* ================= SCENARIO ================= */
+
+function scenarioForecast(f){
+  return {
+    base:f.base,
+    optimistic:f.base.map(v=>Math.round(v*1.12)),
+    conservative:f.base.map(v=>Math.round(v*0.88))
+  };
+}
+
+/* ================= VALIDATION ================= */
 
 function computeStatus(conf,mape,len,vol){
-  if(len<8 || vol>40) return "UNSTABLE";
-  if(conf>80 && mape<15) return "VALIDATED";
+  if(len<10 || vol>45 || mape>35) return "UNSTABLE";
+  if(conf>82 && mape<18) return "VALIDATED";
   if(conf>65) return "STABLE";
   return "MONITOR";
 }
@@ -183,61 +329,43 @@ function renderStatus(s){
   statusBadge.innerHTML = `<div class="badge ${s}">${s}</div>`;
 }
 
-/* ---------------- METRICS ---------------- */
-
-function computeGrowth(d){
-  if(d.length<2) return 0;
-  let g = (d.at(-1)-d[0])/(Math.abs(d[0])||1);
-  return g*100;
-}
-
-function computeSeasonality(data){
-  let m={};
-  data.forEach(d=>{
-    let k=d.date.getMonth();
-    m[k]=(m[k]||0)+d.value;
-  });
-  let vals = Object.values(m);
-  return (std(vals)/(mean(vals)||1))*100;
-}
-
-/* ---------------- CHARTS ---------------- */
+/* ================= CHARTS ================= */
 
 function destroy(n){ if(charts[n]) charts[n].destroy(); }
 
-function renderCharts(parsed,values){
+function renderCharts(parsed,values,smooth,f,segments){
   destroy("line"); destroy("kpi"); destroy("prod"); destroy("pie");
 
   const labels = parsed.map(p=>p.date.toISOString().slice(0,7));
 
   charts.line = new Chart(lineChart,{
     type:"line",
-    data:{labels,datasets:[{label:"Actual",data:values}]}
-  });
-
-  charts.kpi = new Chart(kpiChart,{
-    type:"bar",
     data:{
-      labels:["Max","Min","Avg"],
-      datasets:[{data:[
-        Math.max(...values),
-        Math.min(...values),
-        Math.round(mean(values))
-      ]}]
+      labels:[...labels,"F1","F2","F3"],
+      datasets:[
+        {label:"Actual",data:values},
+        {label:"Smoothed",data:smooth,borderDash:[5,5]},
+        {label:"Forecast",data:[...Array(values.length).fill(null),...f.base]},
+        {label:"Upper Band",data:[...Array(values.length).fill(null),...f.upper],borderDash:[2,4]},
+        {label:"Lower Band",data:[...Array(values.length).fill(null),...f.lower],borderDash:[2,4]}
+      ]
     }
   });
 
-  const seg = {};
-  parsed.forEach(p=> seg[p.product]=(seg[p.product]||0)+p.value);
+  const kpi = kpiCalc(values);
+  charts.kpi = new Chart(kpiChart,{
+    type:"bar",
+    data:{labels:["Max","Min","Avg","Growth%"],datasets:[{data:[kpi.max,kpi.min,kpi.avg,kpi.growth]}]}
+  });
 
   charts.prod = new Chart(productChart,{
     type:"bar",
-    data:{labels:Object.keys(seg),datasets:[{data:Object.values(seg)}]}
+    data:{labels:segments.map(s=>s[0]),datasets:[{data:segments.map(s=>s[1])}]}
   });
 
   charts.pie = new Chart(pieChart,{
     type:"pie",
-    data:{labels:Object.keys(seg),datasets:[{data:Object.values(seg)}]}
+    data:{labels:segments.map(s=>s[0]),datasets:[{data:segments.map(s=>s[1])}]}
   });
 }
 
@@ -245,20 +373,19 @@ function renderConfidence(){
   destroy("conf");
   charts.conf = new Chart(confidenceChart,{
     type:"line",
-    data:{
-      labels:confidenceHistory.map((_,i)=>"Run "+(i+1)),
-      datasets:[{label:"Confidence Strength",data:confidenceHistory}]
-    }
+    data:{labels:confidenceHistory.map((_,i)=>"Run "+(i+1)),
+      datasets:[{label:"Confidence Strength",data:confidenceHistory}]}
   });
 }
 
-/* ---------------- PANELS ---------------- */
+/* ================= PANELS ================= */
 
 function renderInsights(conf,mape,season,vol){
   insightPanel.innerHTML = `
-    <div class="card">Seasonality: ${season.toFixed(1)}%</div>
-    <div class="card">Forecast Error: ${mape.toFixed(1)}%</div>
-    <div class="card">Volatility: ${vol.toFixed(1)}%</div>
+    <div class="card">Confidence ${conf.toFixed(1)}%</div>
+    <div class="card">MAPE ${mape.toFixed(1)}%</div>
+    <div class="card">Seasonality ${season.toFixed(1)}%</div>
+    <div class="card">Volatility ${vol.toFixed(1)}%</div>
   `;
 }
 
@@ -271,22 +398,41 @@ function renderRisk(conf,mape,season,vol){
   `;
 }
 
-function renderScenario(values){
-  let base = values.slice(-3).map(v=>Math.round(v));
+function renderScenario(s){
   scenarioPanel.innerHTML = `
-    <div class="card">Base<div class="value">${base.join(", ")}</div></div>
+    <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
+    <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
+    <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>
   `;
 }
 
-/* ---------------- PDF ---------------- */
+/* ================= PDF ================= */
 
 async function exportPDF(){
   const {jsPDF} = window.jspdf;
-  const pdf = new jsPDF();
-  pdf.text("PARAGON ANALYTICS REPORT",10,10);
-  pdf.text("Generated: "+new Date().toLocaleString(),10,18);
+  const pdf = new jsPDF("p","mm","a4");
+  let y=10;
+
+  pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=8;
+  pdf.text("Generated: "+new Date().toLocaleString(),10,y); y+=10;
+
+  pdf.addImage(lineChart.toDataURL("image/png"),"PNG",10,y,180,55); y+=60;
+  pdf.addImage(kpiChart.toDataURL("image/png"),"PNG",10,y,180,40); y+=45;
+  pdf.addImage(productChart.toDataURL("image/png"),"PNG",10,y,180,40); y+=45;
+
+  pdf.addPage();
+  pdf.addImage(pieChart.toDataURL("image/png"),"PNG",10,15,180,80);
+  pdf.addImage(confidenceChart.toDataURL("image/png"),"PNG",10,105,180,80);
+
+  pdf.addPage();
+  pdf.text("Validation Status: "+cache.status,10,20);
+  pdf.text("Confidence: "+cache.confidence.toFixed(1)+"%",10,30);
+  pdf.text("MAPE: "+cache.mape.toFixed(1)+"%",10,40);
+  pdf.text("Seasonality: "+cache.seasonality.toFixed(1)+"%",10,50);
+
   pdf.save("paragon_report.pdf");
 }
+
 </script>
 </body>
-</html>
+  </html>
