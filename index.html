@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PARAGON ANALYTICS v1.2</title>
+<title>PARAGON ANALYTICS v1.3</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -28,7 +28,7 @@ button, select {
 .card { background:rgba(255,255,255,0.08); padding:10px; border-radius:10px; }
 .value { font-size:18px; font-weight:bold; }
 canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
-textarea { width:95%; height:160px; border-radius:8px; padding:8px; }
+textarea { width:95%; height:150px; border-radius:8px; padding:8px; }
 .badge { padding:6px 14px; border-radius:20px; font-weight:bold; display:inline-block; }
 .ok { background:#16a34a; }
 .stable { background:#22c55e; }
@@ -39,7 +39,7 @@ textarea { width:95%; height:160px; border-radius:8px; padding:8px; }
 
 <body>
 
-<h2>PARAGON ANALYTICS v1.2</h2>
+<h2>PARAGON ANALYTICS v1.3</h2>
 <p>Production-Grade Autonomous Business Intelligence Engine</p>
 
 <input type="file" id="csvFile"><br>
@@ -52,10 +52,7 @@ textarea { width:95%; height:160px; border-radius:8px; padding:8px; }
 </select>
 
 <select id="aggregationSelect">
-  <option value="raw">Raw</option>
-  <option value="week">Weekly</option>
   <option value="month" selected>Monthly</option>
-  <option value="quarter">Quarterly</option>
 </select>
 
 <br>
@@ -69,6 +66,7 @@ textarea { width:95%; height:160px; border-radius:8px; padding:8px; }
 <canvas id="lineChart"></canvas>
 <canvas id="kpiChart"></canvas>
 <canvas id="productChart"></canvas>
+<canvas id="pieChart"></canvas>
 <canvas id="confidenceChart"></canvas>
 
 <h3>Top Insights</h3>
@@ -86,6 +84,7 @@ textarea { width:95%; height:160px; border-radius:8px; padding:8px; }
 
 <script>
 let rawRows=[], headers=[], columnMap={}, charts={}, confidenceHistory=[];
+let lastForecast={}, lastInsights=[], lastValidation="";
 
 /* ---------------- UTILITIES ---------------- */
 
@@ -181,17 +180,23 @@ function runAnalytics(){
 
     const kpi=kpiCalc(values);
     const validation=validationEngine(confidence,mape,values.length);
+    lastValidation = validation;
+
+    const segments=segment(parsed);
 
     renderValidation(validation);
     renderConfidenceChart();
     renderInsights(confidence,mape,seasonality,validation);
 
     renderLine(labels,values,smooth,forecast);
-    renderBars(kpi,segment(parsed));
+    renderBars(kpi,segments);
+    renderPie(segments);
 
     renderRisk(confidence,mape,seasonality,volatility);
     renderScenarios(forecast);
     renderAI(confidence,mape,seasonality,validation);
+
+    lastForecast = forecast;
 
   }catch(e){
     console.error(e);
@@ -282,10 +287,9 @@ function renderInsights(conf,mape,season,validation){
   insights.push({score:season, text:"Strong seasonality – optimize inventory planning."});
   insights.push({score:100-conf, text:"Confidence trending lower – monitor stability."});
   insights.push({score:validation==="UNSTABLE"?80:10, text:"Validation risk – review dataset."});
-
   insights.sort((a,b)=>b.score-a.score);
-  insightPanel.innerHTML = insights.slice(0,3)
-    .map(i=>`<div class="card">${i.text}</div>`).join("");
+  lastInsights = insights.slice(0,3);
+  insightPanel.innerHTML = lastInsights.map(i=>`<div class="card">${i.text}</div>`).join("");
 }
 
 /* ---------------- CHARTS ---------------- */
@@ -329,6 +333,17 @@ function renderBars(kpi,segments){
   });
 }
 
+function renderPie(segments){
+  if(charts.pie) charts.pie.destroy();
+  charts.pie = new Chart(pieChart,{
+    type:"pie",
+    data:{
+      labels:segments.labels,
+      datasets:[{data:segments.values}]
+    }
+  });
+}
+
 /* ---------------- SUPPORT ---------------- */
 
 function kpiCalc(d){
@@ -369,15 +384,44 @@ Seasonality: ${season.toFixed(1)}%
 Validation Status: ${validation}`;
 }
 
-/* ---------------- PDF ---------------- */
+/* ---------------- PDF EXPORT ---------------- */
 
 async function exportPDF(){
   const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF();
-  pdf.text("PARAGON ANALYTICS v1.2 REPORT",10,10);
-  pdf.addImage(lineChart.toDataURL("image/png"),"PNG",10,20,180,60);
+  const pdf=new jsPDF("p","mm","a4");
+  let y=15;
+
+  // PAGE 1
+  pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=8;
+  pdf.text(`Validation: ${lastValidation}`,10,y); y+=6;
+  pdf.text(`Insights:`,10,y); y+=6;
+  lastInsights.forEach(i=>{ pdf.text("• "+i.text,12,y); y+=6; });
+
+  pdf.addPage();
+
+  // PAGE 2
+  pdf.text("Trend & Forecast",10,10);
+  pdf.addImage(lineChart.toDataURL(),"PNG",10,20,180,70);
+  pdf.addImage(confidenceChart.toDataURL(),"PNG",10,100,180,60);
+
+  pdf.addPage();
+
+  // PAGE 3
+  pdf.text("Business Breakdown",10,10);
+  pdf.addImage(kpiChart.toDataURL(),"PNG",10,20,90,60);
+  pdf.addImage(productChart.toDataURL(),"PNG",110,20,90,60);
+  pdf.addImage(pieChart.toDataURL(),"PNG",40,90,120,90);
+
+  pdf.addPage();
+
+  // PAGE 4
+  pdf.text("Scenario Forecast",10,10);
+  pdf.text(`Base: ${lastForecast.base.join(", ")}`,10,25);
+  pdf.text(`Upper: ${lastForecast.upper.join(", ")}`,10,35);
+  pdf.text(`Lower: ${lastForecast.lower.join(", ")}`,10,45);
+
   pdf.save("paragon_report.pdf");
 }
 </script>
 </body>
-  </html>
+</html>
