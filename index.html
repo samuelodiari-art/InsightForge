@@ -30,7 +30,7 @@ button, select {
 .card { background:rgba(255,255,255,0.08); padding:10px; border-radius:10px; }
 .value { font-size:18px; font-weight:bold; }
 canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
-textarea { width:95%; height:200px; border-radius:8px; padding:8px; }
+textarea { width:95%; height:220px; border-radius:8px; padding:8px; }
 </style>
 </head>
 
@@ -85,68 +85,80 @@ let rawRows=[], headers=[], charts={}, cache={};
 /* ---------------- LOAD CSV ---------------- */
 
 function loadCSV(){
-  const file = csvFile.files[0];
-  if(!file) return alert("Upload CSV first.");
+  try{
+    const file = csvFile.files[0];
+    if(!file) return alert("Upload CSV first.");
 
-  const reader = new FileReader();
-  reader.onload = e => {
-    const lines = e.target.result.trim().split("\n");
-    headers = lines[0].split(",").map(h=>h.trim());
-    rawRows = lines.slice(1).map(r=>r.split(","));
-    alert("CSV Loaded Successfully");
-  };
-  reader.readAsText(file);
+    const reader = new FileReader();
+    reader.onload = e => {
+      const lines = e.target.result.trim().split("\n");
+      headers = lines[0].split(",").map(h=>h.trim());
+      rawRows = lines.slice(1).map(r=>r.split(","));
+      alert("CSV Loaded Successfully");
+    };
+    reader.readAsText(file);
+  }catch(err){
+    alert("CSV Load Error: " + err.message);
+  }
 }
 
 /* ---------------- MAIN ENGINE ---------------- */
 
 function runAnalytics(){
-  if(!rawRows.length) return alert("Load CSV first.");
+  try{
+    if(!rawRows.length) return alert("Load CSV first.");
 
-  const metric = metricSelect.value;
-  const agg = aggregationSelect.value;
+    const metric = metricSelect.value;
+    const agg = aggregationSelect.value;
 
-  const colIndex = headers.indexOf(metric);
-  const dateIndex = headers.indexOf("Date");
-  const productIndex = headers.indexOf("Product");
-  const costIndex = headers.indexOf("Cost");
+    const colIndex = headers.indexOf(metric);
+    const dateIndex = headers.indexOf("Date");
+    const productIndex = headers.indexOf("Product");
+    const costIndex = headers.indexOf("Cost");
 
-  if(colIndex === -1 || dateIndex === -1 || productIndex === -1){
-    return alert("CSV must contain Date, Product and selected metric.");
+    if(colIndex === -1 || dateIndex === -1 || productIndex === -1){
+      return alert("CSV must contain Date, Product and selected metric.");
+    }
+
+    const parsed = rawRows.map(r=>({
+      date: new Date(r[dateIndex]),
+      value: parseFloat(r[colIndex]),
+      cost: costIndex>-1 ? parseFloat(r[costIndex]) : null,
+      product: r[productIndex]
+    })).filter(r=>isFinite(r.value) && !isNaN(r.date));
+
+    if(parsed.length < 5) return alert("Not enough valid data rows.");
+
+    const aggregated = aggregateData(parsed, agg);
+    const values = aggregated.map(r=>r.value);
+    const labels = aggregated.map(r=>r.label);
+
+    const smooth = expSmooth(values,0.35);
+    const forecast = forecastModel(smooth);
+    const confidence = forecastConfidence(values,smooth);
+    const risk = riskModel(values,confidence);
+    const kpi = kpiCalc(values);
+    const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
+    const scenarios = scenarioForecast(forecast);
+    const seasonality = detectSeasonality(parsed);
+    const anomalies = detectAnomalies(values);
+    const finance = financeModel(parsed);
+
+    cache = {forecast,confidence,risk,kpi,segments,scenarios,seasonality,anomalies,finance};
+
+    renderLine(labels,values,smooth,forecast);
+    renderBars(kpi);
+    renderRisk(risk,confidence);
+    renderScenarios(scenarios);
+    renderProductPie(segments);
+    renderFinancePie(finance);
+
+    generateExecutiveInsights();
+
+  }catch(err){
+    alert("Intelligence Engine Error: " + err.message);
+    console.error(err);
   }
-
-  const parsed = rawRows.map(r=>({
-    date: new Date(r[dateIndex]),
-    value: parseFloat(r[colIndex]),
-    cost: costIndex>-1 ? parseFloat(r[costIndex]) : null,
-    product: r[productIndex]
-  })).filter(r=>isFinite(r.value) && !isNaN(r.date));
-
-  const aggregated = aggregateData(parsed, agg);
-  const values = aggregated.map(r=>r.value);
-  const labels = aggregated.map(r=>r.label);
-
-  const smooth = expSmooth(values,0.35);
-  const forecast = forecastModel(smooth);
-  const confidence = forecastConfidence(values,smooth);
-  const risk = riskModel(values,confidence);
-  const kpi = kpiCalc(values);
-  const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
-  const scenarios = scenarioForecast(forecast);
-  const seasonality = detectSeasonality(parsed);
-  const anomalies = detectAnomalies(values);
-  const finance = financeModel(parsed);
-
-  cache = {forecast,confidence,risk,kpi,segments,scenarios,seasonality,anomalies,finance};
-
-  renderLine(labels,values,smooth,forecast);
-  renderBars(kpi,segments);
-  renderRisk(risk,confidence);
-  renderScenarios(scenarios);
-  renderProductPie(segments);
-  renderFinancePie(finance);
-
-  generateExecutiveInsights();
 }
 
 /* ---------------- AGGREGATION ---------------- */
@@ -188,8 +200,10 @@ function expSmooth(data,a){
 
 function forecastModel(series){
   let lookback = Math.min(6, series.length-1);
-  let trend = (series.at(-1) - series.at(-lookback)) / lookback;
-  let base = series.at(-1);
+  let last = series[series.length - 1];
+  let past = series[series.length - 1 - lookback] || series[0];
+  let trend = (last - past) / lookback;
+  let base = last;
   let vol = std(series) * 0.35;
 
   let baseF = [1,2,3].map(i=>Math.round(base + trend*i));
@@ -234,7 +248,7 @@ function kpiCalc(d){
     max: Math.max(...d),
     min: Math.min(...d),
     avg: Math.round(mean(d)),
-    growth: (((d.at(-1) - d[0]) / Math.abs(d[0] || 1)) * 100).toFixed(1)
+    growth: (((d[d.length - 1] - d[0]) / Math.abs(d[0] || 1)) * 100).toFixed(1)
   };
 }
 
@@ -243,7 +257,7 @@ function kpiCalc(d){
 function segment(p,v){
   let map={};
   p.forEach((x,i)=> map[x] = (map[x]||0) + v[i]);
-  return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  return Object.entries(map).sort((a,b)=>b[1]-b[1]);
 }
 
 /* ---------------- SEASONALITY ---------------- */
@@ -301,7 +315,7 @@ function renderLine(labels,actual,smooth,f){
   });
 }
 
-function renderBars(kpi,segments){
+function renderBars(kpi){
   destroy("kpi");
   charts.kpi = new Chart(kpiChart,{
     type:"bar",
@@ -375,7 +389,6 @@ Growth & Stability
 
 Market & Product
 - Top Product: ${c.segments[0][0]}
-- Product Concentration Risk: ${c.segments[0][1] / c.segments.reduce((a,b)=>a+b[1],0) > 0.6 ? "HIGH" : "NORMAL"}
 
 Seasonality
 - ${c.seasonality.label}
@@ -387,8 +400,8 @@ Operational Signals
 Strategic Recommendations
 - ${healthScore < 50 ? "Stabilize operations and reduce risk exposure." : "Pursue controlled growth opportunities."}
 - ${c.finance.margin < 20 ? "Improve pricing or cost efficiency." : "Maintain margin discipline."}
-- ${c.seasonality.label.includes("Strong") ? "Plan inventory and staffing around seasonal peaks." : "Demand is relatively stable."}
-- ${c.risk.level === "HIGH" ? "Avoid aggressive expansion until volatility stabilizes." : "Risk is within acceptable range."}
+- ${c.seasonality.label.includes("Strong") ? "Plan inventory around seasonal peaks." : "Demand is stable."}
+- ${c.risk.level === "HIGH" ? "Avoid aggressive expansion until volatility stabilizes." : "Risk is manageable."}
 `;
 }
 
@@ -400,7 +413,6 @@ async function exportPDF(){
   let y = 10;
 
   pdf.text("PARAGON ANALYTICS — EXECUTIVE REPORT",10,y); y+=10;
-  pdf.text(`Business Health Score: ${cache ? "Computed" : "N/A"}`,10,y); y+=10;
 
   pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,60); y+=70;
   pdf.addImage(productChart.toDataURL(),"PNG",10,y,180,50); y+=60;
@@ -419,4 +431,4 @@ function std(a){ let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2))); }
 
 </script>
 </body>
-</html>
+  </html>
