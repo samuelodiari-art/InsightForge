@@ -139,7 +139,7 @@ function runAnalytics(){
     const risk = riskModel(values,confidence);
     const kpi = kpiCalc(values);
     const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
-    const scenarios = scenarioForecast(forecast);
+    const scenarios = scenarioForecast(forecast);   // ✅ FIXED
     const seasonality = detectSeasonality(parsed);
     const anomalies = detectAnomalies(values);
     const finance = financeModel(parsed);
@@ -214,6 +214,16 @@ function forecastModel(series){
   };
 }
 
+/* ---------------- SCENARIO ENGINE (FIXED) ---------------- */
+
+function scenarioForecast(f){
+  return {
+    base: f.base,
+    optimistic: f.base.map(v=>Math.round(v * 1.12)),
+    conservative: f.base.map(v=>Math.round(v * 0.88))
+  };
+}
+
 /* ---------------- CONFIDENCE ---------------- */
 
 function forecastConfidence(actual, smooth){
@@ -252,12 +262,12 @@ function kpiCalc(d){
   };
 }
 
-/* ---------------- SEGMENT ---------------- */
+/* ---------------- SEGMENT (FIXED SORT) ---------------- */
 
 function segment(p,v){
   let map={};
   p.forEach((x,i)=> map[x] = (map[x]||0) + v[i]);
-  return Object.entries(map).sort((a,b)=>b[1]-b[1]);
+  return Object.entries(map).sort((a,b)=>b[1] - a[1]);
 }
 
 /* ---------------- SEASONALITY ---------------- */
