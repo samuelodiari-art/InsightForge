@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>PARAGON ANALYTICS v2.1</title>
+<title>PARAGON ANALYTICS v2.1.1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -38,7 +38,7 @@ textarea { width:96%; height:260px; border-radius:8px; padding:10px; }
 
 <body>
 
-<h2>PARAGON ANALYTICS — BUSINESS AI v2.1</h2>
+<h2>PARAGON ANALYTICS — BUSINESS AI v2.1.1</h2>
 <p>Validated, Explainable Business Intelligence Engine</p>
 
 <input type="file" id="csvFile"><br>
@@ -88,18 +88,20 @@ textarea { width:96%; height:260px; border-radius:8px; padding:10px; }
 let rawRows=[], headers=[], charts={}, cache={}, alerts=[];
 let colMap={};
 
-/* ================= SMART COLUMN MAPPING ================= */
+/* ================= NORMALIZATION ================= */
 
 function normalize(h){
   return h.toLowerCase().replace(/[^a-z0-9]/g,"");
 }
 
+/* ================= SMART COLUMN MAPPING ================= */
+
 function mapColumns(headers){
   let map={};
   headers.forEach((h,i)=>{
     let n=normalize(h);
-    if(n.includes("date")) map.date=i;
-    if(n.includes("product")||n.includes("item")||n.includes("sku")) map.product=i;
+    if(n.includes("date")||n.includes("month")||n.includes("period")) map.date=i;
+    if(n.includes("product")||n.includes("item")||n.includes("sku")||n.includes("category")) map.product=i;
     if(n.includes("revenue")||n.includes("sales")||n.includes("turnover")) map.revenue=i;
     if(n.includes("cost")||n.includes("expense")||n.includes("cogs")) map.cost=i;
     if(n.includes("unit")||n.includes("qty")||n.includes("quantity")) map.units=i;
@@ -138,15 +140,21 @@ function runAnalytics(){
   alertPanel.innerHTML=""; alerts=[];
   const metric = metricSelect.value;
 
-  if(!colMap.date || !colMap.product || !colMap[metric])
+  // ✅ FIXED: proper undefined checks
+  if(
+    colMap.date === undefined ||
+    colMap.product === undefined ||
+    colMap[metric] === undefined
+  ){
     return alert("Required columns not detected automatically.");
+  }
 
   const parsed = rawRows.map(r=>({
     date:new Date(r[colMap.date]),
     value:parseFloat(r[colMap[metric]]),
     product:r[colMap.product],
-    revenue:colMap.revenue!=null?parseFloat(r[colMap.revenue]):null,
-    cost:colMap.cost!=null?parseFloat(r[colMap.cost]):null
+    revenue:colMap.revenue!==undefined?parseFloat(r[colMap.revenue]):null,
+    cost:colMap.cost!==undefined?parseFloat(r[colMap.cost]):null
   })).filter(r=>isFinite(r.value)&&!isNaN(r.date));
 
   const v=validate(parsed);
@@ -187,8 +195,13 @@ function seasonality(d){
   let v=Object.values(m);return std(v)/mean(v)*100;
 }
 
+function detectAnomalies(v){
+  let m=mean(v), s=std(v);
+  return v.filter(x=>Math.abs(x-m)>2*s).length;
+}
+
 function calcConfidence(v,season,anom,q){
-  let c=100 - season*0.4 - anom.length*5;
+  let c=100 - season*0.4 - anom*5;
   return Math.max(30,Math.min(90,(c+q)/2));
 }
 
@@ -208,7 +221,7 @@ function segment(p){
 }
 
 function financeModel(p,metric){
-  if(metric!=="revenue"||!colMap.cost) return null;
+  if(metric!=="revenue"||colMap.cost===undefined) return null;
   let rev=p.reduce((a,b)=>a+b.revenue,0);
   let cost=p.reduce((a,b)=>a+b.cost,0);
   return {rev,cost,profit:rev-cost};
@@ -269,7 +282,6 @@ function show(list,type){
 }
 
 function destroy(n){if(charts[n])charts[n].destroy();}
-
 function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
 function std(a){let m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
 
@@ -278,7 +290,7 @@ async function exportPDF(){
   const pdf=new jsPDF();
   pdf.text("PARAGON ANALYTICS — EXECUTIVE REPORT",10,10);
   pdf.text(aiText.value,10,20,{maxWidth:180});
-  pdf.save("paragon_executive_v2_1.pdf");
+  pdf.save("paragon_executive_v2_1_1.pdf");
 }
 </script>
 </body>
