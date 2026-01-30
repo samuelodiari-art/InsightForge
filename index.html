@@ -1,177 +1,172 @@
-# ================================
-# PARAGON ANALYTICS — ALL IN ONE
-# Single-file, copy-paste runnable
-# ================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Paragon Analytics</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-from datetime import datetime
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
-# ----------------
-# CONFIG
-# ----------------
-OUTPUT_PDF = "paragon_analytics_report.pdf"
-RANDOM_SEED = 42
-np.random.seed(RANDOM_SEED)
+<style>
+:root {
+  --bg: #1b102f;
+  --card: #24133d;
+  --accent: #8b5cf6;
+  --gold: #facc15;
+  --text: #f5f3ff;
+}
 
-# ----------------
-# DATA INGESTION
-# ----------------
-def load_data():
-    """
-    Replace this with CSV loading if needed.
-    This mock dataset mirrors real business metrics.
-    """
-    dates = pd.date_range(start="2024-01-01", periods=12, freq="M")
-    revenue = np.array([1200, 1350, 1500, 1480, 1600, 1750, 1800, 1950, 2100, 2200, 2350, 2500])
-    expenses = np.array([700, 720, 760, 780, 800, 830, 850, 880, 910, 940, 960, 1000])
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+}
 
-    df = pd.DataFrame({
-        "date": dates,
-        "revenue": revenue,
-        "expenses": expenses
-    })
-    return df
+h1, h2 {
+  color: var(--gold);
+}
 
-# ----------------
-# DATA VALIDATION
-# ----------------
-def validate_data(df):
-    issues = []
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
 
-    if df.isnull().any().any():
-        issues.append("Missing values detected")
+.metrics {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-    if (df[["revenue", "expenses"]] < 0).any().any():
-        issues.append("Negative financial values detected")
+.metric {
+  flex: 1;
+  background: #2e1a55;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
 
-    if not pd.api.types.is_datetime64_any_dtype(df["date"]):
-        issues.append("Date column is not datetime")
+input, select, button {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  margin-top: 8px;
+}
 
-    return issues
+button {
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  color: #1b102f;
+  font-weight: bold;
+}
 
-# ----------------
-# FEATURE ENGINEERING
-# ----------------
-def add_growth_metrics(df):
-    df = df.copy()
-    df["profit"] = df["revenue"] - df["expenses"]
-    df["revenue_growth_pct"] = df["revenue"].pct_change() * 100
-    df["profit_growth_pct"] = df["profit"].pct_change() * 100
-    return df
+canvas {
+  background: #1b102f;
+  border-radius: 12px;
+  padding: 8px;
+}
+</style>
+</head>
 
-# ----------------
-# FORECAST ENGINE
-# ----------------
-def forecast_series(series, periods=3):
-    X = np.arange(len(series)).reshape(-1, 1)
-    y = series.values
+<body>
 
-    model = LinearRegression()
-    model.fit(X, y)
+<h1>🔮 Paragon Analytics</h1>
 
-    future_X = np.arange(len(series), len(series) + periods).reshape(-1, 1)
-    forecast = model.predict(future_X)
+<div class="card">
+  <h2>📁 Upload CSV</h2>
+  <input type="file" accept=".csv" id="csvInput" />
+  <select id="valueColumn"></select>
+</div>
 
-    return forecast, model
+<div class="metrics" id="metrics"></div>
 
-# ----------------
-# CHARTS
-# ----------------
-def plot_time_series(df, pdf):
-    plt.figure()
-    plt.plot(df["date"], df["revenue"], label="Revenue")
-    plt.plot(df["date"], df["expenses"], label="Expenses")
-    plt.plot(df["date"], df["profit"], label="Profit")
-    plt.title("Revenue, Expenses & Profit Over Time")
-    plt.legend()
-    plt.tight_layout()
-    pdf.savefig()
-    plt.close()
+<div class="card"><canvas id="lineChart"></canvas></div>
+<div class="card"><canvas id="barChart"></canvas></div>
+<div class="card"><canvas id="pieChart"></canvas></div>
 
-def plot_growth(df, pdf):
-    plt.figure()
-    plt.plot(df["date"], df["revenue_growth_pct"], label="Revenue Growth %")
-    plt.plot(df["date"], df["profit_growth_pct"], label="Profit Growth %")
-    plt.axhline(0)
-    plt.title("Growth Rates")
-    plt.legend()
-    plt.tight_layout()
-    pdf.savefig()
-    plt.close()
+<div class="card" id="insights"></div>
 
-def plot_forecast(df, revenue_forecast, pdf):
-    plt.figure()
-    historical_x = range(len(df))
-    forecast_x = range(len(df), len(df) + len(revenue_forecast))
+<button onclick="exportPDF()">📄 Export PDF Report</button>
 
-    plt.plot(historical_x, df["revenue"], label="Historical Revenue")
-    plt.plot(forecast_x, revenue_forecast, linestyle="--", label="Forecast Revenue")
-    plt.title("Revenue Forecast")
-    plt.legend()
-    plt.tight_layout()
-    pdf.savefig()
-    plt.close()
+<script>
+let rawData = [];
+let numericData = [];
+let chartRefs = [];
 
-# ----------------
-# PDF REPORT
-# ----------------
-def generate_pdf(df, validation_issues, revenue_forecast):
-    with PdfPages(OUTPUT_PDF) as pdf:
-        # Summary page
-        plt.figure()
-        plt.axis("off")
-        summary_text = f"""
-        PARAGON ANALYTICS REPORT
-        Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+function mean(arr){return arr.reduce((a,b)=>a+b,0)/arr.length;}
+function std(arr){const m=mean(arr);return Math.sqrt(mean(arr.map(v=>(v-m)**2)));}
 
-        Records analyzed: {len(df)}
+document.getElementById("csvInput").addEventListener("change", e => {
+  Papa.parse(e.target.files[0], {
+    header: true,
+    skipEmptyLines: true,
+    complete: res => {
+      rawData = res.data;
+      const cols = Object.keys(rawData[0]).filter(c => !isNaN(rawData[0][c]));
+      const sel = document.getElementById("valueColumn");
+      sel.innerHTML = cols.map(c=>`<option>${c}</option>`).join("");
+      analyze();
+    }
+  });
+});
 
-        Avg Revenue: {df['revenue'].mean():.2f}
-        Avg Expenses: {df['expenses'].mean():.2f}
-        Avg Profit: {df['profit'].mean():.2f}
+document.getElementById("valueColumn").addEventListener("change", analyze);
 
-        Validation Issues:
-        {', '.join(validation_issues) if validation_issues else 'None'}
-        """
-        plt.text(0.01, 0.99, summary_text, va="top")
-        pdf.savefig()
-        plt.close()
+function analyze(){
+  const col = valueColumn.value;
+  numericData = rawData.map(r => Number(r[col])).filter(v=>!isNaN(v));
 
-        plot_time_series(df, pdf)
-        plot_growth(df, pdf)
-        plot_forecast(df, revenue_forecast, pdf)
+  const avg = mean(numericData);
+  const volatility = std(numericData);
+  const growth = ((numericData.at(-1)-numericData[0])/numericData[0])*100;
 
-# ----------------
-# MAIN PIPELINE
-# ----------------
-def run_paragon_analytics():
-    print("Running Paragon Analytics...")
+  document.getElementById("metrics").innerHTML = `
+    <div class="metric"><h3>Average</h3><p>${avg.toFixed(2)}</p></div>
+    <div class="metric"><h3>Volatility</h3><p>${volatility.toFixed(2)}</p></div>
+    <div class="metric"><h3>Total Growth</h3><p>${growth.toFixed(2)}%</p></div>
+  `;
 
-    df = load_data()
-    print("Data loaded")
+  const trend = numericData.map((v,i)=>v - i*(numericData.at(-1)-numericData[0])/numericData.length);
+  const forecast = Math.round((mean(trend)+numericData.at(-1))/2);
 
-    validation_issues = validate_data(df)
-    print("Validation complete:", validation_issues if validation_issues else "No issues")
+  document.getElementById("insights").innerHTML = `
+    <h2>🧠 Analysis</h2>
+    <p>The selected metric shows a ${growth>0?"positive":"negative"} long-term trend with
+    ${volatility>avg*0.25?"high":"moderate"} volatility. Momentum suggests the next period
+    is likely around <b>${forecast}</b>, assuming current conditions persist.</p>
+  `;
 
-    df = add_growth_metrics(df)
-    print("Growth metrics added")
+  renderCharts(numericData, forecast);
+}
 
-    revenue_forecast, model = forecast_series(df["revenue"])
-    print("Forecast generated")
+function renderCharts(data, forecast){
+  chartRefs.forEach(c=>c.destroy());
+  chartRefs=[];
 
-    generate_pdf(df, validation_issues, revenue_forecast)
-    print(f"PDF report saved as {OUTPUT_PDF}")
+  chartRefs.push(new Chart(lineChart,{type:"line",
+    data:{labels:data.map((_,i)=>i+1),datasets:[{label:"Trend",data}]}}));
 
-    print("\n=== FINAL DATA SNAPSHOT ===")
-    print(df.tail())
+  chartRefs.push(new Chart(barChart,{type:"bar",
+    data:{labels:data.map((_,i)=>i+1),datasets:[{label:"Values",data}]}}));
 
-# ----------------
-# EXECUTE
-# ----------------
-if __name__ == "__main__":
-    run_paragon_analytics()
+  chartRefs.push(new Chart(pieChart,{type:"pie",
+    data:{labels:["Last","Forecast"],datasets:[{data:[data.at(-1),forecast]}]}}));
+}
+
+function exportPDF(){
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  pdf.text("Paragon Analytics Report", 14, 20);
+  pdf.text(document.getElementById("insights").innerText, 14, 35);
+  pdf.save("paragon_report.pdf");
+}
+</script>
+
+</body>
+</html>
