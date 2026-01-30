@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>Paragon Analytics</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -11,8 +11,8 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <style>
-:root {
-  --bg:#1b102f; --card:#24133d; --accent:#8b5cf6; --gold:#facc15; --text:#f5f3ff;
+:root{
+  --bg:#1b102f;--card:#24133d;--accent:#8b5cf6;--gold:#facc15;--text:#f5f3ff
 }
 body{margin:0;padding:16px;background:var(--bg);color:var(--text);font-family:system-ui}
 h1,h2,h3{color:var(--gold)}
@@ -22,6 +22,7 @@ h1,h2,h3{color:var(--gold)}
 input,select,button{width:100%;padding:10px;border-radius:10px;border:none;margin-top:8px}
 button{background:linear-gradient(135deg,var(--accent),var(--gold));color:#1b102f;font-weight:bold}
 canvas{background:#1b102f;border-radius:12px;padding:8px}
+.status{opacity:.85;font-size:.9em}
 .warn{color:#fca5a5}
 .good{color:#86efac}
 </style>
@@ -33,9 +34,9 @@ canvas{background:#1b102f;border-radius:12px;padding:8px}
 
 <div class="card">
   <h2>📁 Upload CSV</h2>
-  <input type="file" accept=".csv" id="csvInput">
-  <select id="valueColumn"></select>
-  <div id="validation"></div>
+  <input type="file" id="csvInput" accept=".csv">
+  <select id="valueColumn" disabled></select>
+  <div id="status" class="status">Waiting for CSV…</div>
 </div>
 
 <div class="metrics" id="metrics"></div>
@@ -49,74 +50,90 @@ canvas{background:#1b102f;border-radius:12px;padding:8px}
 <button onclick="exportPDF()">📄 Export Full PDF Report</button>
 
 <script>
-let raw=[], values=[], charts=[];
+let rawData=[], values=[], charts=[];
 
 const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
 const std=a=>{const m=mean(a);return Math.sqrt(mean(a.map(v=>(v-m)**2)))};
 
-csvInput.onchange=e=>{
+const csvInput=document.getElementById("csvInput");
+const valueColumn=document.getElementById("valueColumn");
+const statusEl=document.getElementById("status");
+
+csvInput.addEventListener("change", e=>{
+ statusEl.textContent="Parsing CSV…";
  Papa.parse(e.target.files[0],{
   header:true,skipEmptyLines:true,
   complete:r=>{
-   raw=r.data;
-   const cols=Object.keys(raw[0]).filter(c=>!isNaN(raw[0][c]));
-   valueColumn.innerHTML=cols.map(c=>`<option>${c}</option>`).join("");
-   analyze();
+   rawData=r.data;
+   setupColumns();
   }
  });
-};
-valueColumn.onchange=analyze;
+});
 
-function analyze(){
- values=raw.map(r=>+r[valueColumn.value]).filter(v=>!isNaN(v));
- validateData();
- compute();
+function setupColumns(){
+ if(!rawData.length){
+  statusEl.innerHTML="<span class='warn'>CSV is empty</span>";
+  return;
+ }
+
+ const cols=Object.keys(rawData[0]).filter(c=>{
+  return rawData.some(r=>!isNaN(Number(r[c])));
+ });
+
+ if(!cols.length){
+  statusEl.innerHTML="<span class='warn'>No numeric columns found</span>";
+  return;
+ }
+
+ valueColumn.innerHTML=cols.map(c=>`<option value="${c}">${c}</option>`).join("");
+ valueColumn.disabled=false;
+ valueColumn.selectedIndex=0;
+
+ statusEl.innerHTML="<span class='good'>✓ Data loaded</span>";
+ analyze();
 }
 
-function validateData(){
- let msgs=[];
- if(values.length<8) msgs.push("Dataset is short; forecast confidence reduced.");
- if(std(values)==0) msgs.push("No variability detected.");
- validation.innerHTML=msgs.length
-  ? `<p class="warn">⚠ ${msgs.join(" ")}</p>`
-  : `<p class="good">✓ Data passed validation</p>`;
+valueColumn.addEventListener("change", analyze);
+
+function analyze(){
+ const col=valueColumn.value;
+ values=rawData.map(r=>Number(r[col])).filter(v=>!isNaN(v));
+
+ if(values.length<3){
+  statusEl.innerHTML="<span class='warn'>Not enough data to analyze</span>";
+  return;
+ }
+
+ compute();
 }
 
 function compute(){
  const avg=mean(values);
  const vol=std(values);
  const normVol=vol/avg;
- const slope=(values.at(-1)-values[0])/values.length;
+ const slope=(values.at(-1)-values[0])/(values.length-1);
 
- // backtest
- let errors=[];
- for(let i=5;i<values.length;i++){
-  const past=values.slice(0,i);
-  const pred=past.at(-1)+(past.at(-1)-past[0])/past.length;
-  errors.push(Math.abs((values[i]-pred)/values[i]));
- }
- const mape=mean(errors)*100;
+ const forecast=Math.round(values.at(-1)+slope);
 
- const confidence=Math.max(0,100-(mape*1.5)-(normVol*100));
+ const confidence=Math.max(20,Math.min(95,
+  100-(normVol*100)-(values.length<10?20:0)
+ ));
 
- metrics.innerHTML=`
+ document.getElementById("metrics").innerHTML=`
   <div class="metric"><h3>Average</h3><p>${avg.toFixed(2)}</p></div>
   <div class="metric"><h3>Volatility</h3><p>${(normVol*100).toFixed(1)}%</p></div>
   <div class="metric"><h3>Confidence</h3><p>${confidence.toFixed(0)}%</p></div>
  `;
 
- const forecast=Math.round(values.at(-1)+slope*values.length);
-
- analysis.innerHTML=`
-  <h2>🧠 Analysis & Forecast</h2>
-  <p>The data shows a ${slope>0?"positive":"negative"} long-term trend with
+ document.getElementById("analysis").innerHTML=`
+  <h2>🧠 Analysis</h2>
+  <p>The selected metric shows a ${slope>0?"positive":"negative"} trend with
   ${normVol>0.3?"high":"moderate"} volatility.</p>
-  <p>The forecast for the next period is <b>${forecast}</b>.</p>
-  <p>Forecast confidence is estimated at <b>${confidence.toFixed(0)}%</b>
-  based on historical stability and backtest accuracy.</p>
+  <p><b>Forecast (next period): ${forecast}</b></p>
+  <p>Confidence is estimated at <b>${confidence.toFixed(0)}%</b>.</p>
   <h3>Recommendations</h3>
   <ul>
-    <li>${normVol>0.3?"Stabilize operations to reduce volatility.":"Maintain current strategy."}</li>
+    <li>${normVol>0.3?"Reduce variability before scaling.":"Maintain current strategy."}</li>
     <li>${confidence<60?"Use forecast cautiously.":"Forecast is reasonably reliable."}</li>
   </ul>
  `;
@@ -126,26 +143,35 @@ function compute(){
 
 function renderCharts(forecast){
  charts.forEach(c=>c.destroy()); charts=[];
- charts.push(new Chart(trendChart,{type:"line",
+
+ charts.push(new Chart(trendChart,{
+  type:"line",
   data:{labels:values.map((_,i)=>i+1),
-  datasets:[{label:"Trend",data:values,borderColor:"#8b5cf6"}]}}));
- charts.push(new Chart(barChart,{type:"bar",
+  datasets:[{label:"Trend",data:values,borderColor:"#8b5cf6"}]}
+ }));
+
+ charts.push(new Chart(barChart,{
+  type:"bar",
   data:{labels:values.map((_,i)=>i+1),
-  datasets:[{label:"Values",data:values,backgroundColor:"#facc15"}]}}));
- charts.push(new Chart(pieChart,{type:"pie",
+  datasets:[{label:"Values",data:values,backgroundColor:"#facc15"}]}
+ }));
+
+ charts.push(new Chart(pieChart,{
+  type:"pie",
   data:{labels:["Last","Forecast"],
   datasets:[{data:[values.at(-1),forecast],
-  backgroundColor:["#8b5cf6","#facc15"]}]}));
+  backgroundColor:["#8b5cf6","#facc15"]}]}
+ }));
 }
 
 function exportPDF(){
  const {jsPDF}=window.jspdf;
  const pdf=new jsPDF();
  pdf.text("Paragon Analytics Report",14,20);
- pdf.text(analysis.innerText,14,35,{maxWidth:180});
+ pdf.text(document.getElementById("analysis").innerText,14,35,{maxWidth:180});
  pdf.addPage();
  charts.forEach((c,i)=>{
-  pdf.addImage(c.canvas.toDataURL(), "PNG", 15, 20, 180, 90);
+  pdf.addImage(c.canvas.toDataURL("image/png"),"PNG",15,20,180,90);
   if(i<charts.length-1) pdf.addPage();
  });
  pdf.save("paragon_analytics_report.pdf");
