@@ -1,283 +1,177 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>PARAGON ANALYTICS v3.1</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+# ================================
+# PARAGON ANALYTICS — ALL IN ONE
+# Single-file, copy-paste runnable
+# ================================
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from datetime import datetime
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error
 
-<style>
-body{
-  background: radial-gradient(circle at top,#14002a,#050012);
-  color:white;
-  font-family:Arial, sans-serif;
-  text-align:center;
-}
-button,select{
-  padding:10px;margin:5px;border-radius:6px;border:none;font-weight:bold;
-}
-.primary{background:gold;color:black;}
-.secondary{background:#333;color:white;}
-.panel{max-width:1200px;margin:auto;padding:10px;}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
-.card{background:rgba(255,255,255,0.08);padding:12px;border-radius:10px;}
-.value{font-size:18px;font-weight:bold;}
-canvas{background:rgba(255,255,255,0.05);border-radius:10px;margin-top:18px;}
-textarea{width:96%;height:340px;border-radius:8px;padding:12px;}
-</style>
-</head>
+# ----------------
+# CONFIG
+# ----------------
+OUTPUT_PDF = "paragon_analytics_report.pdf"
+RANDOM_SEED = 42
+np.random.seed(RANDOM_SEED)
 
-<body>
+# ----------------
+# DATA INGESTION
+# ----------------
+def load_data():
+    """
+    Replace this with CSV loading if needed.
+    This mock dataset mirrors real business metrics.
+    """
+    dates = pd.date_range(start="2024-01-01", periods=12, freq="M")
+    revenue = np.array([1200, 1350, 1500, 1480, 1600, 1750, 1800, 1950, 2100, 2200, 2350, 2500])
+    expenses = np.array([700, 720, 760, 780, 800, 830, 850, 880, 910, 940, 960, 1000])
 
-<h2>PARAGON ANALYTICS — v3.1</h2>
-<p>Virtual Business Consultant · Trust-First Forecast Mode</p>
+    df = pd.DataFrame({
+        "date": dates,
+        "revenue": revenue,
+        "expenses": expenses
+    })
+    return df
 
-<input type="file" id="csvFile"><br>
+# ----------------
+# DATA VALIDATION
+# ----------------
+def validate_data(df):
+    issues = []
 
-<select id="metricSelect">
-  <option value="Revenue">Revenue</option>
-  <option value="Cost">Cost</option>
-  <option value="Units_Sold">Units Sold</option>
-</select>
+    if df.isnull().any().any():
+        issues.append("Missing values detected")
 
-<br>
-<button class="primary" onclick="loadCSV()">Load CSV</button>
-<button class="secondary" onclick="runAnalytics()">Run Analysis</button>
-<button class="secondary" onclick="exportPDF()">Export Consultant PDF</button>
+    if (df[["revenue", "expenses"]] < 0).any().any():
+        issues.append("Negative financial values detected")
 
-<div class="panel">
+    if not pd.api.types.is_datetime64_any_dtype(df["date"]):
+        issues.append("Date column is not datetime")
 
-<canvas id="trendChart"></canvas>
+    return issues
 
-<h3>Key Metrics</h3>
-<div class="grid" id="kpiPanel"></div>
+# ----------------
+# FEATURE ENGINEERING
+# ----------------
+def add_growth_metrics(df):
+    df = df.copy()
+    df["profit"] = df["revenue"] - df["expenses"]
+    df["revenue_growth_pct"] = df["revenue"].pct_change() * 100
+    df["profit_growth_pct"] = df["profit"].pct_change() * 100
+    return df
 
-<h3>Consultant Brief</h3>
-<textarea id="insightText"></textarea>
+# ----------------
+# FORECAST ENGINE
+# ----------------
+def forecast_series(series, periods=3):
+    X = np.arange(len(series)).reshape(-1, 1)
+    y = series.values
 
-</div>
+    model = LinearRegression()
+    model.fit(X, y)
 
-<script>
-let headers=[], rows=[], chart, cache={};
+    future_X = np.arange(len(series), len(series) + periods).reshape(-1, 1)
+    forecast = model.predict(future_X)
 
-/* ================= CSV ================= */
+    return forecast, model
 
-function loadCSV(){
-  const f=csvFile.files[0];
-  if(!f) return alert("Upload CSV");
-  const r=new FileReader();
-  r.onload=e=>{
-    const l=e.target.result.trim().split("\n");
-    headers=l[0].split(",").map(x=>x.trim());
-    rows=l.slice(1).map(x=>x.split(","));
-    alert("CSV loaded successfully");
-  };
-  r.readAsText(f);
-}
+# ----------------
+# CHARTS
+# ----------------
+def plot_time_series(df, pdf):
+    plt.figure()
+    plt.plot(df["date"], df["revenue"], label="Revenue")
+    plt.plot(df["date"], df["expenses"], label="Expenses")
+    plt.plot(df["date"], df["profit"], label="Profit")
+    plt.title("Revenue, Expenses & Profit Over Time")
+    plt.legend()
+    plt.tight_layout()
+    pdf.savefig()
+    plt.close()
 
-/* ================= MAIN ================= */
+def plot_growth(df, pdf):
+    plt.figure()
+    plt.plot(df["date"], df["revenue_growth_pct"], label="Revenue Growth %")
+    plt.plot(df["date"], df["profit_growth_pct"], label="Profit Growth %")
+    plt.axhline(0)
+    plt.title("Growth Rates")
+    plt.legend()
+    plt.tight_layout()
+    pdf.savefig()
+    plt.close()
 
-function runAnalytics(){
-  if(!rows.length) return alert("Load CSV first");
+def plot_forecast(df, revenue_forecast, pdf):
+    plt.figure()
+    historical_x = range(len(df))
+    forecast_x = range(len(df), len(df) + len(revenue_forecast))
 
-  const metric=metricSelect.value;
-  const dI=headers.indexOf("Date");
-  const mI=headers.indexOf(metric);
-  if(dI===-1||mI===-1) return alert("CSV must contain Date and selected metric");
+    plt.plot(historical_x, df["revenue"], label="Historical Revenue")
+    plt.plot(forecast_x, revenue_forecast, linestyle="--", label="Forecast Revenue")
+    plt.title("Revenue Forecast")
+    plt.legend()
+    plt.tight_layout()
+    pdf.savefig()
+    plt.close()
 
-  const data=rows.map(r=>({
-    date:new Date(r[dI]),
-    value:parseFloat(r[mI])
-  })).filter(x=>isFinite(x.value)&&!isNaN(x.date));
+# ----------------
+# PDF REPORT
+# ----------------
+def generate_pdf(df, validation_issues, revenue_forecast):
+    with PdfPages(OUTPUT_PDF) as pdf:
+        # Summary page
+        plt.figure()
+        plt.axis("off")
+        summary_text = f"""
+        PARAGON ANALYTICS REPORT
+        Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
-  const values=data.map(d=>d.value);
+        Records analyzed: {len(df)}
 
-  const stats=analyzeSignals(values);
-  const regime=detectRegime(stats);
-  const forecast=trustFirstForecast(values,stats,regime);
-  const verdict=businessVerdict(stats,regime);
-  const confidence=confidenceLogic(stats,regime);
-  const recommendation=recommendationLogic(verdict,regime);
+        Avg Revenue: {df['revenue'].mean():.2f}
+        Avg Expenses: {df['expenses'].mean():.2f}
+        Avg Profit: {df['profit'].mean():.2f}
 
-  cache={values,stats,forecast,verdict,confidence,recommendation,regime};
+        Validation Issues:
+        {', '.join(validation_issues) if validation_issues else 'None'}
+        """
+        plt.text(0.01, 0.99, summary_text, va="top")
+        pdf.savefig()
+        plt.close()
 
-  renderChart(values,forecast.base);
-  renderKPIs(stats,regime);
-  renderNarrative();
-}
+        plot_time_series(df, pdf)
+        plot_growth(df, pdf)
+        plot_forecast(df, revenue_forecast, pdf)
 
-/* ================= ANALYSIS ================= */
+# ----------------
+# MAIN PIPELINE
+# ----------------
+def run_paragon_analytics():
+    print("Running Paragon Analytics...")
 
-function analyzeSignals(v){
-  const m=mean(v);
-  const s=std(v);
-  const vol=(s/(Math.abs(m)||1))*100;
-  const growth=((v[v.length-1]-v[0])/(Math.abs(v[0])||1))*100;
-  const anomalies=v.filter(x=>Math.abs(x-m)>2*s).length;
-  return{
-    mean:m,
-    volatility:vol,
-    growth:growth,
-    anomalies:anomalies
-  };
-}
+    df = load_data()
+    print("Data loaded")
 
-/* ================= REGIME ================= */
+    validation_issues = validate_data(df)
+    print("Validation complete:", validation_issues if validation_issues else "No issues")
 
-function detectRegime(s){
-  if(s.volatility<25 && s.anomalies<2) return "Stable";
-  if(s.volatility>45 || s.anomalies>3) return "Unstable";
-  return "Transition";
-}
+    df = add_growth_metrics(df)
+    print("Growth metrics added")
 
-/* ================= TRUST-FIRST FORECAST ================= */
+    revenue_forecast, model = forecast_series(df["revenue"])
+    print("Forecast generated")
 
-function trustFirstForecast(v,s,regime){
-  const last=v[v.length-1];
-  const baseTrend=(last-v[Math.max(0,v.length-6)])/(Math.min(6,v.length-1)||1);
+    generate_pdf(df, validation_issues, revenue_forecast)
+    print(f"PDF report saved as {OUTPUT_PDF}")
 
-  const dampener = regime==="Stable"?1 : regime==="Transition"?0.6 : 0.3;
+    print("\n=== FINAL DATA SNAPSHOT ===")
+    print(df.tail())
 
-  const base=[1,2,3].map(i=>round(last + baseTrend*i*dampener));
-
-  const downside=[1,2,3].map(i=>round(last + baseTrend*i*dampener - s.volatility*0.01*last));
-  const upside=[1,2,3].map(i=>round(last + baseTrend*i*dampener + s.volatility*0.005*last));
-
-  let usability="Suitable only for short-term operational planning.";
-  if(regime==="Transition") usability="Use with caution — business may be shifting.";
-  if(regime==="Unstable") usability="Indicative only — volatility dominates historical signal.";
-
-  return{
-    base,
-    downside,
-    upside,
-    planning:downside,
-    usability
-  };
-}
-
-/* ================= VERDICT ================= */
-
-function businessVerdict(s,r){
-  if(r==="Stable" && s.growth>0) return "Strong & Stable";
-  if(r!=="Stable" && s.growth>0) return "Growth with Elevated Risk";
-  if(r==="Stable" && s.growth<=0) return "Stable with Watchpoints";
-  return "Operationally Fragile";
-}
-
-/* ================= CONFIDENCE ================= */
-
-function confidenceLogic(s,r){
-  let c=85;
-  if(r==="Transition") c-=20;
-  if(r==="Unstable") c-=35;
-  return Math.max(30,Math.min(90,c));
-}
-
-/* ================= RECOMMENDATION ================= */
-
-function recommendationLogic(v,r){
-  if(v==="Strong & Stable")
-    return "Maintain strategy; any expansion should remain measured and reversible.";
-  if(v==="Growth with Elevated Risk")
-    return "Anchor planning to conservative outcomes and prioritize stabilization.";
-  if(v==="Stable with Watchpoints")
-    return "Hold course while actively monitoring risk indicators.";
-  return "Defer growth initiatives and focus on restoring stability.";
-}
-
-/* ================= RENDER ================= */
-
-function renderChart(actual,forecast){
-  if(chart) chart.destroy();
-  chart=new Chart(trendChart,{
-    type:"line",
-    data:{
-      labels:[...actual.map((_,i)=>i+1),"F1","F2","F3"],
-      datasets:[
-        {label:"Actual",data:actual},
-        {label:"Conservative Forecast (Planning)",data:[...Array(actual.length).fill(null),...forecast],borderDash:[5,5]}
-      ]
-    }
-  });
-}
-
-function renderKPIs(s,r){
-  kpiPanel.innerHTML=`
-    <div class="card">Regime<div class="value">${r}</div></div>
-    <div class="card">Growth<div class="value">${round(s.growth)}%</div></div>
-    <div class="card">Volatility<div class="value">${round(s.volatility)}%</div></div>
-    <div class="card">Anomalies<div class="value">${s.anomalies}</div></div>
-  `;
-}
-
-function renderNarrative(){
-  const c=cache;
-  insightText.value=
-`EXECUTIVE VERDICT
-${c.verdict}
-
-REGIME ASSESSMENT
-The business is operating in a ${c.regime.toLowerCase()} regime. Forecasts are intentionally conservative.
-
-FORECAST OUTLOOK
-${c.forecast.usability}
-Planning should assume outcomes closer to the lower range: ${c.forecast.planning.join(", ")}
-
-STRATEGIC RECOMMENDATION
-${c.recommendation}
-
-RISKS & CAVEATS
-Forecasts are dampened to account for volatility and potential regime shifts. Sudden market or cost shocks could materially alter outcomes.
-
-CONFIDENCE STATEMENT
-Overall confidence is ${c.confidence}%, reflecting forecast humility and regime-aware risk management.
-`;
-}
-
-/* ================= PDF ================= */
-
-async function exportPDF(){
-  if(!cache.values) return alert("Run analysis first");
-  const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF();
-  let y=14;
-
-  function section(title,text){
-    pdf.setFontSize(14); pdf.text(title,10,y); y+=6;
-    pdf.setFontSize(10); pdf.text(text,10,y,{maxWidth:180}); y+=text.split("\n").length*5+6;
-  }
-
-  section("EXECUTIVE OVERVIEW",
-`Verdict: ${cache.verdict}
-Operating regime: ${cache.regime}
-Confidence: ${cache.confidence}%
-
-${cache.recommendation}`);
-
-  section("FORECAST & PLANNING POSTURE",
-`${cache.forecast.usability}
-Recommended planning range: ${cache.forecast.planning.join(", ")}`);
-
-  section("RISKS & ASSUMPTIONS",
-`Forecasts are conservative by design.
-Volatility and regime changes should be monitored closely.`);
-
-  pdf.addPage();
-  pdf.text("ANALYTICAL EVIDENCE",10,14);
-  pdf.addImage(trendChart.toDataURL(),"PNG",10,20,180,80);
-
-  pdf.save("paragon_consultant_report_v3_1.pdf");
-}
-
-/* ================= MATH ================= */
-
-function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
-function std(a){let m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)));}
-function round(x){return Math.round(x*100)/100;}
-
-</script>
-</body>
-</html>
+# ----------------
+# EXECUTE
+# ----------------
+if __name__ == "__main__":
+    run_paragon_analytics()
