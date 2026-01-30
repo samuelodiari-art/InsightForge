@@ -1,182 +1,272 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Paragon Analytics</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PARAGON ANALYTICS v1.1</title>
 
-<!-- Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-:root{
-  --bg:#1b102f;--card:#24133d;--accent:#8b5cf6;--gold:#facc15;--text:#f5f3ff
+body {
+  background: radial-gradient(circle at top, #16002f, #050012);
+  color: #f5f3ff;
+  font-family: system-ui, Arial, sans-serif;
+  text-align: center;
 }
-body{margin:0;padding:16px;background:var(--bg);color:var(--text);font-family:system-ui}
-h1,h2,h3{color:var(--gold)}
-.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:18px}
-.metrics{display:flex;gap:12px;flex-wrap:wrap}
-.metric{flex:1;background:#2e1a55;border-radius:12px;padding:12px;text-align:center}
-input,select,button{width:100%;padding:10px;border-radius:10px;border:none;margin-top:8px}
-button{background:linear-gradient(135deg,var(--accent),var(--gold));color:#1b102f;font-weight:bold}
-canvas{background:#1b102f;border-radius:12px;padding:8px}
-.status{opacity:.85;font-size:.9em}
-.warn{color:#fca5a5}
-.good{color:#86efac}
+button, select {
+  padding: 10px;
+  margin: 5px;
+  border-radius: 6px;
+  border: none;
+  font-weight: bold;
+}
+.primary { background: linear-gradient(135deg,#8b5cf6,#facc15); color:#1b102f; }
+.secondary { background: #2e1a55; color:white; }
+.panel { max-width:1200px; margin:auto; padding:10px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
+.card { background:rgba(255,255,255,0.08); padding:12px; border-radius:10px; }
+.value { font-size:18px; font-weight:bold; }
+canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
+textarea { width:96%; height:220px; border-radius:8px; padding:8px; }
+.badge { padding:8px; border-radius:8px; font-weight:bold; }
+.good { background:#2ecc71; color:black; }
+.warn { background:#f1c40f; color:black; }
+.bad { background:#e74c3c; color:white; }
+.small { font-size:12px; opacity:0.85; }
 </style>
 </head>
 
 <body>
 
-<h1>🔮 Paragon Analytics</h1>
+<h2>🔮 PARAGON ANALYTICS</h2>
+<p class="small">Autonomous Business Intelligence Engine — v1.1</p>
 
-<div class="card">
-  <h2>📁 Upload CSV</h2>
-  <input type="file" id="csvInput" accept=".csv">
-  <select id="valueColumn" disabled></select>
-  <div id="status" class="status">Waiting for CSV…</div>
+<input type="file" id="csvFile"><br>
+
+<select id="columnSelect"></select>
+
+<select id="horizonSelect">
+  <option value="1">Forecast: 1 Period</option>
+  <option value="3" selected>Forecast: 3 Periods</option>
+  <option value="6">Forecast: 6 Periods</option>
+</select>
+
+<br>
+<button class="primary" onclick="loadCSV()">Load CSV</button>
+<button class="secondary" onclick="runAnalytics()">Run Intelligence</button>
+<button class="secondary" onclick="exportPDF()">Export PDF</button>
+
+<div class="panel">
+<canvas id="lineChart"></canvas>
+<canvas id="kpiChart"></canvas>
+<canvas id="productChart"></canvas>
+
+<h3>📊 Confidence & Data Quality</h3>
+<div class="grid" id="accuracyPanel"></div>
+
+<h3>⚠ Risk & Stability</h3>
+<div class="grid" id="riskPanel"></div>
+
+<h3>🔮 Scenario Forecast</h3>
+<div class="grid" id="scenarioPanel"></div>
+
+<h3>🧠 AI Explanation & Strategy</h3>
+<textarea id="aiText"></textarea>
 </div>
 
-<div class="metrics" id="metrics"></div>
-
-<div class="card"><canvas id="trendChart"></canvas></div>
-<div class="card"><canvas id="barChart"></canvas></div>
-<div class="card"><canvas id="pieChart"></canvas></div>
-
-<div class="card" id="analysis"></div>
-
-<button onclick="exportPDF()">📄 Export Full PDF Report</button>
-
 <script>
-let rawData=[], values=[], charts=[];
+let rawData=[], charts={}, cache={};
 
+/* ---------- Utilities ---------- */
 const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
-const std=a=>{const m=mean(a);return Math.sqrt(mean(a.map(v=>(v-m)**2)))};
+const std=a=>{let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2)));};
 
-const csvInput=document.getElementById("csvInput");
-const valueColumn=document.getElementById("valueColumn");
-const statusEl=document.getElementById("status");
-
-csvInput.addEventListener("change", e=>{
- statusEl.textContent="Parsing CSV…";
- Papa.parse(e.target.files[0],{
-  header:true,skipEmptyLines:true,
-  complete:r=>{
-   rawData=r.data;
-   setupColumns();
-  }
- });
-});
-
-function setupColumns(){
- if(!rawData.length){
-  statusEl.innerHTML="<span class='warn'>CSV is empty</span>";
-  return;
- }
-
- const cols=Object.keys(rawData[0]).filter(c=>{
-  return rawData.some(r=>!isNaN(Number(r[c])));
- });
-
- if(!cols.length){
-  statusEl.innerHTML="<span class='warn'>No numeric columns found</span>";
-  return;
- }
-
- valueColumn.innerHTML=cols.map(c=>`<option value="${c}">${c}</option>`).join("");
- valueColumn.disabled=false;
- valueColumn.selectedIndex=0;
-
- statusEl.innerHTML="<span class='good'>✓ Data loaded</span>";
- analyze();
+/* ---------- CSV Load + Schema Intelligence ---------- */
+function loadCSV(){
+  const file = csvFile.files[0];
+  if(!file) return alert("Upload CSV first.");
+  const reader = new FileReader();
+  reader.onload = e => {
+    rawData = e.target.result.trim().split("\n").slice(1).map(r=>r.split(","));
+    autoDetectColumns();
+    alert("CSV Loaded Successfully");
+  };
+  reader.readAsText(file);
 }
 
-valueColumn.addEventListener("change", analyze);
-
-function analyze(){
- const col=valueColumn.value;
- values=rawData.map(r=>Number(r[col])).filter(v=>!isNaN(v));
-
- if(values.length<3){
-  statusEl.innerHTML="<span class='warn'>Not enough data to analyze</span>";
-  return;
- }
-
- compute();
+function autoDetectColumns(){
+  const header = csvFile.files[0].name;
+  columnSelect.innerHTML = "";
+  rawData[0].forEach((_,i)=>{
+    let score = 0;
+    let name = rawData[0][i] || "";
+    if(/revenue|sales|income/i.test(name)) score += 3;
+    columnSelect.innerHTML += `<option value="${i}">Column ${i}</option>`;
+  });
+  columnSelect.selectedIndex = 1;
 }
 
-function compute(){
- const avg=mean(values);
- const vol=std(values);
- const normVol=vol/avg;
- const slope=(values.at(-1)-values[0])/(values.length-1);
+/* ---------- Core Pipeline ---------- */
+function runAnalytics(){
+  if(!rawData.length) return alert("Load CSV first.");
 
- const forecast=Math.round(values.at(-1)+slope);
+  const col = parseInt(columnSelect.value);
+  const horizon = parseInt(horizonSelect.value);
 
- const confidence=Math.max(20,Math.min(95,
-  100-(normVol*100)-(values.length<10?20:0)
- ));
+  const parsed = rawData.map(r=>({
+    date:new Date(r[0]),
+    value:parseFloat(r[col]),
+    product:r[4]
+  })).filter(r=>isFinite(r.value) && !isNaN(r.date));
 
- document.getElementById("metrics").innerHTML=`
-  <div class="metric"><h3>Average</h3><p>${avg.toFixed(2)}</p></div>
-  <div class="metric"><h3>Volatility</h3><p>${(normVol*100).toFixed(1)}%</p></div>
-  <div class="metric"><h3>Confidence</h3><p>${confidence.toFixed(0)}%</p></div>
- `;
+  const aggregated = aggregate(parsed);
+  let values = clamp(aggregated.map(r=>r.value));
+  let labels = aggregated.map(r=>r.label);
 
- document.getElementById("analysis").innerHTML=`
-  <h2>🧠 Analysis</h2>
-  <p>The selected metric shows a ${slope>0?"positive":"negative"} trend with
-  ${normVol>0.3?"high":"moderate"} volatility.</p>
-  <p><b>Forecast (next period): ${forecast}</b></p>
-  <p>Confidence is estimated at <b>${confidence.toFixed(0)}%</b>.</p>
-  <h3>Recommendations</h3>
-  <ul>
-    <li>${normVol>0.3?"Reduce variability before scaling.":"Maintain current strategy."}</li>
-    <li>${confidence<60?"Use forecast cautiously.":"Forecast is reasonably reliable."}</li>
-  </ul>
- `;
+  const smooth = expSmooth(values,0.35);
+  const forecast = buildForecast(values,horizon);
 
- renderCharts(forecast);
+  const mape = backtest(values,smooth);
+  const season = seasonality(parsed);
+  const anomalies = anomalyCount(values);
+  const confidence = confidenceScore(values,mape,season,anomalies);
+  const dataQuality = dataQualityScore(values,anomalies);
+  const validation = validationStatus(confidence,mape);
+
+  const kpi = kpiCalc(values,smooth);
+  const risk = riskModel(values,confidence);
+  const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
+  const scenarios = scenarioForecast(forecast);
+
+  cache={confidence,mape,season,dataQuality,validation,kpi,risk,scenarios};
+
+  renderLine(labels,values,smooth,forecast);
+  renderBars(kpi,segments);
+  renderAccuracy(confidence,mape,dataQuality,season,validation);
+  renderRisk(risk,season,kpi.growth);
+  renderScenarios(scenarios);
+  renderExplanation(confidence,season,risk,kpi.growth,dataQuality);
 }
 
-function renderCharts(forecast){
- charts.forEach(c=>c.destroy()); charts=[];
-
- charts.push(new Chart(trendChart,{
-  type:"line",
-  data:{labels:values.map((_,i)=>i+1),
-  datasets:[{label:"Trend",data:values,borderColor:"#8b5cf6"}]}
- }));
-
- charts.push(new Chart(barChart,{
-  type:"bar",
-  data:{labels:values.map((_,i)=>i+1),
-  datasets:[{label:"Values",data:values,backgroundColor:"#facc15"}]}
- }));
-
- charts.push(new Chart(pieChart,{
-  type:"pie",
-  data:{labels:["Last","Forecast"],
-  datasets:[{data:[values.at(-1),forecast],
-  backgroundColor:["#8b5cf6","#facc15"]}]}
- }));
+/* ---------- Engines ---------- */
+function aggregate(data){
+  let map={};
+  data.forEach(d=>{
+    let k=d.date.getFullYear()+"-"+(d.date.getMonth()+1);
+    map[k]=(map[k]||0)+d.value;
+  });
+  return Object.entries(map).map(([k,v])=>({label:k,value:v}));
 }
 
+const clamp=d=>{let m=mean(d),s=std(d);return d.map(v=>Math.min(m+2.5*s,Math.max(m-2.5*s,v)));};
+const expSmooth=(d,a)=>d.reduce((s,v,i)=>i?[...s,a*v+(1-a)*s[i-1]]:[v],[]);
+const buildForecast=(d,h)=>Array.from({length:h},(_,i)=>Math.round(d.at(-1)+(d.at(-1)-d[0])/d.length*(i+1)));
+const backtest=(a,s)=>mean(a.slice(1).map((v,i)=>Math.abs((v-s[i])/v)))*100;
+const seasonality=d=>{let m={};d.forEach(x=>m[x.date.getMonth()]=(m[x.date.getMonth()]||0)+x.value);return (std(Object.values(m))/mean(Object.values(m)))*100;};
+const anomalyCount=d=>d.filter(v=>Math.abs(v-mean(d))>3*std(d)).length;
+
+/* ---------- Scores ---------- */
+function confidenceScore(d,mape,season,anom){
+  return Math.max(55,Math.min(95,
+    100-(std(d)/mean(d))*100-mape*0.9-anom*4+season*0.4
+  ));
+}
+function dataQualityScore(d,anom){
+  let depth=Math.min(100,d.length*6);
+  let stability=Math.max(0,100-(std(d)/mean(d))*120);
+  let anomalyPenalty=anom*10;
+  return Math.max(40,Math.min(100,(depth+stability)/2-anomalyPenalty));
+}
+const validationStatus=(c,e)=>c>70&&e<35?"VALIDATED":c>55?"MONITOR":"UNSTABLE";
+
+/* ---------- Risk & KPI ---------- */
+const riskModel=(d,c)=>({vol:(std(d)/mean(d)*100).toFixed(1),level:c<60?"HIGH":c<75?"MEDIUM":"LOW"});
+const kpiCalc=(d,s)=>({max:Math.max(...d),min:Math.min(...d),avg:Math.round(mean(d)),growth:(((s.at(-1)-s[0])/Math.abs(s[0]||1))*100).toFixed(1)});
+const segment=(p,v)=>Object.entries(p.reduce((m,x,i)=>(m[x]=(m[x]||0)+v[i],m),{})).sort((a,b)=>b[1]-a[1]);
+const scenarioForecast=f=>({base:f,optimistic:f.map(v=>Math.round(v*1.12)),conservative:f.map(v=>Math.round(v*0.88))});
+
+/* ---------- UI ---------- */
+function renderAccuracy(c,e,q,s,v){
+  accuracyPanel.innerHTML=`
+  <div class="card">Confidence<div class="value">${c.toFixed(1)}%</div></div>
+  <div class="card">Data Quality<div class="value">${q.toFixed(0)}%</div></div>
+  <div class="card">MAPE<div class="value">${e.toFixed(1)}%</div></div>
+  <div class="card">Seasonality<div class="value">${s.toFixed(1)}%</div></div>
+  <div class="card">Validation<div class="badge ${v==="VALIDATED"?"good":v==="MONITOR"?"warn":"bad"}">${v}</div></div>`;
+}
+
+function renderRisk(r,s,g){
+  riskPanel.innerHTML=`
+  <div class="card">Volatility<div class="value">${r.vol}%</div></div>
+  <div class="card">Risk Level<div class="value">${r.level}</div></div>
+  <div class="card">Seasonality<div class="value">${s.toFixed(1)}%</div></div>
+  <div class="card">Growth<div class="value">${g}%</div></div>`;
+}
+
+function renderScenarios(s){
+  scenarioPanel.innerHTML=`
+  <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
+  <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
+  <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
+}
+
+function renderExplanation(c,s,r,g,q){
+  aiText.value=
+`SYSTEM ASSESSMENT
+Data Quality: ${q.toFixed(0)}%
+Forecast Confidence: ${c.toFixed(1)}%
+
+INTERPRETATION
+${g>0?"Growth is positive.":"Growth is negative."}
+${r.level==="HIGH"?"Risk is elevated due to volatility.":"Risk level is manageable."}
+${s>25?"Strong seasonal effects detected.":"No dominant seasonality detected."}
+
+STRATEGY
+${c>75&&r.level==="LOW"?"Scale with confidence.":
+c>60?"Proceed cautiously and monitor trends.":"Stabilize data before major decisions."}`;
+}
+
+/* ---------- Charts ---------- */
+function renderLine(l,a,s,f){
+ destroy("line");
+ charts.line=new Chart(lineChart,{type:"line",data:{labels:[...l,...f.map((_,i)=>"F"+(i+1))],
+ datasets:[
+  {label:"Actual",data:a},
+  {label:"Smoothed",data:s,borderDash:[5,5]},
+  {label:"Forecast",data:[...Array(a.length).fill(null),...f],borderDash:[3,3]}
+ ]}});
+}
+
+function renderBars(k,seg){
+ destroy("kpi"); destroy("prod");
+ charts.kpi=new Chart(kpiChart,{type:"bar",data:{labels:["Max","Min","Avg","Growth%"],datasets:[{data:[k.max,k.min,k.avg,k.growth]}]}});
+ charts.prod=new Chart(productChart,{type:"bar",data:{labels:seg.map(x=>x[0]),datasets:[{data:seg.map(x=>x[1])}]}});
+}
+
+const destroy=n=>charts[n]&&charts[n].destroy();
+
+/* ---------- PDF ---------- */
 function exportPDF(){
  const {jsPDF}=window.jspdf;
  const pdf=new jsPDF();
- pdf.text("Paragon Analytics Report",14,20);
- pdf.text(document.getElementById("analysis").innerText,14,35,{maxWidth:180});
- pdf.addPage();
- charts.forEach((c,i)=>{
-  pdf.addImage(c.canvas.toDataURL("image/png"),"PNG",15,20,180,90);
-  if(i<charts.length-1) pdf.addPage();
- });
- pdf.save("paragon_analytics_report.pdf");
+ let y=15;
+ pdf.setFontSize(16);
+ pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=8;
+ pdf.setFontSize(10);
+ pdf.text(`Confidence: ${cache.confidence.toFixed(1)}% | Data Quality: ${cache.dataQuality.toFixed(0)}% | Validation: ${cache.validation}`,10,y); y+=8;
+ pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,55); y+=60;
+ pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,85,45);
+ pdf.addImage(productChart.toDataURL(),"PNG",105,y,85,45); y+=55;
+ pdf.text("Scenario Forecast",10,y); y+=6;
+ pdf.text(`Base: ${cache.scenarios.base.join(", ")}`,10,y); y+=5;
+ pdf.text(`Optimistic: ${cache.scenarios.optimistic.join(", ")}`,10,y); y+=5;
+ pdf.text(`Conservative: ${cache.scenarios.conservative.join(", ")}`,10,y); y+=8;
+ pdf.text("AI Strategy Summary",10,y); y+=6;
+ pdf.text(aiText.value,10,y,{maxWidth:180});
+ pdf.text("Generated by Paragon Analytics",10,285);
+ pdf.save("paragon_report.pdf");
 }
 </script>
-
 </body>
 </html>
