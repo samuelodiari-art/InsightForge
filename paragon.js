@@ -1,3 +1,9 @@
+const pdfBtn = document.getElementById("pdfBtn");
+const reportSection = document.getElementById("report");
+const execSummary = document.getElementById("execSummary");
+const reportKPIs = document.getElementById("reportKPIs");
+const forecastNotes = document.getElementById("forecastNotes");
+const riskNotes = document.getElementById("riskNotes");
 const fileInput = document.getElementById("csvFile");
 const analyzeBtn = document.getElementById("analyzeBtn");
 
