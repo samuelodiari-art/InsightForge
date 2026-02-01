@@ -32,7 +32,7 @@ function resetUI() {
 
 function readCSV(file) {
   const reader = new FileReader();
-  reader.onload = (e) => parseCSV(e.target.result);
+  reader.onload = e => parseCSV(e.target.result);
   reader.readAsText(file);
 }
 
@@ -67,9 +67,9 @@ function detectColumns(headers) {
     h.toLowerCase().includes("year")
   );
 
-  metricColumn = numericColumns.find(h =>
-    h.toLowerCase().includes("revenue")
-  ) || numericColumns[0];
+  metricColumn =
+    numericColumns.find(h => h.toLowerCase().includes("revenue")) ||
+    numericColumns[0];
 
   log(`Detected numeric columns: ${numericColumns.join(", ")}`);
   log(`Time column: ${timeColumn || "None"}`);
@@ -79,22 +79,14 @@ function detectColumns(headers) {
 function analyze() {
   summarySection.classList.remove("hidden");
   logsSection.classList.remove("hidden");
-
   renderKPIs();
-  if (timeColumn && metricColumn) {
-    renderChart();
-  }
+  if (timeColumn && metricColumn) renderChart();
 }
 
 function renderKPIs() {
   numericColumns.forEach(col => {
     const values = rawData.map(r => r[col]).filter(v => typeof v === "number");
-    if (values.length < 2) return;
-
-    if (isBinary(values)) {
-      log(`Skipping KPI for flag column: ${col}`);
-      return;
-    }
+    if (values.length < 2 || isBinary(values)) return;
 
     const avg = average(values);
     const growth = ((values.at(-1) - values[0]) / Math.abs(values[0])) * 100;
@@ -114,12 +106,15 @@ function renderChart() {
   chartsSection.classList.remove("hidden");
 
   const labels = rawData.map(r => r[timeColumn]);
-  const values = rawData.map(r => r[metricColumn]);
+  const actual = rawData.map(r => r[metricColumn]);
 
-  const forecast = forecastSeries(values, 6);
+  const smoothed = ema(actual, 0.3);
+  const forecast = forecastFromEMA(smoothed, 6);
+  const { upper, lower } = confidenceBands(smoothed, forecast);
+
   const forecastLabels = forecast.map((_, i) => `F${i + 1}`);
-
   const ctx = document.getElementById("trendChart").getContext("2d");
+
   if (chart) chart.destroy();
 
   chart = new Chart(ctx, {
@@ -128,39 +123,70 @@ function renderChart() {
       labels: [...labels, ...forecastLabels],
       datasets: [
         {
-          label: "Historical",
-          data: values,
+          label: "Actual",
+          data: actual,
+          borderWidth: 2
+        },
+        {
+          label: "Smoothed",
+          data: smoothed,
+          borderDash: [4, 4],
           borderWidth: 2
         },
         {
           label: "Forecast",
-          data: [...Array(values.length).fill(null), ...forecast],
+          data: [...Array(actual.length).fill(null), ...forecast],
           borderDash: [6, 6],
           borderWidth: 2
+        },
+        {
+          label: "Upper Bound",
+          data: [...Array(actual.length).fill(null), ...upper],
+          borderWidth: 0,
+          fill: "+1"
+        },
+        {
+          label: "Lower Bound",
+          data: [...Array(actual.length).fill(null), ...lower],
+          borderWidth: 0,
+          fill: false
         }
       ]
     }
   });
 
-  log(`Generated ${forecast.length}-period forecast for ${metricColumn}`);
+  log("Applied EMA smoothing (α = 0.3)");
+  log("Computed confidence bands from historical error");
 }
 
-function forecastSeries(values, periods) {
-  const n = values.length;
-  const slope = (values[n - 1] - values[0]) / (n - 1);
-  const avgGrowth =
-    values.slice(1).map((v, i) => (v - values[i]) / Math.abs(values[i] || 1));
-  const growthRate = average(avgGrowth) * 0.6;
-
-  let last = values.at(-1);
-  const result = [];
-
-  for (let i = 0; i < periods; i++) {
-    last = last + slope + last * growthRate;
-    result.push(Number(last.toFixed(2)));
+function ema(values, alpha) {
+  const result = [values[0]];
+  for (let i = 1; i < values.length; i++) {
+    result.push(alpha * values[i] + (1 - alpha) * result[i - 1]);
   }
-
   return result;
+}
+
+function forecastFromEMA(smoothed, periods) {
+  const slope = (smoothed.at(-1) - smoothed[0]) / (smoothed.length - 1);
+  let last = smoothed.at(-1);
+  const out = [];
+  for (let i = 0; i < periods; i++) {
+    last += slope;
+    out.push(Number(last.toFixed(2)));
+  }
+  return out;
+}
+
+function confidenceBands(smoothed, forecast) {
+  const errors = smoothed.map((v, i) => v - (smoothed[i - 1] ?? v));
+  const sigma = Math.sqrt(average(errors.map(e => e * e))) || 0;
+  const k = 1.96; // ~95%
+
+  return {
+    upper: forecast.map(v => Number((v + k * sigma).toFixed(2))),
+    lower: forecast.map(v => Number((v - k * sigma).toFixed(2)))
+  };
 }
 
 function isBinary(values) {
@@ -174,4 +200,4 @@ function average(arr) {
 
 function log(msg) {
   logOutput.textContent += msg + "\n";
-    }
+}
