@@ -174,4 +174,4 @@ function average(arr) {
 
 function log(msg) {
   logOutput.textContent += msg + "\n";
-                                                   }
+    }
