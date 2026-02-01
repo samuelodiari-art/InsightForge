@@ -109,8 +109,46 @@ function renderKPIs() {
 }
 
 function renderChart() {
-  chartsSection.classList.remove("hidden");
+  pdfBtn.addEventListener("click", generateReport);
 
+function generateReport() {
+  reportSection.classList.remove("hidden");
+  buildExecutiveSummary();
+  buildReportKPIs();
+  buildNotes();
+  window.print();
+}
+  function buildExecutiveSummary() {
+  execSummary.innerHTML = `
+    <h2>Executive Summary</h2>
+    <p>
+      This report analyzes <strong>${rawData.length}</strong> records
+      across the <strong>${metricColumn}</strong> metric.
+      The data shows an overall <strong>upward trend</strong> with
+      forward projections based on smoothed historical performance.
+    </p>
+  `;
+  }
+  function buildNotes() {
+  forecastNotes.textContent =
+    "The forecast is based on exponential smoothing and historical trend continuation. Confidence bands reflect historical variability.";
+
+  riskNotes.textContent =
+    "Forecast reliability is moderate. Higher volatility increases uncertainty. Results should be used for planning, not guarantees.";
+  }
+  function buildReportKPIs() {
+  reportKPIs.innerHTML = "";
+  numericColumns.forEach(col => {
+    const values = rawData.map(r => r[col]).filter(v => typeof v === "number");
+    if (values.length < 2 || isBinary(values)) return;
+
+    const avg = average(values);
+    const div = document.createElement("div");
+    div.className = "kpi";
+    div.innerHTML = `<strong>${col}</strong><br>${avg.toFixed(2)}`;
+    reportKPIs.appendChild(div);
+  });
+  }
   const labels = rawData.map(r => r[timeColumn]);
   const actual = rawData.map(r => r[metricColumn]);
 
