@@ -1,272 +1,41 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>PARAGON ANALYTICS v1.1</title>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-<style>
-body {
-  background: radial-gradient(circle at top, #16002f, #050012);
-  color: #f5f3ff;
-  font-family: system-ui, Arial, sans-serif;
-  text-align: center;
-}
-button, select {
-  padding: 10px;
-  margin: 5px;
-  border-radius: 6px;
-  border: none;
-  font-weight: bold;
-}
-.primary { background: linear-gradient(135deg,#8b5cf6,#facc15); color:#1b102f; }
-.secondary { background: #2e1a55; color:white; }
-.panel { max-width:1200px; margin:auto; padding:10px; }
-.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
-.card { background:rgba(255,255,255,0.08); padding:12px; border-radius:10px; }
-.value { font-size:18px; font-weight:bold; }
-canvas { background:rgba(255,255,255,0.05); border-radius:10px; margin-top:15px; }
-textarea { width:96%; height:220px; border-radius:8px; padding:8px; }
-.badge { padding:8px; border-radius:8px; font-weight:bold; }
-.good { background:#2ecc71; color:black; }
-.warn { background:#f1c40f; color:black; }
-.bad { background:#e74c3c; color:white; }
-.small { font-size:12px; opacity:0.85; }
-</style>
+  <meta charset="UTF-8" />
+  <title>Paragon Analytics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
 
-<h2>🔮 PARAGON ANALYTICS</h2>
-<p class="small">Autonomous Business Intelligence Engine — v1.1</p>
+  <header>
+    <h1>Paragon Analytics</h1>
+    <p>Laptop-grade business analysis & forecasting</p>
+  </header>
 
-<input type="file" id="csvFile"><br>
+  <main>
+    <section class="upload">
+      <input type="file" id="csvFile" accept=".csv" />
+      <button id="analyzeBtn">Analyze</button>
+    </section>
 
-<select id="columnSelect"></select>
+    <section id="summary" class="card hidden">
+      <h2>Business Summary</h2>
+      <div id="kpis"></div>
+    </section>
 
-<select id="horizonSelect">
-  <option value="1">Forecast: 1 Period</option>
-  <option value="3" selected>Forecast: 3 Periods</option>
-  <option value="6">Forecast: 6 Periods</option>
-</select>
+    <section id="charts" class="card hidden">
+      <h2>Trends & Forecast</h2>
+      <canvas id="trendChart"></canvas>
+    </section>
 
-<br>
-<button class="primary" onclick="loadCSV()">Load CSV</button>
-<button class="secondary" onclick="runAnalytics()">Run Intelligence</button>
-<button class="secondary" onclick="exportPDF()">Export PDF</button>
+    <section id="logs" class="card hidden">
+      <h2>Analysis Log</h2>
+      <pre id="logOutput"></pre>
+    </section>
+  </main>
 
-<div class="panel">
-<canvas id="lineChart"></canvas>
-<canvas id="kpiChart"></canvas>
-<canvas id="productChart"></canvas>
-
-<h3>📊 Confidence & Data Quality</h3>
-<div class="grid" id="accuracyPanel"></div>
-
-<h3>⚠ Risk & Stability</h3>
-<div class="grid" id="riskPanel"></div>
-
-<h3>🔮 Scenario Forecast</h3>
-<div class="grid" id="scenarioPanel"></div>
-
-<h3>🧠 AI Explanation & Strategy</h3>
-<textarea id="aiText"></textarea>
-</div>
-
-<script>
-let rawData=[], charts={}, cache={};
-
-/* ---------- Utilities ---------- */
-const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
-const std=a=>{let m=mean(a); return Math.sqrt(mean(a.map(x=>(x-m)**2)));};
-
-/* ---------- CSV Load + Schema Intelligence ---------- */
-function loadCSV(){
-  const file = csvFile.files[0];
-  if(!file) return alert("Upload CSV first.");
-  const reader = new FileReader();
-  reader.onload = e => {
-    rawData = e.target.result.trim().split("\n").slice(1).map(r=>r.split(","));
-    autoDetectColumns();
-    alert("CSV Loaded Successfully");
-  };
-  reader.readAsText(file);
-}
-
-function autoDetectColumns(){
-  const header = csvFile.files[0].name;
-  columnSelect.innerHTML = "";
-  rawData[0].forEach((_,i)=>{
-    let score = 0;
-    let name = rawData[0][i] || "";
-    if(/revenue|sales|income/i.test(name)) score += 3;
-    columnSelect.innerHTML += `<option value="${i}">Column ${i}</option>`;
-  });
-  columnSelect.selectedIndex = 1;
-}
-
-/* ---------- Core Pipeline ---------- */
-function runAnalytics(){
-  if(!rawData.length) return alert("Load CSV first.");
-
-  const col = parseInt(columnSelect.value);
-  const horizon = parseInt(horizonSelect.value);
-
-  const parsed = rawData.map(r=>({
-    date:new Date(r[0]),
-    value:parseFloat(r[col]),
-    product:r[4]
-  })).filter(r=>isFinite(r.value) && !isNaN(r.date));
-
-  const aggregated = aggregate(parsed);
-  let values = clamp(aggregated.map(r=>r.value));
-  let labels = aggregated.map(r=>r.label);
-
-  const smooth = expSmooth(values,0.35);
-  const forecast = buildForecast(values,horizon);
-
-  const mape = backtest(values,smooth);
-  const season = seasonality(parsed);
-  const anomalies = anomalyCount(values);
-  const confidence = confidenceScore(values,mape,season,anomalies);
-  const dataQuality = dataQualityScore(values,anomalies);
-  const validation = validationStatus(confidence,mape);
-
-  const kpi = kpiCalc(values,smooth);
-  const risk = riskModel(values,confidence);
-  const segments = segment(parsed.map(r=>r.product), parsed.map(r=>r.value));
-  const scenarios = scenarioForecast(forecast);
-
-  cache={confidence,mape,season,dataQuality,validation,kpi,risk,scenarios};
-
-  renderLine(labels,values,smooth,forecast);
-  renderBars(kpi,segments);
-  renderAccuracy(confidence,mape,dataQuality,season,validation);
-  renderRisk(risk,season,kpi.growth);
-  renderScenarios(scenarios);
-  renderExplanation(confidence,season,risk,kpi.growth,dataQuality);
-}
-
-/* ---------- Engines ---------- */
-function aggregate(data){
-  let map={};
-  data.forEach(d=>{
-    let k=d.date.getFullYear()+"-"+(d.date.getMonth()+1);
-    map[k]=(map[k]||0)+d.value;
-  });
-  return Object.entries(map).map(([k,v])=>({label:k,value:v}));
-}
-
-const clamp=d=>{let m=mean(d),s=std(d);return d.map(v=>Math.min(m+2.5*s,Math.max(m-2.5*s,v)));};
-const expSmooth=(d,a)=>d.reduce((s,v,i)=>i?[...s,a*v+(1-a)*s[i-1]]:[v],[]);
-const buildForecast=(d,h)=>Array.from({length:h},(_,i)=>Math.round(d.at(-1)+(d.at(-1)-d[0])/d.length*(i+1)));
-const backtest=(a,s)=>mean(a.slice(1).map((v,i)=>Math.abs((v-s[i])/v)))*100;
-const seasonality=d=>{let m={};d.forEach(x=>m[x.date.getMonth()]=(m[x.date.getMonth()]||0)+x.value);return (std(Object.values(m))/mean(Object.values(m)))*100;};
-const anomalyCount=d=>d.filter(v=>Math.abs(v-mean(d))>3*std(d)).length;
-
-/* ---------- Scores ---------- */
-function confidenceScore(d,mape,season,anom){
-  return Math.max(55,Math.min(95,
-    100-(std(d)/mean(d))*100-mape*0.9-anom*4+season*0.4
-  ));
-}
-function dataQualityScore(d,anom){
-  let depth=Math.min(100,d.length*6);
-  let stability=Math.max(0,100-(std(d)/mean(d))*120);
-  let anomalyPenalty=anom*10;
-  return Math.max(40,Math.min(100,(depth+stability)/2-anomalyPenalty));
-}
-const validationStatus=(c,e)=>c>70&&e<35?"VALIDATED":c>55?"MONITOR":"UNSTABLE";
-
-/* ---------- Risk & KPI ---------- */
-const riskModel=(d,c)=>({vol:(std(d)/mean(d)*100).toFixed(1),level:c<60?"HIGH":c<75?"MEDIUM":"LOW"});
-const kpiCalc=(d,s)=>({max:Math.max(...d),min:Math.min(...d),avg:Math.round(mean(d)),growth:(((s.at(-1)-s[0])/Math.abs(s[0]||1))*100).toFixed(1)});
-const segment=(p,v)=>Object.entries(p.reduce((m,x,i)=>(m[x]=(m[x]||0)+v[i],m),{})).sort((a,b)=>b[1]-a[1]);
-const scenarioForecast=f=>({base:f,optimistic:f.map(v=>Math.round(v*1.12)),conservative:f.map(v=>Math.round(v*0.88))});
-
-/* ---------- UI ---------- */
-function renderAccuracy(c,e,q,s,v){
-  accuracyPanel.innerHTML=`
-  <div class="card">Confidence<div class="value">${c.toFixed(1)}%</div></div>
-  <div class="card">Data Quality<div class="value">${q.toFixed(0)}%</div></div>
-  <div class="card">MAPE<div class="value">${e.toFixed(1)}%</div></div>
-  <div class="card">Seasonality<div class="value">${s.toFixed(1)}%</div></div>
-  <div class="card">Validation<div class="badge ${v==="VALIDATED"?"good":v==="MONITOR"?"warn":"bad"}">${v}</div></div>`;
-}
-
-function renderRisk(r,s,g){
-  riskPanel.innerHTML=`
-  <div class="card">Volatility<div class="value">${r.vol}%</div></div>
-  <div class="card">Risk Level<div class="value">${r.level}</div></div>
-  <div class="card">Seasonality<div class="value">${s.toFixed(1)}%</div></div>
-  <div class="card">Growth<div class="value">${g}%</div></div>`;
-}
-
-function renderScenarios(s){
-  scenarioPanel.innerHTML=`
-  <div class="card">Base<div class="value">${s.base.join(", ")}</div></div>
-  <div class="card">Optimistic<div class="value">${s.optimistic.join(", ")}</div></div>
-  <div class="card">Conservative<div class="value">${s.conservative.join(", ")}</div></div>`;
-}
-
-function renderExplanation(c,s,r,g,q){
-  aiText.value=
-`SYSTEM ASSESSMENT
-Data Quality: ${q.toFixed(0)}%
-Forecast Confidence: ${c.toFixed(1)}%
-
-INTERPRETATION
-${g>0?"Growth is positive.":"Growth is negative."}
-${r.level==="HIGH"?"Risk is elevated due to volatility.":"Risk level is manageable."}
-${s>25?"Strong seasonal effects detected.":"No dominant seasonality detected."}
-
-STRATEGY
-${c>75&&r.level==="LOW"?"Scale with confidence.":
-c>60?"Proceed cautiously and monitor trends.":"Stabilize data before major decisions."}`;
-}
-
-/* ---------- Charts ---------- */
-function renderLine(l,a,s,f){
- destroy("line");
- charts.line=new Chart(lineChart,{type:"line",data:{labels:[...l,...f.map((_,i)=>"F"+(i+1))],
- datasets:[
-  {label:"Actual",data:a},
-  {label:"Smoothed",data:s,borderDash:[5,5]},
-  {label:"Forecast",data:[...Array(a.length).fill(null),...f],borderDash:[3,3]}
- ]}});
-}
-
-function renderBars(k,seg){
- destroy("kpi"); destroy("prod");
- charts.kpi=new Chart(kpiChart,{type:"bar",data:{labels:["Max","Min","Avg","Growth%"],datasets:[{data:[k.max,k.min,k.avg,k.growth]}]}});
- charts.prod=new Chart(productChart,{type:"bar",data:{labels:seg.map(x=>x[0]),datasets:[{data:seg.map(x=>x[1])}]}});
-}
-
-const destroy=n=>charts[n]&&charts[n].destroy();
-
-/* ---------- PDF ---------- */
-function exportPDF(){
- const {jsPDF}=window.jspdf;
- const pdf=new jsPDF();
- let y=15;
- pdf.setFontSize(16);
- pdf.text("PARAGON ANALYTICS REPORT",10,y); y+=8;
- pdf.setFontSize(10);
- pdf.text(`Confidence: ${cache.confidence.toFixed(1)}% | Data Quality: ${cache.dataQuality.toFixed(0)}% | Validation: ${cache.validation}`,10,y); y+=8;
- pdf.addImage(lineChart.toDataURL(),"PNG",10,y,180,55); y+=60;
- pdf.addImage(kpiChart.toDataURL(),"PNG",10,y,85,45);
- pdf.addImage(productChart.toDataURL(),"PNG",105,y,85,45); y+=55;
- pdf.text("Scenario Forecast",10,y); y+=6;
- pdf.text(`Base: ${cache.scenarios.base.join(", ")}`,10,y); y+=5;
- pdf.text(`Optimistic: ${cache.scenarios.optimistic.join(", ")}`,10,y); y+=5;
- pdf.text(`Conservative: ${cache.scenarios.conservative.join(", ")}`,10,y); y+=8;
- pdf.text("AI Strategy Summary",10,y); y+=6;
- pdf.text(aiText.value,10,y,{maxWidth:180});
- pdf.text("Generated by Paragon Analytics",10,285);
- pdf.save("paragon_report.pdf");
-}
-</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="paragon.js"></script>
 </body>
 </html>
