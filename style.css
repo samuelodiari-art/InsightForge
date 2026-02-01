@@ -95,3 +95,35 @@ pre {
   overflow-y: auto;
   font-size: 0.85rem;
 }
+.secondary {
+  background: #0f172a;
+}
+
+.report {
+  background: #ffffff;
+  padding: 2rem;
+}
+
+#reportKPIs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+/* PRINT STYLES */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .report, .report * {
+    visibility: visible;
+  }
+
+  .report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
