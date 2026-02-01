@@ -85,9 +85,17 @@ function detectColumns(headers) {
 function analyze() {
   summarySection.classList.remove("hidden");
   logsSection.classList.remove("hidden");
+
+  // FORCE charts section visible early
+  chartsSection.classList.remove("hidden");
+
   renderKPIs();
-  if (timeColumn && metricColumn) renderChart();
+
+  if (timeColumn && metricColumn) {
+    setTimeout(renderChart, 0);
+  }
 }
+
 
 function renderKPIs() {
   numericColumns.forEach(col => {
