@@ -127,3 +127,13 @@ pre {
     width: 100%;
   }
 }
+/* ===== Paragon Charts (REQUIRED) ===== */
+
+#charts {
+  height: 420px;
+}
+
+#trendChart {
+  width: 100%;
+  height: 100%;
+}
