@@ -25,6 +25,7 @@ analyzeBtn.addEventListener("click", () => {
   if (!file) {
     alert("Please upload a CSV file.");
     return;
+    pdfBtn.addEventListener("click", generateReport);
   }
   resetUI();
   readCSV(file);
@@ -115,9 +116,71 @@ function renderKPIs() {
     kpiContainer.appendChild(div);
   });
 }
-
 function renderChart() {
-  pdfBtn.addEventListener("click", generateReport);
+  if (!timeColumn || !metricColumn) return;
+
+  const labels = rawData.map(r => r[timeColumn]);
+  const actual = rawData.map(r => r[metricColumn]);
+
+  const smoothed = ema(actual, 0.3);
+  const forecast = forecastFromEMA(smoothed, 6);
+  const { upper, lower } = confidenceBands(smoothed, forecast);
+
+  const forecastLabels = forecast.map((_, i) => `F${i + 1}`);
+
+  const canvas = document.getElementById("trendChart");
+  if (!canvas) {
+    log("Chart canvas not found");
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (chart) chart.destroy();
+
+  chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [...labels, ...forecastLabels],
+      datasets: [
+        {
+          label: "Actual",
+          data: actual,
+          borderWidth: 2
+        },
+        {
+          label: "Smoothed",
+          data: smoothed,
+          borderDash: [4, 4],
+          borderWidth: 2
+        },
+        {
+          label: "Forecast",
+          data: [...Array(actual.length).fill(null), ...forecast],
+          borderDash: [6, 6],
+          borderWidth: 2
+        },
+        {
+          label: "Upper Bound",
+          data: [...Array(actual.length).fill(null), ...upper],
+          borderWidth: 0,
+          fill: "+1"
+        },
+        {
+          label: "Lower Bound",
+          data: [...Array(actual.length).fill(null), ...lower],
+          borderWidth: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+
+  log("Rendered trend & forecast chart");
+}
 
 function generateReport() {
   reportSection.classList.remove("hidden");
