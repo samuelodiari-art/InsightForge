@@ -93,8 +93,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!metric) return;
 
     const series = rows.map(r => r[metric]).filter(v => typeof v === "number");
-    if (series.length < 5) {
-      log("Not enough numeric data.");
+    if (series.length < 6) {
+      log("Not enough numeric data for forecasting.");
       return;
     }
 
@@ -105,37 +105,59 @@ document.addEventListener("DOMContentLoaded", () => {
     const avg = mean(series);
     const growth = pct(series);
     const vol = std(series) / avg;
-    const confidence = confidenceScore(series, vol);
-    const validation = confidence >= 70 ? "Valid" : confidence >= 50 ? "Moderate" : "Weak";
 
-    renderKPIs(avg, growth, vol, confidence, validation);
-    renderChart(series);
-    log(`Confidence score: ${confidence}% (${validation})`);
+    // --- Forecast math ---
+    const smooth = ema(series, 0.35);
+    const slope = trendSlope(smooth);
+
+    const base = forecast(smooth.at(-1), slope, 6);
+    const sigma = std(series);
+
+    const optimistic = base.map(v => v + sigma);
+    const pessimistic = base.map(v => v - sigma);
+
+    // --- Confidence score (soft-scaled) ---
+    const confidence = confidenceScore(series.length, vol, slope);
+    const validation =
+      confidence >= 75 ? "Valid" :
+      confidence >= 55 ? "Moderate" : "Weak";
+
+    renderKPIs({
+      avg, growth, vol,
+      confidence, validation,
+      base, optimistic, pessimistic
+    });
+
+    renderChart(series, smooth, base, optimistic, pessimistic);
+    autoCommentary(confidence, validation, base, optimistic, pessimistic);
   }
 
   /* ========= KPIs ========= */
 
-  function renderKPIs(avg, growth, vol, confidence, validation) {
+  function renderKPIs(data) {
+    const nextBase = data.base[0];
+    const nextLow = data.pessimistic[0];
+    const nextHigh = data.optimistic[0];
+
     kpiContainer.innerHTML = `
       <div class="kpi"><h3>Metric</h3><p>${metric}</p></div>
-      <div class="kpi"><h3>Average</h3><p>${avg.toFixed(2)}</p></div>
-      <div class="kpi"><h3>Overall Change</h3><p>${growth.toFixed(2)}%</p></div>
-      <div class="kpi"><h3>Volatility</h3><p>${(vol*100).toFixed(1)}%</p></div>
-      <div class="kpi"><h3>Confidence</h3><p>${confidence}%</p></div>
-      <div class="kpi"><h3>Validation</h3><p>${validation}</p></div>
+      <div class="kpi"><h3>Average</h3><p>${data.avg.toFixed(2)}</p></div>
+      <div class="kpi"><h3>Overall Change</h3><p>${data.growth.toFixed(2)}%</p></div>
+      <div class="kpi"><h3>Volatility</h3><p>${(data.vol * 100).toFixed(1)}%</p></div>
+      <div class="kpi"><h3>Next Forecast</h3><p>${nextBase.toFixed(2)}</p></div>
+      <div class="kpi"><h3>Forecast Range</h3><p>${nextLow.toFixed(2)} – ${nextHigh.toFixed(2)}</p></div>
+      <div class="kpi"><h3>Confidence</h3><p>${data.confidence}%</p></div>
+      <div class="kpi"><h3>Validation</h3><p>${data.validation}</p></div>
     `;
   }
 
-  /* ========= CHART + SCENARIOS ========= */
+  /* ========= CHART ========= */
 
-  function renderChart(series) {
-    const smooth = ema(series, 0.35);
-    const slope = (smooth.at(-1) - smooth[0]) / smooth.length;
-
-    const base = forecast(smooth.at(-1), slope, 6);
-    const sigma = std(series);
-    const optimistic = base.map(v => v + sigma);
-    const pessimistic = base.map(v => v - sigma);
+  function renderChart(actual, smooth, base, opt, pess) {
+    const labels = [
+      ...actual.map((_, i) => `P${i + 1}`),
+      ...base.map((_, i) => `F${i + 1}`)
+    ];
 
     const ctx = document.getElementById("trendChart").getContext("2d");
     if (chart) chart.destroy();
@@ -143,32 +165,31 @@ document.addEventListener("DOMContentLoaded", () => {
     chart = new Chart(ctx, {
       type: "line",
       data: {
-        labels: [...series.map((_, i) => `P${i+1}`), ...base.map((_, i) => `F${i+1}`)],
+        labels,
         datasets: [
-          { label: "Actual", data: series },
-          { label: "Trend", data: smooth, borderDash: [4,4] },
-          { label: "Base Forecast", data: [...Array(series.length).fill(null), ...base], borderDash: [6,6] }
+          { label: "Actual", data: actual },
+          { label: "Trend", data: smooth, borderDash: [4, 4] },
+          { label: "Base Forecast", data: [...Array(actual.length).fill(null), ...base], borderDash: [6, 6] },
+          { label: "Upper Confidence", data: [...Array(actual.length).fill(null), ...opt], borderWidth: 0, fill: "+1" },
+          { label: "Lower Confidence", data: [...Array(actual.length).fill(null), ...pess], borderWidth: 0 }
         ]
       },
       options: { responsive: true, maintainAspectRatio: false }
     });
-
-    autoCommentary(series, base, optimistic, pessimistic);
   }
 
   /* ========= EXEC COMMENTARY ========= */
 
-  function autoCommentary(series, base, opt, pess) {
-    const dir = series.at(-1) > series[0] ? "upward" : "downward";
-    const range = ((opt.at(-1) - pess.at(-1)) / Math.abs(base.at(-1))) * 100;
-
+  function autoCommentary(conf, val, base, opt, pess) {
     execSummary.innerHTML = `
       <h2>Executive Commentary</h2>
       <p>
-        ${metric} shows a <strong>${dir}</strong> trend with
-        forecast confidence sufficient for planning.
-        Scenario analysis indicates a potential variance of
-        <strong>±${range.toFixed(1)}%</strong> around the base outlook.
+        The selected metric shows a forecast confidence of
+        <strong>${conf}%</strong>, classified as <strong>${val}</strong>.
+        The next expected value is <strong>${base[0].toFixed(2)}</strong>,
+        with a plausible range between
+        <strong>${pess[0].toFixed(2)}</strong> and
+        <strong>${opt[0].toFixed(2)}</strong>.
       </p>
     `;
   }
@@ -177,9 +198,9 @@ document.addEventListener("DOMContentLoaded", () => {
     reportSection.classList.remove("hidden");
     reportKPIs.innerHTML = kpiContainer.innerHTML;
     forecastNotes.textContent =
-      "Base, optimistic, and pessimistic scenarios are derived from trend and volatility.";
+      "Forecast values are derived from trend smoothing and historical variance.";
     riskNotes.textContent =
-      "Lower confidence forecasts should be used directionally, not as fixed targets.";
+      "Wider confidence ranges indicate higher uncertainty and require caution.";
     window.print();
   }
 
@@ -189,12 +210,22 @@ document.addEventListener("DOMContentLoaded", () => {
   function std(a){ const m=mean(a); return Math.sqrt(mean(a.map(v=>(v-m)**2))); }
   function pct(a){ return ((a.at(-1)-a[0])/Math.abs(a[0]))*100; }
   function ema(a,α){ const o=[a[0]]; for(let i=1;i<a.length;i++) o.push(α*a[i]+(1-α)*o[i-1]); return o; }
-  function forecast(last,s,n){ return Array.from({length:n},(_,i)=>+(last+s*(i+1)).toFixed(2)); }
 
-  function confidenceScore(series, vol){
-    let score = 100;
-    score -= vol * 200;
-    score -= series.length < 30 ? 20 : 0;
+  function trendSlope(arr){
+    let num=0, den=0;
+    for(let i=0;i<arr.length;i++){ num += i*arr[i]; den += i*i; }
+    return num / Math.max(1, den);
+  }
+
+  function forecast(last,s,n){
+    return Array.from({length:n},(_,i)=>+(last+s*(i+1)).toFixed(2));
+  }
+
+  function confidenceScore(len, vol, slope){
+    let score = 50;
+    score += Math.min(30, len);
+    score += Math.max(-20, 20 - vol * 100);
+    score += Math.min(20, Math.abs(slope) * 10);
     return Math.max(0, Math.min(100, Math.round(score)));
   }
 
