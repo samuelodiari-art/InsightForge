@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ====================== */
 
   let rawData = [];
+  let headers = [];
   let numericColumns = [];
   let timeColumn = null;
   let metricColumn = null;
@@ -38,17 +39,17 @@ document.addEventListener("DOMContentLoaded", () => {
   analyzeBtn.addEventListener("click", () => {
     const file = fileInput.files[0];
     if (!file) {
-      alert("Please upload a CSV file.");
+      alert("Please upload a data file.");
       return;
     }
     resetUI();
-    readCSV(file);
+    readFile(file);
   });
 
   pdfBtn.addEventListener("click", generateReport);
 
   /* =====================
-     FLOW
+     CORE FLOW
   ====================== */
 
   function resetUI() {
@@ -59,88 +60,145 @@ document.addEventListener("DOMContentLoaded", () => {
     logsSection.classList.add("hidden");
   }
 
-  function readCSV(file) {
+  function readFile(file) {
     const reader = new FileReader();
-    reader.onload = e => parseCSV(e.target.result);
+    reader.onload = e => parseText(e.target.result);
     reader.readAsText(file);
   }
 
-  function parseCSV(text) {
-    const lines = text.trim().split("\n");
-    const headers = lines[0].split(",").map(h => h.trim());
+  /* =====================
+     ROBUST PARSER
+  ====================== */
+
+  function parseText(text) {
+    const lines = text
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    log(`Raw lines detected: ${lines.length}`);
+    log(`Preview: ${lines.slice(0, 3).join(" | ")}`);
+
+    // Detect delimiter
+    const delimiters = [",", ";", "\t", "|"];
+    let delimiter = null;
+
+    for (const d of delimiters) {
+      if (lines[0].split(d).length > 1) {
+        delimiter = d;
+        break;
+      }
+    }
+
+    // If no delimiter, fallback to whitespace
+    if (!delimiter) {
+      log("No standard delimiter found. Using whitespace parser.");
+      parseWhitespace(lines);
+      return;
+    }
+
+    log(`Detected delimiter: "${delimiter}"`);
+    headers = normalizeHeaders(lines[0].split(delimiter));
 
     rawData = lines.slice(1).map(line => {
-      const values = line.split(",");
+      const parts = line.split(delimiter);
       const row = {};
       headers.forEach((h, i) => {
-        const v = values[i]?.trim();
-        const n = parseFloat(v);
-        row[h] = isNaN(n) ? v : n;
+        const val = parts[i]?.trim();
+        const num = parseFloat(val);
+        row[h] = isNaN(num) ? val : num;
       });
       return row;
     });
 
-    detectColumns(headers);
-    analyze();
+    finalizeAnalysis();
   }
 
-  function detectColumns(headers) {
+  function parseWhitespace(lines) {
+    const sample = lines[0].split(/\s+/);
+    headers = sample.map((_, i) => `Column_${i + 1}`);
+
+    rawData = lines.map(line => {
+      const parts = line.split(/\s+/);
+      const row = {};
+      headers.forEach((h, i) => {
+        const val = parts[i];
+        const num = parseFloat(val);
+        row[h] = isNaN(num) ? val : num;
+      });
+      return row;
+    });
+
+    finalizeAnalysis();
+  }
+
+  function normalizeHeaders(hs) {
+    return hs.map(h =>
+      h.replace(/[^a-zA-Z0-9_]/g, "_").trim() || "Field"
+    );
+  }
+
+  function finalizeAnalysis() {
     numericColumns = headers.filter(h =>
       rawData.some(r => typeof r[h] === "number")
     );
 
-    timeColumn = headers.find(h =>
-      /date|month|year/i.test(h)
-    );
-
+    timeColumn = headers.find(h => /date|month|year/i.test(h));
     metricColumn =
-      numericColumns.find(h => /revenue|sales|amount/i.test(h)) ||
+      numericColumns.find(h => /revenue|sales|amount|value/i.test(h)) ||
       numericColumns[0];
 
-    log(`Rows: ${rawData.length}`);
-    log(`Metric: ${metricColumn}`);
+    log(`Parsed rows: ${rawData.length}`);
+    log(`Numeric columns: ${numericColumns.join(", ") || "None"}`);
+    log(`Metric used: ${metricColumn || "None"}`);
     log(`Time axis: ${timeColumn || "Index-based"}`);
+
+    analyze();
   }
+
+  /* =====================
+     ANALYSIS
+  ====================== */
 
   function analyze() {
     summarySection.classList.remove("hidden");
     chartsSection.classList.remove("hidden");
     logsSection.classList.remove("hidden");
 
-    renderKPIs();
-    if (metricColumn) renderChart();
-  }
+    if (!metricColumn) {
+      log("No numeric data found. Chart cannot be rendered.");
+      return;
+    }
 
-  /* =====================
-     KPIs
-  ====================== */
+    renderKPIs();
+    renderChart();
+  }
 
   function renderKPIs() {
     numericColumns.forEach(col => {
-      const values = rawData.map(r => r[col]).filter(v => typeof v === "number");
-      if (values.length < 2) return;
+      const vals = rawData.map(r => r[col]).filter(v => typeof v === "number");
+      if (vals.length < 2) return;
 
-      const avg = mean(values);
-      const growth = ((values.at(-1) - values[0]) / Math.abs(values[0])) * 100;
+      const avg = mean(vals);
+      const growth = ((vals.at(-1) - vals[0]) / Math.abs(vals[0])) * 100;
 
-      const el = document.createElement("div");
-      el.className = "kpi";
-      el.innerHTML = `
+      const div = document.createElement("div");
+      div.className = "kpi";
+      div.innerHTML = `
         <h3>${col}</h3>
         <p>${avg.toFixed(2)}</p>
         <small>${isFinite(growth) ? growth.toFixed(2) + "% growth" : "—"}</small>
       `;
-      kpiContainer.appendChild(el);
+      kpiContainer.appendChild(div);
     });
   }
 
   /* =====================
-     CHART + FORECAST
+     CHART
   ====================== */
 
   function renderChart() {
     const actual = rawData.map(r => r[metricColumn]);
-
     const labels = timeColumn
       ? rawData.map(r => r[timeColumn])
       : actual.map((_, i) => `P${i + 1}`);
@@ -148,7 +206,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const smoothed = ema(actual, 0.35);
     const forecast = forecastTrend(smoothed, 6);
     const bands = confidenceBands(smoothed, forecast);
-
     const forecastLabels = forecast.map((_, i) => `F${i + 1}`);
 
     const ctx = document.getElementById("trendChart").getContext("2d");
@@ -168,7 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
           },
           {
             label: "Upper Band",
-            data: [...Array(actual.length).fill(null), ...bands.upper],
+            data: [...Array(actual.length).fill(null), ...bands.upper),
             borderWidth: 0,
             fill: "+1"
           },
@@ -186,11 +243,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    log("Forecast chart rendered");
+    log("Chart rendered successfully");
   }
 
   /* =====================
-     PDF REPORT
+     PDF
   ====================== */
 
   function generateReport() {
@@ -199,17 +256,14 @@ document.addEventListener("DOMContentLoaded", () => {
     execSummary.innerHTML = `
       <h2>Executive Summary</h2>
       <p>
-        This report analyzes <strong>${rawData.length}</strong> records
+        Analysis based on <strong>${rawData.length}</strong> records
         using <strong>${metricColumn}</strong>.
-        Forecasting is based on trend smoothing with confidence bounds.
       </p>
     `;
 
     reportKPIs.innerHTML = kpiContainer.innerHTML;
-    forecastNotes.textContent =
-      "Forecast reflects recent trend momentum and historical variance.";
-    riskNotes.textContent =
-      "Higher volatility increases forecast uncertainty.";
+    forecastNotes.textContent = "Forecast uses trend smoothing with uncertainty bands.";
+    riskNotes.textContent = "Unstructured source data increases uncertainty.";
 
     window.print();
   }
@@ -218,39 +272,38 @@ document.addEventListener("DOMContentLoaded", () => {
      MATH
   ====================== */
 
-  function ema(values, alpha) {
-    const out = [values[0]];
-    for (let i = 1; i < values.length; i++) {
-      out.push(alpha * values[i] + (1 - alpha) * out[i - 1]);
+  function ema(arr, a) {
+    const out = [arr[0]];
+    for (let i = 1; i < arr.length; i++) {
+      out.push(a * arr[i] + (1 - a) * out[i - 1]);
     }
     return out;
   }
 
-  function forecastTrend(values, periods) {
-    const slope =
-      (values.at(-1) - values[0]) / Math.max(1, values.length - 1);
-    let last = values.at(-1);
-    return Array.from({ length: periods }, () => {
+  function forecastTrend(arr, n) {
+    const slope = (arr.at(-1) - arr[0]) / Math.max(1, arr.length - 1);
+    let last = arr.at(-1);
+    return Array.from({ length: n }, () => {
       last += slope;
       return Number(last.toFixed(2));
     });
   }
 
-  function confidenceBands(history, forecast) {
-    const sd = std(history);
+  function confidenceBands(hist, fc) {
+    const s = std(hist);
     return {
-      upper: forecast.map(v => v + sd),
-      lower: forecast.map(v => v - sd)
+      upper: fc.map(v => v + s),
+      lower: fc.map(v => v - s)
     };
   }
 
-  function mean(arr) {
-    return arr.reduce((a, b) => a + b, 0) / arr.length;
+  function mean(a) {
+    return a.reduce((x, y) => x + y, 0) / a.length;
   }
 
-  function std(arr) {
-    const m = mean(arr);
-    return Math.sqrt(mean(arr.map(v => (v - m) ** 2)));
+  function std(a) {
+    const m = mean(a);
+    return Math.sqrt(mean(a.map(v => (v - m) ** 2)));
   }
 
   function log(msg) {
