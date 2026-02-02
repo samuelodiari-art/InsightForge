@@ -23,13 +23,9 @@ main {
   margin-bottom: 1rem;
 }
 
-.controls {
-  margin-top: 0.5rem;
-}
-
 button {
   padding: 0.6rem 1rem;
-  margin-right: 0.5rem;
+  margin-left: 0.5rem;
   cursor: pointer;
 }
 
@@ -41,9 +37,13 @@ button {
   display: inline-block;
   padding: 1rem;
   margin: 0.5rem;
-  background: #020617;
   border-radius: 6px;
+  background: #020617;
 }
+
+.badge.green { color: #22c55e; }
+.badge.amber { color: #facc15; }
+.badge.red { color: #ef4444; }
 
 #charts {
   height: 420px;
@@ -52,6 +52,16 @@ button {
 #trendChart {
   width: 100%;
   height: 100%;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+td, th {
+  border: 1px solid #334155;
+  padding: 0.5rem;
 }
 
 /* PRINT */
@@ -67,5 +77,7 @@ button {
     top: 0;
     left: 0;
     width: 100%;
+    background: white;
+    color: black;
   }
 }
