@@ -23,14 +23,14 @@ main {
   margin-bottom: 1rem;
 }
 
-button {
-  padding: 0.6rem 1rem;
-  margin-left: 0.5rem;
-  cursor: pointer;
+.controls {
+  margin-top: 0.5rem;
 }
 
-input[type="file"] {
+button {
+  padding: 0.6rem 1rem;
   margin-right: 0.5rem;
+  cursor: pointer;
 }
 
 .hidden {
@@ -59,15 +59,13 @@ input[type="file"] {
   body * {
     visibility: hidden;
   }
-
   .report, .report * {
     visibility: visible;
   }
-
   .report {
     position: absolute;
-    left: 0;
     top: 0;
+    left: 0;
     width: 100%;
   }
 }
