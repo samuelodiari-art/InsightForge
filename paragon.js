@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
 
   /* =====================
-     ELEMENT REFERENCES
+     ELEMENTS
   ====================== */
 
   const analyzeBtn = document.getElementById("analyzeBtn");
@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
   pdfBtn.addEventListener("click", generateReport);
 
   /* =====================
-     CORE FLOW
+     FLOW
   ====================== */
 
   function resetUI() {
@@ -80,7 +80,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return row;
     });
 
-    log(`Loaded ${rawData.length} rows`);
     detectColumns(headers);
     analyze();
   }
@@ -91,18 +90,16 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
     timeColumn = headers.find(h =>
-      h.toLowerCase().includes("date") ||
-      h.toLowerCase().includes("month") ||
-      h.toLowerCase().includes("year")
+      /date|month|year/i.test(h)
     );
 
     metricColumn =
-      numericColumns.find(h => h.toLowerCase().includes("revenue")) ||
+      numericColumns.find(h => /revenue|sales|amount/i.test(h)) ||
       numericColumns[0];
 
-    log(`Numeric columns: ${numericColumns.join(", ")}`);
-    log(`Time column: ${timeColumn || "None"}`);
-    log(`Metric column: ${metricColumn}`);
+    log(`Rows: ${rawData.length}`);
+    log(`Metric: ${metricColumn}`);
+    log(`Time axis: ${timeColumn || "Index-based"}`);
   }
 
   function analyze() {
@@ -111,9 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
     logsSection.classList.remove("hidden");
 
     renderKPIs();
-    if (timeColumn && metricColumn) {
-      renderChart();
-    }
+    if (metricColumn) renderChart();
   }
 
   /* =====================
@@ -125,30 +120,34 @@ document.addEventListener("DOMContentLoaded", () => {
       const values = rawData.map(r => r[col]).filter(v => typeof v === "number");
       if (values.length < 2) return;
 
-      const avg = average(values);
+      const avg = mean(values);
       const growth = ((values.at(-1) - values[0]) / Math.abs(values[0])) * 100;
 
-      const div = document.createElement("div");
-      div.className = "kpi";
-      div.innerHTML = `
+      const el = document.createElement("div");
+      el.className = "kpi";
+      el.innerHTML = `
         <h3>${col}</h3>
         <p>${avg.toFixed(2)}</p>
-        <small>${isFinite(growth) ? growth.toFixed(2) + "% growth" : "-"}</small>
+        <small>${isFinite(growth) ? growth.toFixed(2) + "% growth" : "—"}</small>
       `;
-      kpiContainer.appendChild(div);
+      kpiContainer.appendChild(el);
     });
   }
 
   /* =====================
-     CHART
+     CHART + FORECAST
   ====================== */
 
   function renderChart() {
-    const labels = rawData.map(r => r[timeColumn]);
     const actual = rawData.map(r => r[metricColumn]);
 
-    const smoothed = ema(actual, 0.3);
-    const forecast = forecastFromEMA(smoothed, 6);
+    const labels = timeColumn
+      ? rawData.map(r => r[timeColumn])
+      : actual.map((_, i) => `P${i + 1}`);
+
+    const smoothed = ema(actual, 0.35);
+    const forecast = forecastTrend(smoothed, 6);
+    const bands = confidenceBands(smoothed, forecast);
 
     const forecastLabels = forecast.map((_, i) => `F${i + 1}`);
 
@@ -161,19 +160,33 @@ document.addEventListener("DOMContentLoaded", () => {
         labels: [...labels, ...forecastLabels],
         datasets: [
           { label: "Actual", data: actual, borderWidth: 2 },
-          { label: "Smoothed", data: smoothed, borderDash: [4, 4], borderWidth: 2 },
+          { label: "Smoothed", data: smoothed, borderDash: [4, 4] },
           {
             label: "Forecast",
             data: [...Array(actual.length).fill(null), ...forecast],
-            borderDash: [6, 6],
-            borderWidth: 2
+            borderDash: [6, 6]
+          },
+          {
+            label: "Upper Band",
+            data: [...Array(actual.length).fill(null), ...bands.upper],
+            borderWidth: 0,
+            fill: "+1"
+          },
+          {
+            label: "Lower Band",
+            data: [...Array(actual.length).fill(null), ...bands.lower],
+            borderWidth: 0,
+            fill: false
           }
         ]
       },
-      options: { responsive: true, maintainAspectRatio: false }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false
+      }
     });
 
-    log("Chart rendered");
+    log("Forecast chart rendered");
   }
 
   /* =====================
@@ -185,21 +198,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     execSummary.innerHTML = `
       <h2>Executive Summary</h2>
-      <p>Analysis based on <strong>${rawData.length}</strong> records for
-      <strong>${metricColumn}</strong>.</p>
+      <p>
+        This report analyzes <strong>${rawData.length}</strong> records
+        using <strong>${metricColumn}</strong>.
+        Forecasting is based on trend smoothing with confidence bounds.
+      </p>
     `;
 
     reportKPIs.innerHTML = kpiContainer.innerHTML;
     forecastNotes.textContent =
-      "Forecast uses exponential smoothing based on historical trend.";
+      "Forecast reflects recent trend momentum and historical variance.";
     riskNotes.textContent =
-      "Forecast reliability depends on data stability and volatility.";
+      "Higher volatility increases forecast uncertainty.";
 
     window.print();
   }
 
   /* =====================
-     UTILITIES
+     MATH
   ====================== */
 
   function ema(values, alpha) {
@@ -210,20 +226,31 @@ document.addEventListener("DOMContentLoaded", () => {
     return out;
   }
 
-  function forecastFromEMA(smoothed, periods) {
+  function forecastTrend(values, periods) {
     const slope =
-      (smoothed.at(-1) - smoothed[0]) / (smoothed.length - 1);
-    let last = smoothed.at(-1);
-    const out = [];
-    for (let i = 0; i < periods; i++) {
+      (values.at(-1) - values[0]) / Math.max(1, values.length - 1);
+    let last = values.at(-1);
+    return Array.from({ length: periods }, () => {
       last += slope;
-      out.push(Number(last.toFixed(2)));
-    }
-    return out;
+      return Number(last.toFixed(2));
+    });
   }
 
-  function average(arr) {
+  function confidenceBands(history, forecast) {
+    const sd = std(history);
+    return {
+      upper: forecast.map(v => v + sd),
+      lower: forecast.map(v => v - sd)
+    };
+  }
+
+  function mean(arr) {
     return arr.reduce((a, b) => a + b, 0) / arr.length;
+  }
+
+  function std(arr) {
+    const m = mean(arr);
+    return Math.sqrt(mean(arr.map(v => (v - m) ** 2)));
   }
 
   function log(msg) {
