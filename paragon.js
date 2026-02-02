@@ -1,3 +1,4 @@
+document.addEventListener("DOMContentLoaded", (alert("Analyze JS is alive");) => {
 const pdfBtn = document.getElementById("pdfBtn");
 const reportSection = document.getElementById("report");
 const execSummary = document.getElementById("execSummary");
@@ -25,11 +26,14 @@ analyzeBtn.addEventListener("click", () => {
   if (!file) {
     alert("Please upload a CSV file.");
     return;
-    pdfBtn.addEventListener("click", generateReport);
   }
   resetUI();
   readCSV(file);
 });
+
+// PDF export (bind ONCE)
+pdfBtn.addEventListener("click", generateReport);
+
 
 function resetUI() {
   kpiContainer.innerHTML = "";
@@ -316,3 +320,4 @@ function average(arr) {
 function log(msg) {
   logOutput.textContent += msg + "\n";
 }
+});
