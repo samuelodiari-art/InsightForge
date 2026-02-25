@@ -2,73 +2,706 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Paragon Analytics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <link rel="stylesheet" href="style.css" />
+  <title>InsightForge — Executive Analytics</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #08090d;
+      --surface:  #0f1118;
+      --border:   #1e2230;
+      --accent:   #c9a84c;
+      --accent2:  #4c8ec9;
+      --green:    #22c55e;
+      --amber:    #f59e0b;
+      --red:      #ef4444;
+      --text:     #e8e9ef;
+      --muted:    #6b7280;
+      --card-bg:  #11131c;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── NOISE OVERLAY ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.6;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: relative; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.2rem 2.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,9,13,0.9);
+      backdrop-filter: blur(12px);
+    }
+    .logo {
+      display: flex; align-items: baseline; gap: 0.5rem;
+    }
+    .logo-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem; font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    .logo-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem; font-weight: 500;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 1px 6px; border-radius: 3px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .header-right {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem; color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+    #clock { color: var(--accent); }
+
+    /* ── MAIN LAYOUT ── */
+    main {
+      position: relative; z-index: 1;
+      max-width: 1200px; margin: 0 auto;
+      padding: 2rem 2rem 4rem;
+      display: flex; flex-direction: column; gap: 1.5rem;
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: #2a2f45; }
+    .card-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem; font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .card-title::before {
+      content: '';
+      display: inline-block; width: 6px; height: 6px;
+      background: var(--accent); border-radius: 50%;
+    }
+
+    /* ── CONTROLS ── */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .upload-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: 8px;
+      padding: 1.2rem 1.5rem;
+      display: flex; align-items: center; gap: 1rem;
+      cursor: pointer; transition: all 0.2s;
+      background: rgba(201,168,76,0.03);
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(201,168,76,0.07);
+    }
+    .upload-icon { font-size: 1.5rem; }
+    .upload-text { font-size: 0.85rem; color: var(--muted); }
+    .upload-text strong { color: var(--text); display: block; font-size: 0.9rem; }
+    #csvFile { display: none; }
+
+    .select-wrap {
+      position: relative;
+    }
+    select {
+      appearance: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 2.5rem 0.6rem 1rem;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      min-width: 160px;
+    }
+    select:focus { outline: none; border-color: var(--accent); }
+    .select-wrap::after {
+      content: '▾';
+      position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%);
+      color: var(--muted); pointer-events: none; font-size: 0.8rem;
+    }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.6rem 1.4rem;
+      border: none; border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem; font-weight: 500;
+      cursor: pointer; transition: all 0.18s;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #08090d;
+    }
+    .btn-primary:hover { background: #dab85a; transform: translateY(-1px); }
+    .btn-secondary {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+    /* ── KPI ROW ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.1rem 1.3rem;
+      position: relative; overflow: hidden;
+    }
+    .kpi-card::after {
+      content: '';
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .kpi-card.green::after { background: var(--green); }
+    .kpi-card.amber::after { background: var(--amber); }
+    .kpi-card.red::after { background: var(--red); }
+    .kpi-card.blue::after { background: var(--accent2); }
+    .kpi-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-bottom: 0.4rem;
+    }
+    .kpi-value {
+      font-size: 1.6rem; font-weight: 300;
+      font-family: 'Playfair Display', serif;
+      line-height: 1;
+    }
+    .kpi-sub {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem; margin-top: 0.3rem;
+    }
+    .kpi-sub.green { color: var(--green); }
+    .kpi-sub.amber { color: var(--amber); }
+    .kpi-sub.red { color: var(--red); }
+
+    /* ── CHART ── */
+    .chart-wrap {
+      position: relative; height: 340px;
+    }
+    #trendChart { width: 100% !important; height: 100% !important; }
+
+    /* ── FORECAST TABLE ── */
+    .scenario-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem; margin-top: 0.75rem;
+    }
+    .scenario-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .scenario-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-bottom: 0.4rem;
+    }
+    .scenario-value {
+      font-size: 1.3rem;
+      font-family: 'Playfair Display', serif;
+    }
+    .scenario-item.opt .scenario-value { color: var(--green); }
+    .scenario-item.base .scenario-value { color: var(--accent); }
+    .scenario-item.pess .scenario-value { color: var(--red); }
+
+    /* ── LOG ── */
+    #logOutput {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+    #logOutput .log-ok { color: var(--green); }
+    #logOutput .log-warn { color: var(--amber); }
+    #logOutput .log-info { color: var(--accent2); }
+
+    /* ── HIDDEN ── */
+    .hidden { display: none !important; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 2rem; right: 2rem; z-index: 999;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1.4rem;
+      font-size: 0.85rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transform: translateY(20px); opacity: 0;
+      transition: all 0.3s;
+      pointer-events: none;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.err { border-color: var(--red); color: var(--red); }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      display: flex; align-items: center; gap: 1rem;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem; letter-spacing: 0.1em;
+    }
+    .section-divider::before, .section-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ── PRINT ── */
+    @media print {
+      body > *:not(#printReport) { display: none; }
+      #printReport { display: block !important; }
+    }
+    #printReport {
+      display: none;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      header { padding: 1rem 1.2rem; }
+      main { padding: 1rem 1rem 3rem; }
+      .controls-grid { grid-template-columns: 1fr; }
+      .scenario-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in { animation: fadeSlide 0.4s ease both; }
+    .delay-1 { animation-delay: 0.08s; }
+    .delay-2 { animation-delay: 0.16s; }
+    .delay-3 { animation-delay: 0.24s; }
+  </style>
 </head>
 <body>
 
+<!-- HEADER -->
 <header>
-  <h1>Paragon Analytics</h1>
-  <p>Executive Forecasting & Decision Support</p>
+  <div class="logo">
+    <span class="logo-name">InsightForge</span>
+    <span class="logo-badge">Lite</span>
+  </div>
+  <div class="header-right">
+    Executive Forecasting &amp; Decision Support &nbsp;|&nbsp; <span id="clock"></span>
+  </div>
 </header>
 
+<!-- MAIN -->
 <main>
 
-  <!-- CONTROLS -->
-  <section class="card">
-    <input type="file" id="csvFile" />
+  <!-- CONTROLS CARD -->
+  <div class="card animate-in">
+    <div class="card-title">Data Input &amp; Configuration</div>
+    <div class="controls-grid">
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('csvFile').click()">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">
+          <strong id="fileName">Upload CSV / TSV File</strong>
+          Drag &amp; drop or click to browse
+        </div>
+        <input type="file" id="csvFile" accept=".csv,.tsv,.txt" />
+      </div>
+      <div class="select-wrap">
+        <select id="metricSelect">
+          <option value="">— Select Metric —</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="btn btn-primary" id="analyzeBtn" disabled>▶ Analyze</button>
+        <button class="btn btn-secondary" id="pdfBtn" disabled>⬇ Export PDF</button>
+      </div>
+    </div>
+  </div>
 
-    <label>
-      Metric:
-      <select id="metricSelect"></select>
-    </label>
+  <!-- KPI ROW -->
+  <div id="kpiSection" class="hidden animate-in delay-1">
+    <div class="card-title" style="margin-bottom:0.75rem;">Business Summary</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+  </div>
 
-    <button type="button" id="analyzeBtn">Analyze</button>
-    <button type="button" id="pdfBtn">Export PDF</button>
-  </section>
+  <!-- CHART CARD -->
+  <div id="chartSection" class="card hidden animate-in delay-2">
+    <div class="card-title">Trend &amp; Forecast</div>
+    <div class="chart-wrap">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
 
-  <!-- BUSINESS SUMMARY -->
-  <section id="summary" class="card hidden">
-    <h2>Business Summary</h2>
-    <div id="kpis"></div>
-  </section>
+  <!-- SCENARIO SECTION -->
+  <div id="scenarioSection" class="hidden animate-in delay-3">
+    <div class="section-divider">Scenario Analysis — 3-Period Outlook</div>
+    <div class="scenario-grid" id="scenarioGrid"></div>
+  </div>
 
-  <!-- CHART -->
-  <section id="charts" class="card hidden">
-    <h2>Trends & Forecast</h2>
-    <canvas id="trendChart"></canvas>
-  </section>
-
-  <!-- LOGS -->
-  <section id="logs" class="card hidden">
-    <h2>Analysis Log</h2>
+  <!-- LOG CARD -->
+  <div id="logSection" class="card hidden">
+    <div class="card-title">Analysis Log</div>
     <pre id="logOutput"></pre>
-  </section>
-
-  <!-- PDF REPORT -->
-  <section id="report" class="report hidden">
-    <h2>Executive Report</h2>
-
-    <div id="execSummary"></div>
-
-    <h3>Key Metrics</h3>
-    <div id="reportKPIs"></div>
-
-    <h3>Forecast Chart</h3>
-    <img id="chartImage" />
-
-    <h3>Scenario Analysis</h3>
-    <table id="scenarioTable"></table>
-
-    <p id="forecastNotes"></p>
-    <p id="riskNotes"></p>
-  </section>
+  </div>
 
 </main>
 
-<script src="paragon.js"></script>
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- PRINT REPORT -->
+<div id="printReport"></div>
+
+<script>
+// ── CLOCK ──
+function tick() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+tick(); setInterval(tick, 1000);
+
+// ── STATE ──
+let rows = [], headers = [], numericCols = [], metric = null, chartObj = null, lastScenario = null;
+
+// ── ELEMENTS ──
+const csvFile       = document.getElementById('csvFile');
+const analyzeBtn    = document.getElementById('analyzeBtn');
+const pdfBtn        = document.getElementById('pdfBtn');
+const metricSelect  = document.getElementById('metricSelect');
+const uploadZone    = document.getElementById('uploadZone');
+const fileName      = document.getElementById('fileName');
+const kpiSection    = document.getElementById('kpiSection');
+const chartSection  = document.getElementById('chartSection');
+const scenarioSection = document.getElementById('scenarioSection');
+const logSection    = document.getElementById('logSection');
+const logOutput     = document.getElementById('logOutput');
+const kpiGrid       = document.getElementById('kpiGrid');
+const scenarioGrid  = document.getElementById('scenarioGrid');
+
+// ── DRAG & DROP ──
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) { readFile(f); csvFile.files; }
+});
+
+csvFile.addEventListener('change', () => { if (csvFile.files[0]) readFile(csvFile.files[0]); });
+metricSelect.addEventListener('change', () => { metric = metricSelect.value; if (metric) analyze(); });
+analyzeBtn.addEventListener('click', () => analyze());
+pdfBtn.addEventListener('click', () => exportPDF());
+
+// ── FILE READ ──
+function readFile(file) {
+  fileName.textContent = file.name;
+  const r = new FileReader();
+  r.onload = e => parse(e.target.result);
+  r.readAsText(file);
+}
+
+function parse(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const d = [',', ';', '\t', '|'].find(x => lines[0].split(x).length > 1) || ',';
+  headers = lines[0].split(d).map(h => h.toLowerCase().replace(/\W/g,'_'));
+  rows = lines.slice(1).map(l => {
+    const p = l.split(d), o = {};
+    headers.forEach((h,i) => o[h] = isNaN(+p[i]) ? p[i] : +p[i]);
+    return o;
+  });
+  numericCols = headers.filter(h => rows.some(r => typeof r[h] === 'number'));
+  metricSelect.innerHTML = '<option value="">— Select Metric —</option>' +
+    numericCols.map(c => `<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
+  metric = numericCols[0] || null;
+  if (metric) { metricSelect.value = metric; analyze(); }
+  analyzeBtn.disabled = false;
+  toast(`✓ Loaded ${rows.length} rows, ${numericCols.length} numeric columns`);
+}
+
+// ── ANALYZE ──
+function analyze() {
+  if (!metric) return;
+  const s = rows.map(r => r[metric]).filter(v => typeof v === 'number');
+  if (s.length < 4) { toast('Need at least 4 data points', true); return; }
+
+  const avg = mean(s);
+  const vol = std(s) / avg;
+  const smooth = ema(s, 0.3);
+  const slope = (smooth[smooth.length-1] - smooth[0]) / smooth.length;
+  const conf = Math.round(60 + Math.min(30, s.length) - vol*50);
+  const badge = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
+
+  const base = forecast(smooth[smooth.length-1], slope, 3);
+  const sigma = std(s);
+  const opt  = base.map(v => v + sigma);
+  const pess = base.map(v => v - sigma);
+  lastScenario = { base, opt, pess, metric, conf, avg, vol, s };
+
+  // ── KPIs ──
+  kpiGrid.innerHTML = `
+    <div class="kpi-card blue">
+      <div class="kpi-label">Metric</div>
+      <div class="kpi-value" style="font-size:1.1rem; padding-top:0.3rem;">${metric.replace(/_/g,' ')}</div>
+      <div class="kpi-sub">${s.length} data points</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Average</div>
+      <div class="kpi-value">${avg.toFixed(2)}</div>
+      <div class="kpi-sub" style="color:var(--muted)">Historical mean</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Volatility</div>
+      <div class="kpi-value">${(vol*100).toFixed(1)}%</div>
+      <div class="kpi-sub" style="color:var(--muted)">Coeff. of variation</div>
+    </div>
+    <div class="kpi-card ${badge}">
+      <div class="kpi-label">Confidence</div>
+      <div class="kpi-value">${conf}%</div>
+      <div class="kpi-sub ${badge}">${badge === 'green' ? '● High confidence' : badge === 'amber' ? '● Moderate confidence' : '● Low confidence'}</div>
+    </div>
+  `;
+
+  // ── SCENARIOS ──
+  scenarioGrid.innerHTML = `
+    <div class="scenario-item opt">
+      <div class="scenario-label">▲ Optimistic</div>
+      <div class="scenario-value">${opt[0].toFixed(2)}</div>
+      <div class="kpi-sub" style="color:var(--muted); margin-top:0.3rem">Next period upper</div>
+    </div>
+    <div class="scenario-item base">
+      <div class="scenario-label">◆ Base</div>
+      <div class="scenario-value">${base[0].toFixed(2)}</div>
+      <div class="kpi-sub" style="color:var(--muted); margin-top:0.3rem">EMA trend projection</div>
+    </div>
+    <div class="scenario-item pess">
+      <div class="scenario-label">▼ Pessimistic</div>
+      <div class="scenario-value">${pess[0].toFixed(2)}</div>
+      <div class="kpi-sub" style="color:var(--muted); margin-top:0.3rem">Next period lower</div>
+    </div>
+  `;
+
+  // ── LOG ──
+  const ts = new Date().toLocaleTimeString();
+  logOutput.innerHTML =
+    `<span class="log-ok">[${ts}] ✓ Analysis complete</span>\n` +
+    `<span class="log-info">[INFO] Metric     : ${metric}</span>\n` +
+    `<span class="log-info">[INFO] Data points: ${s.length}</span>\n` +
+    `<span class="log-info">[INFO] Average     : ${avg.toFixed(4)}</span>\n` +
+    `<span class="log-info">[INFO] Std Dev     : ${sigma.toFixed(4)}</span>\n` +
+    `<span class="log-info">[INFO] Volatility  : ${(vol*100).toFixed(2)}%</span>\n` +
+    `<span class="log-${badge}">[CONF] Score      : ${conf}% (${badge.toUpperCase()})</span>\n` +
+    `<span class="log-info">[FCST] Base[+1]   : ${base[0].toFixed(4)}</span>\n` +
+    `<span class="log-ok">[FCST] Opt [+1]   : ${opt[0].toFixed(4)}</span>\n` +
+    `<span class="log-warn">[FCST] Pess[+1]   : ${pess[0].toFixed(4)}</span>`;
+
+  // ── SHOW SECTIONS ──
+  [kpiSection, chartSection, scenarioSection, logSection].forEach(el => el.classList.remove('hidden'));
+  pdfBtn.disabled = false;
+
+  renderChart(s, smooth, base, opt, pess);
+}
+
+// ── CHART ──
+function renderChart(a, t, b, o, p) {
+  if (chartObj) chartObj.destroy();
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  const labels = [...a.map((_,i) => `P${i+1}`), ...b.map((_,i) => `F${i+1}`)];
+
+  chartObj = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Actual',
+          data: a,
+          borderColor: '#c9a84c',
+          backgroundColor: 'rgba(201,168,76,0.08)',
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 3,
+          pointBackgroundColor: '#c9a84c',
+          fill: true,
+        },
+        {
+          label: 'EMA Trend',
+          data: t,
+          borderColor: '#4c8ec9',
+          borderWidth: 1.5,
+          borderDash: [4,4],
+          tension: 0.4,
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: 'Forecast',
+          data: [...Array(a.length).fill(null), ...b],
+          borderColor: '#c9a84c',
+          borderWidth: 2,
+          borderDash: [6,6],
+          pointRadius: 4,
+          pointBackgroundColor: '#c9a84c',
+          fill: false,
+        },
+        {
+          label: 'Upper',
+          data: [...Array(a.length).fill(null), ...o],
+          borderColor: '#22c55e',
+          borderWidth: 1,
+          borderWidth: 0,
+          backgroundColor: 'rgba(34,197,94,0.12)',
+          fill: '+1',
+          pointRadius: 0,
+        },
+        {
+          label: 'Lower',
+          data: [...Array(a.length).fill(null), ...p],
+          borderColor: '#ef4444',
+          borderWidth: 0,
+          fill: false,
+          pointRadius: 0,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#6b7280',
+            font: { family: 'DM Mono', size: 10 },
+            boxWidth: 20,
+          }
+        },
+        tooltip: {
+          backgroundColor: '#11131c',
+          borderColor: '#1e2230',
+          borderWidth: 1,
+          titleColor: '#e8e9ef',
+          bodyColor: '#6b7280',
+          titleFont: { family: 'DM Mono', size: 11 },
+          bodyFont: { family: 'DM Mono', size: 10 },
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(30,34,48,0.8)' },
+          ticks: { color: '#6b7280', font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 12 },
+        },
+        y: {
+          grid: { color: 'rgba(30,34,48,0.8)' },
+          ticks: { color: '#6b7280', font: { family: 'DM Mono', size: 9 } },
+        }
+      }
+    }
+  });
+}
+
+// ── EXPORT PDF ──
+function exportPDF() {
+  if (!lastScenario) return;
+  const { metric, conf, avg, vol, base, opt, pess } = lastScenario;
+  const badge = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
+  const img = chartObj ? chartObj.toBase64Image() : '';
+
+  const rep = document.getElementById('printReport');
+  rep.innerHTML = `
+    <div style="font-family:'DM Sans',sans-serif; padding:40px; max-width:900px; margin:0 auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #c9a84c; padding-bottom:16px; margin-bottom:24px;">
+        <div>
+          <h1 style="font-family:'Playfair Display',serif; font-size:2rem; margin:0;">InsightForge</h1>
+          <p style="color:#888; font-size:0.85rem; margin:4px 0 0;">Executive Analytics Report &mdash; Generated ${new Date().toLocaleDateString()}</p>
+        </div>
+        <div style="text-align:right; color:#888; font-size:0.8rem;">CONFIDENTIAL</div>
+      </div>
+      <h2 style="font-size:1.1rem; margin-bottom:16px;">Summary: <em>${metric.replace(/_/g,' ')}</em></h2>
+      <table style="width:100%; border-collapse:collapse; font-size:0.9rem; margin-bottom:24px;">
+        <tr><td style="padding:8px; border:1px solid #ddd;"><strong>Average</strong></td><td style="padding:8px; border:1px solid #ddd;">${avg.toFixed(2)}</td></tr>
+        <tr><td style="padding:8px; border:1px solid #ddd;"><strong>Volatility</strong></td><td style="padding:8px; border:1px solid #ddd;">${(vol*100).toFixed(1)}%</td></tr>
+        <tr><td style="padding:8px; border:1px solid #ddd;"><strong>Confidence</strong></td><td style="padding:8px; border:1px solid #ddd;">${conf}% (${badge.toUpperCase()})</td></tr>
+      </table>
+      ${img ? `<img src="${img}" style="width:100%; border:1px solid #eee; border-radius:6px; margin-bottom:24px;" />` : ''}
+      <h3 style="margin-bottom:12px;">3-Period Scenario Forecast</h3>
+      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+        <thead><tr style="background:#f5f5f5;">
+          <th style="padding:8px; border:1px solid #ddd; text-align:left;">Scenario</th>
+          <th style="padding:8px; border:1px solid #ddd;">+1</th>
+          <th style="padding:8px; border:1px solid #ddd;">+2</th>
+          <th style="padding:8px; border:1px solid #ddd;">+3</th>
+        </tr></thead>
+        <tbody>
+          <tr><td style="padding:8px; border:1px solid #ddd;">▲ Optimistic</td>${opt.map(v=>`<td style="padding:8px;border:1px solid #ddd; text-align:center; color:#16a34a;">${v.toFixed(2)}</td>`).join('')}</tr>
+          <tr><td style="padding:8px; border:1px solid #ddd;">◆ Base</td>${base.map(v=>`<td style="padding:8px;border:1px solid #ddd; text-align:center;">${v.toFixed(2)}</td>`).join('')}</tr>
+          <tr><td style="padding:8px; border:1px solid #ddd;">▼ Pessimistic</td>${pess.map(v=>`<td style="padding:8px;border:1px solid #ddd; text-align:center; color:#dc2626;">${v.toFixed(2)}</td>`).join('')}</tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+  window.print();
+}
+
+// ── TOAST ──
+function toast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = err ? 'show err' : 'show';
+  setTimeout(() => { t.className = ''; }, 3000);
+}
+
+// ── MATH HELPERS ──
+function mean(a) { return a.reduce((x,y) => x+y, 0) / a.length; }
+function std(a) { const m = mean(a); return Math.sqrt(mean(a.map(v => (v-m)**2))); }
+function ema(a, s) {
+  const o = [a[0]];
+  for (let i=1; i<a.length; i++) o.push(a[i]*(1-s)*o[i-1]+s*o[i-1]);
+  return o;
+}
+function forecast(l, s, n) { return Array.from({length:n}, (_,i) => +(l*(1+s*(i+1))).toFixed(2)); }
+</script>
+
 </body>
 </html>
