@@ -469,7 +469,7 @@ function analyze() {
   const avg = mean(s);
   const vol = std(s) / avg;
   const smooth = ema(s, 0.3);
-  const slope = (smooth[smooth.length-1] - smooth[0]) / smooth.length;
+  const slope = (smooth[smooth.length - 1] - smooth[0]) / (smooth.length - 1); // ✅ FIXED: correct rise-over-run
   // ✅ FIXED: clamp confidence between 10–95% to prevent negative or unrealistic scores
   const rawConf = 60 + Math.min(30, s.length) - vol * 50;
   const conf = Math.round(Math.max(10, Math.min(95, rawConf)));
@@ -609,7 +609,6 @@ function renderChart(a, t, b, o, p) {
           label: 'Upper',
           data: [...Array(a.length).fill(null), ...o],
           borderColor: '#22c55e',
-          borderWidth: 1,
           borderWidth: 0,
           backgroundColor: 'rgba(34,197,94,0.12)',
           fill: '+1',
@@ -664,41 +663,125 @@ function renderChart(a, t, b, o, p) {
 // ── EXPORT PDF ──
 function exportPDF() {
   if (!lastScenario) return;
-  const { metric, conf, avg, vol, base, opt, pess } = lastScenario;
-  const badge = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
-  const img = chartObj ? chartObj.toBase64Image() : '';
+  const { metric, conf, avg, vol, base, opt, pess, sigma, slope, s } = lastScenario;
+  const badge     = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
+  const badgeHex  = conf > 75 ? '#16a34a' : conf > 55 ? '#d97706' : '#dc2626';
+  const badgeLabel= conf > 75 ? 'HIGH' : conf > 55 ? 'MODERATE' : 'LOW';
+  const trendDir  = slope > 0.001 ? '↑ Upward' : slope < -0.001 ? '↓ Downward' : '→ Flat';
+  const trendHex  = slope > 0.001 ? '#16a34a' : slope < -0.001 ? '#dc2626' : '#d97706';
+  const lastActual = s[s.length - 1];
+  const pctChange = lastActual !== 0 ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
+
+  // ── Render chart with WHITE background for printing ──
+  let chartImg = '';
+  if (chartObj) {
+    const origCanvas = document.getElementById('trendChart');
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width  = origCanvas.width;
+    tempCanvas.height = origCanvas.height;
+    const ctx2 = tempCanvas.getContext('2d');
+    ctx2.fillStyle = '#ffffff';
+    ctx2.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    ctx2.drawImage(origCanvas, 0, 0);
+    chartImg = tempCanvas.toDataURL('image/png');
+  }
 
   const rep = document.getElementById('printReport');
   rep.innerHTML = `
-    <div style="font-family:'DM Sans',sans-serif; padding:40px; max-width:900px; margin:0 auto;">
-      <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #c9a84c; padding-bottom:16px; margin-bottom:24px;">
+    <div style="font-family:'DM Sans',Georgia,sans-serif; background:#fff; color:#111; min-height:100vh;">
+
+      <!-- HEADER BANNER -->
+      <div style="background:#0f1118; padding:32px 48px; display:flex; align-items:flex-end; justify-content:space-between;">
         <div>
-          <h1 style="font-family:'Playfair Display',serif; font-size:2rem; margin:0;">Paragon Analytics</h1>
-          <p style="color:#888; font-size:0.85rem; margin:4px 0 0;">Executive Forecasting Report &mdash; Generated ${new Date().toLocaleDateString()}</p>
+          <div style="font-family:Georgia,serif; font-size:2.2rem; font-weight:700; color:#fff; letter-spacing:-0.02em; line-height:1;">Paragon</div>
+          <div style="font-size:0.75rem; color:#c9a84c; letter-spacing:0.18em; text-transform:uppercase; margin-top:4px;">Analytics · Executive Forecasting Report</div>
         </div>
-        <div style="text-align:right; color:#888; font-size:0.8rem;">CONFIDENTIAL</div>
+        <div style="text-align:right;">
+          <div style="font-size:0.7rem; color:#6b7280; font-family:monospace; letter-spacing:0.08em;">CONFIDENTIAL</div>
+          <div style="font-size:0.7rem; color:#6b7280; font-family:monospace; margin-top:2px;">Generated: ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
+        </div>
       </div>
-      <h2 style="font-size:1.1rem; margin-bottom:16px;">Summary: <em>${metric.replace(/_/g,' ')}</em></h2>
-      <table style="width:100%; border-collapse:collapse; font-size:0.9rem; margin-bottom:24px;">
-        <tr><td style="padding:8px; border:1px solid #ddd;"><strong>Average</strong></td><td style="padding:8px; border:1px solid #ddd;">${avg.toFixed(2)}</td></tr>
-        <tr><td style="padding:8px; border:1px solid #ddd;"><strong>Volatility</strong></td><td style="padding:8px; border:1px solid #ddd;">${(vol*100).toFixed(1)}%</td></tr>
-        <tr><td style="padding:8px; border:1px solid #ddd;"><strong>Confidence</strong></td><td style="padding:8px; border:1px solid #ddd;">${conf}% (${badge.toUpperCase()})</td></tr>
-      </table>
-      ${img ? `<img src="${img}" style="width:100%; border:1px solid #eee; border-radius:6px; margin-bottom:24px;" />` : ''}
-      <h3 style="margin-bottom:12px;">3-Period Scenario Forecast</h3>
-      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-        <thead><tr style="background:#f5f5f5;">
-          <th style="padding:8px; border:1px solid #ddd; text-align:left;">Scenario</th>
-          <th style="padding:8px; border:1px solid #ddd;">+1</th>
-          <th style="padding:8px; border:1px solid #ddd;">+2</th>
-          <th style="padding:8px; border:1px solid #ddd;">+3</th>
-        </tr></thead>
-        <tbody>
-          <tr><td style="padding:8px; border:1px solid #ddd;">▲ Optimistic</td>${opt.map(v=>`<td style="padding:8px;border:1px solid #ddd; text-align:center; color:#16a34a;">${v.toFixed(2)}</td>`).join('')}</tr>
-          <tr><td style="padding:8px; border:1px solid #ddd;">◆ Base</td>${base.map(v=>`<td style="padding:8px;border:1px solid #ddd; text-align:center;">${v.toFixed(2)}</td>`).join('')}</tr>
-          <tr><td style="padding:8px; border:1px solid #ddd;">▼ Pessimistic</td>${pess.map(v=>`<td style="padding:8px;border:1px solid #ddd; text-align:center; color:#dc2626;">${v.toFixed(2)}</td>`).join('')}</tr>
-        </tbody>
-      </table>
+      <div style="height:4px; background: linear-gradient(90deg, #c9a84c, #4c8ec9);"></div>
+
+      <!-- BODY -->
+      <div style="padding:40px 48px;">
+
+        <!-- METRIC TITLE -->
+        <div style="margin-bottom:28px; padding-bottom:16px; border-bottom:1px solid #e5e7eb;">
+          <div style="font-size:0.65rem; font-family:monospace; color:#9ca3af; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:6px;">Analysis Subject</div>
+          <div style="font-family:Georgia,serif; font-size:1.7rem; font-weight:700; color:#111;">${metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
+          <div style="font-size:0.8rem; color:#6b7280; margin-top:4px;">${s.length} historical data points analysed &nbsp;·&nbsp; EMA smoothing α = 0.30</div>
+        </div>
+
+        <!-- KPI BOXES -->
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:28px;">
+          <div style="border:1.5px solid #e5e7eb; border-radius:8px; padding:14px 16px; border-top:3px solid #4c8ec9;">
+            <div style="font-size:0.6rem; font-family:monospace; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Average</div>
+            <div style="font-size:1.5rem; font-family:Georgia,serif; font-weight:700; color:#111;">${avg.toFixed(2)}</div>
+            <div style="font-size:0.7rem; color:#6b7280; margin-top:4px;">Historical mean</div>
+          </div>
+          <div style="border:1.5px solid #e5e7eb; border-radius:8px; padding:14px 16px; border-top:3px solid #6366f1;">
+            <div style="font-size:0.6rem; font-family:monospace; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Std Deviation</div>
+            <div style="font-size:1.5rem; font-family:Georgia,serif; font-weight:700; color:#111;">${sigma.toFixed(2)}</div>
+            <div style="font-size:0.7rem; color:#6b7280; margin-top:4px;">Volatility band ±</div>
+          </div>
+          <div style="border:1.5px solid #e5e7eb; border-radius:8px; padding:14px 16px; border-top:3px solid ${trendHex};">
+            <div style="font-size:0.6rem; font-family:monospace; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Trend</div>
+            <div style="font-size:1.3rem; font-family:Georgia,serif; font-weight:700; color:${trendHex};">${trendDir}</div>
+            <div style="font-size:0.7rem; color:#6b7280; margin-top:4px;">Next period: ${pctChange}%</div>
+          </div>
+          <div style="border:1.5px solid #e5e7eb; border-radius:8px; padding:14px 16px; border-top:3px solid ${badgeHex};">
+            <div style="font-size:0.6rem; font-family:monospace; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Confidence</div>
+            <div style="font-size:1.5rem; font-family:Georgia,serif; font-weight:700; color:${badgeHex};">${conf}%</div>
+            <div style="font-size:0.7rem; color:${badgeHex}; margin-top:4px; font-weight:600;">${badgeLabel}</div>
+          </div>
+        </div>
+
+        <!-- CHART -->
+        ${chartImg ? `
+        <div style="margin-bottom:28px;">
+          <div style="font-size:0.65rem; font-family:monospace; color:#9ca3af; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:10px;">Trend &amp; Forecast Chart</div>
+          <div style="border:1.5px solid #e5e7eb; border-radius:8px; overflow:hidden; padding:16px; background:#fafafa;">
+            <img src="${chartImg}" style="width:100%; display:block;" />
+          </div>
+        </div>` : ''}
+
+        <!-- SCENARIO TABLE -->
+        <div style="margin-bottom:28px;">
+          <div style="font-size:0.65rem; font-family:monospace; color:#9ca3af; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:10px;">3-Period Scenario Forecast</div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+            <thead>
+              <tr style="background:#0f1118; color:#fff;">
+                <th style="padding:11px 14px; text-align:left; font-weight:600; border-radius:6px 0 0 0;">Scenario</th>
+                <th style="padding:11px 14px; text-align:center; font-weight:600;">Period +1</th>
+                <th style="padding:11px 14px; text-align:center; font-weight:600;">Period +2</th>
+                <th style="padding:11px 14px; text-align:center; font-weight:600; border-radius:0 6px 0 0;">Period +3</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#f0fdf4; border-bottom:1px solid #e5e7eb;">
+                <td style="padding:11px 14px; font-weight:600; color:#15803d;">▲ Optimistic</td>
+                ${opt.map(v=>`<td style="padding:11px 14px; text-align:center; font-weight:700; color:#15803d; font-size:1rem;">${v.toFixed(2)}</td>`).join('')}
+              </tr>
+              <tr style="background:#fffbeb; border-bottom:1px solid #e5e7eb;">
+                <td style="padding:11px 14px; font-weight:600; color:#92400e;">◆ Base</td>
+                ${base.map(v=>`<td style="padding:11px 14px; text-align:center; font-weight:700; color:#92400e; font-size:1rem;">${v.toFixed(2)}</td>`).join('')}
+              </tr>
+              <tr style="background:#fef2f2;">
+                <td style="padding:11px 14px; font-weight:600; color:#b91c1c;">▼ Pessimistic</td>
+                ${pess.map(v=>`<td style="padding:11px 14px; text-align:center; font-weight:700; color:#b91c1c; font-size:1rem;">${v.toFixed(2)}</td>`).join('')}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- FOOTER -->
+        <div style="border-top:1px solid #e5e7eb; padding-top:16px; display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:0.7rem; color:#9ca3af;">This report was generated by Paragon Analytics. For internal use only.</div>
+          <div style="font-size:0.7rem; color:#9ca3af; font-family:monospace;">paragon.analytics · ${new Date().getFullYear()}</div>
+        </div>
+
+      </div>
     </div>
   `;
   window.print();
