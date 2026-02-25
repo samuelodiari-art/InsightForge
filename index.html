@@ -470,26 +470,42 @@ function analyze() {
   const vol = std(s) / avg;
   const smooth = ema(s, 0.3);
   const slope = (smooth[smooth.length-1] - smooth[0]) / smooth.length;
-  const conf = Math.round(60 + Math.min(30, s.length) - vol*50);
+  // ✅ FIXED: clamp confidence between 10–95% to prevent negative or unrealistic scores
+  const rawConf = 60 + Math.min(30, s.length) - vol * 50;
+  const conf = Math.round(Math.max(10, Math.min(95, rawConf)));
   const badge = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
 
-  const base = forecast(smooth[smooth.length-1], slope, 3);
+  const lastActual = s[s.length - 1];
+  const base = forecast(smooth[smooth.length - 1], slope, 3);
   const sigma = std(s);
   const opt  = base.map(v => v + sigma);
   const pess = base.map(v => v - sigma);
-  lastScenario = { base, opt, pess, metric, conf, avg, vol, s };
+
+  // Trend direction
+  const trendDir = slope > 0.001 ? '↑ Upward' : slope < -0.001 ? '↓ Downward' : '→ Flat';
+  const trendColor = slope > 0.001 ? 'var(--green)' : slope < -0.001 ? 'var(--red)' : 'var(--amber)';
+
+  // % change: last actual → base forecast next period
+  const pctChange = lastActual !== 0 ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
+
+  lastScenario = { base, opt, pess, metric, conf, avg, vol, s, sigma, slope };
 
   // ── KPIs ──
   kpiGrid.innerHTML = `
     <div class="kpi-card blue">
       <div class="kpi-label">Metric</div>
       <div class="kpi-value" style="font-size:1.1rem; padding-top:0.3rem;">${metric.replace(/_/g,' ')}</div>
-      <div class="kpi-sub">${s.length} data points</div>
+      <div class="kpi-sub" style="color:var(--muted)">${s.length} data points</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Average</div>
       <div class="kpi-value">${avg.toFixed(2)}</div>
       <div class="kpi-sub" style="color:var(--muted)">Historical mean</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Trend Direction</div>
+      <div class="kpi-value" style="font-size:1.2rem; padding-top:0.2rem; color:${trendColor}">${trendDir}</div>
+      <div class="kpi-sub" style="color:var(--muted)">Next period: ${pctChange}%</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Volatility</div>
@@ -526,13 +542,17 @@ function analyze() {
   const ts = new Date().toLocaleTimeString();
   logOutput.innerHTML =
     `<span class="log-ok">[${ts}] ✓ Analysis complete</span>\n` +
-    `<span class="log-info">[INFO] Metric     : ${metric}</span>\n` +
-    `<span class="log-info">[INFO] Data points: ${s.length}</span>\n` +
+    `<span class="log-info">[INFO] Metric      : ${metric}</span>\n` +
+    `<span class="log-info">[INFO] Data points : ${s.length}</span>\n` +
     `<span class="log-info">[INFO] Average     : ${avg.toFixed(4)}</span>\n` +
     `<span class="log-info">[INFO] Std Dev     : ${sigma.toFixed(4)}</span>\n` +
     `<span class="log-info">[INFO] Volatility  : ${(vol*100).toFixed(2)}%</span>\n` +
-    `<span class="log-${badge}">[CONF] Score      : ${conf}% (${badge.toUpperCase()})</span>\n` +
+    `<span class="log-info">[INFO] EMA Slope   : ${slope.toFixed(4)} (${trendDir})</span>\n` +
+    `<span class="log-info">[INFO] Δ Next per  : ${pctChange}%</span>\n` +
+    `<span class="log-${badge}">[CONF] Score       : ${conf}% (${badge.toUpperCase()})</span>\n` +
     `<span class="log-info">[FCST] Base[+1]   : ${base[0].toFixed(4)}</span>\n` +
+    `<span class="log-info">[FCST] Base[+2]   : ${base[1].toFixed(4)}</span>\n` +
+    `<span class="log-info">[FCST] Base[+3]   : ${base[2].toFixed(4)}</span>\n` +
     `<span class="log-ok">[FCST] Opt [+1]   : ${opt[0].toFixed(4)}</span>\n` +
     `<span class="log-warn">[FCST] Pess[+1]   : ${pess[0].toFixed(4)}</span>`;
 
@@ -695,12 +715,16 @@ function toast(msg, err=false) {
 // ── MATH HELPERS ──
 function mean(a) { return a.reduce((x,y) => x+y, 0) / a.length; }
 function std(a) { const m = mean(a); return Math.sqrt(mean(a.map(v => (v-m)**2))); }
+// ✅ FIXED: correct EMA — s*current + (1-s)*previous
 function ema(a, s) {
   const o = [a[0]];
-  for (let i=1; i<a.length; i++) o.push(a[i]*(1-s)*o[i-1]+s*o[i-1]);
+  for (let i = 1; i < a.length; i++) o.push(s * a[i] + (1 - s) * o[i - 1]);
   return o;
 }
-function forecast(l, s, n) { return Array.from({length:n}, (_,i) => +(l*(1+s*(i+1))).toFixed(2)); }
+// ✅ FIXED: additive linear forecast — last + slope * step (not multiplicative)
+function forecast(last, slope, n) {
+  return Array.from({length: n}, (_, i) => +(last + slope * (i + 1)).toFixed(2));
+}
 </script>
 
 </body>
