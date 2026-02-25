@@ -292,8 +292,10 @@
 
     /* ── PRINT ── */
     @media print {
-      body > *:not(#printReport) { display: none; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      header, main, #toast { display: none !important; }
       #printReport { display: block !important; }
+      body { background: #fff !important; margin: 0; padding: 0; }
     }
     #printReport {
       display: none;
@@ -664,121 +666,139 @@ function renderChart(a, t, b, o, p) {
 function exportPDF() {
   if (!lastScenario) return;
   const { metric, conf, avg, vol, base, opt, pess, sigma, slope, s } = lastScenario;
-  const badge     = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
-  const badgeHex  = conf > 75 ? '#16a34a' : conf > 55 ? '#d97706' : '#dc2626';
-  const badgeLabel= conf > 75 ? 'HIGH' : conf > 55 ? 'MODERATE' : 'LOW';
-  const trendDir  = slope > 0.001 ? '↑ Upward' : slope < -0.001 ? '↓ Downward' : '→ Flat';
-  const trendHex  = slope > 0.001 ? '#16a34a' : slope < -0.001 ? '#dc2626' : '#d97706';
+  const badge      = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
+  const badgeHex   = conf > 75 ? '#15803d' : conf > 55 ? '#b45309' : '#b91c1c';
+  const badgeBg    = conf > 75 ? '#dcfce7' : conf > 55 ? '#fef3c7' : '#fee2e2';
+  const badgeLabel = conf > 75 ? 'HIGH CONFIDENCE' : conf > 55 ? 'MODERATE CONFIDENCE' : 'LOW CONFIDENCE';
+  const trendDir   = slope > 0.001 ? '↑ Upward' : slope < -0.001 ? '↓ Downward' : '→ Flat';
+  const trendHex   = slope > 0.001 ? '#15803d' : slope < -0.001 ? '#b91c1c' : '#b45309';
   const lastActual = s[s.length - 1];
-  const pctChange = lastActual !== 0 ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
+  const pctChange  = lastActual !== 0 ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
+  const pctSign    = parseFloat(pctChange) >= 0 ? '+' : '';
 
-  // ── Render chart with WHITE background for printing ──
+  // ── Capture chart with solid white background ──
   let chartImg = '';
   if (chartObj) {
+    // Temporarily hide tooltip by removing hover state
     const origCanvas = document.getElementById('trendChart');
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width  = origCanvas.width;
-    tempCanvas.height = origCanvas.height;
-    const ctx2 = tempCanvas.getContext('2d');
+    const tmp = document.createElement('canvas');
+    tmp.width  = origCanvas.width;
+    tmp.height = origCanvas.height;
+    const ctx2 = tmp.getContext('2d');
     ctx2.fillStyle = '#ffffff';
-    ctx2.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    ctx2.fillRect(0, 0, tmp.width, tmp.height);
     ctx2.drawImage(origCanvas, 0, 0);
-    chartImg = tempCanvas.toDataURL('image/png');
+    chartImg = tmp.toDataURL('image/png');
   }
 
   const rep = document.getElementById('printReport');
   rep.innerHTML = `
-    <div style="font-family:'DM Sans',Georgia,sans-serif; background:#fff; color:#111; min-height:100vh;">
+    <style>
+      @media print {
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      }
+      .pdf-root * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    </style>
+    <div class="pdf-root" style="font-family:Georgia,'Times New Roman',serif; background:#ffffff; color:#111111; margin:0; padding:0;">
 
-      <!-- HEADER BANNER -->
-      <div style="background:#0f1118; padding:32px 48px; display:flex; align-items:flex-end; justify-content:space-between;">
+      <!-- ══ HEADER ══ -->
+      <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#0d1117 !important; padding:28px 44px; display:flex; align-items:center; justify-content:space-between;">
         <div>
-          <div style="font-family:Georgia,serif; font-size:2.2rem; font-weight:700; color:#fff; letter-spacing:-0.02em; line-height:1;">Paragon</div>
-          <div style="font-size:0.75rem; color:#c9a84c; letter-spacing:0.18em; text-transform:uppercase; margin-top:4px;">Analytics · Executive Forecasting Report</div>
+          <div style="font-size:2rem; font-weight:900; color:#ffffff !important; letter-spacing:-0.02em; line-height:1; font-family:Georgia,serif;">PARAGON</div>
+          <div style="font-size:0.65rem; color:#c9a84c !important; letter-spacing:0.22em; text-transform:uppercase; margin-top:5px; font-family:monospace;">Analytics &nbsp;·&nbsp; Executive Forecasting Report</div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:0.7rem; color:#6b7280; font-family:monospace; letter-spacing:0.08em;">CONFIDENTIAL</div>
-          <div style="font-size:0.7rem; color:#6b7280; font-family:monospace; margin-top:2px;">Generated: ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
+          <div style="font-size:0.65rem; color:#9ca3af !important; font-family:monospace; letter-spacing:0.06em; text-transform:uppercase;">Confidential</div>
+          <div style="font-size:0.7rem; color:#e5e7eb !important; font-family:monospace; margin-top:3px;">${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
         </div>
       </div>
-      <div style="height:4px; background: linear-gradient(90deg, #c9a84c, #4c8ec9);"></div>
+      <!-- Gold accent bar -->
+      <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; height:5px; background:linear-gradient(90deg,#c9a84c,#4c8ec9) !important;"></div>
 
-      <!-- BODY -->
-      <div style="padding:40px 48px;">
+      <!-- ══ BODY ══ -->
+      <div style="padding:36px 44px;">
 
-        <!-- METRIC TITLE -->
-        <div style="margin-bottom:28px; padding-bottom:16px; border-bottom:1px solid #e5e7eb;">
-          <div style="font-size:0.65rem; font-family:monospace; color:#9ca3af; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:6px;">Analysis Subject</div>
-          <div style="font-family:Georgia,serif; font-size:1.7rem; font-weight:700; color:#111;">${metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
-          <div style="font-size:0.8rem; color:#6b7280; margin-top:4px;">${s.length} historical data points analysed &nbsp;·&nbsp; EMA smoothing α = 0.30</div>
+        <!-- Metric Title -->
+        <div style="margin-bottom:24px; padding-bottom:14px; border-bottom:2px solid #111111;">
+          <div style="font-size:0.6rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:6px;">Analysis Subject</div>
+          <div style="font-size:1.9rem; font-weight:900; color:#111111; font-family:Georgia,serif; line-height:1.1;">${metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
+          <div style="font-size:0.75rem; color:#374151; margin-top:5px; font-family:monospace;">${s.length} historical data points &nbsp;·&nbsp; EMA smoothing α = 0.30</div>
         </div>
 
-        <!-- KPI BOXES -->
-        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:28px;">
-          <div style="border:1.5px solid #e5e7eb; border-radius:8px; padding:14px 16px; border-top:3px solid #4c8ec9;">
-            <div style="font-size:0.6rem; font-family:monospace; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Average</div>
-            <div style="font-size:1.5rem; font-family:Georgia,serif; font-weight:700; color:#111;">${avg.toFixed(2)}</div>
-            <div style="font-size:0.7rem; color:#6b7280; margin-top:4px;">Historical mean</div>
+        <!-- ── KPI GRID ── -->
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:24px;">
+
+          <!-- Average -->
+          <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; border:2px solid #e5e7eb; border-top:4px solid #2563eb !important; border-radius:6px; padding:14px 14px 12px; background:#f8fafc !important;">
+            <div style="font-size:0.55rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">Average</div>
+            <div style="font-size:1.55rem; font-weight:900; color:#111111; font-family:Georgia,serif; line-height:1;">${avg.toFixed(2)}</div>
+            <div style="font-size:0.65rem; color:#64748b; margin-top:5px;">Historical mean</div>
           </div>
-          <div style="border:1.5px solid #e5e7eb; border-radius:8px; padding:14px 16px; border-top:3px solid #6366f1;">
-            <div style="font-size:0.6rem; font-family:monospace; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Std Deviation</div>
-            <div style="font-size:1.5rem; font-family:Georgia,serif; font-weight:700; color:#111;">${sigma.toFixed(2)}</div>
-            <div style="font-size:0.7rem; color:#6b7280; margin-top:4px;">Volatility band ±</div>
+
+          <!-- Std Dev -->
+          <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; border:2px solid #e5e7eb; border-top:4px solid #7c3aed !important; border-radius:6px; padding:14px 14px 12px; background:#f8fafc !important;">
+            <div style="font-size:0.55rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">Std Deviation</div>
+            <div style="font-size:1.55rem; font-weight:900; color:#111111; font-family:Georgia,serif; line-height:1;">${sigma.toFixed(2)}</div>
+            <div style="font-size:0.65rem; color:#64748b; margin-top:5px;">Volatility band ±</div>
           </div>
-          <div style="border:1.5px solid #e5e7eb; border-radius:8px; padding:14px 16px; border-top:3px solid ${trendHex};">
-            <div style="font-size:0.6rem; font-family:monospace; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Trend</div>
-            <div style="font-size:1.3rem; font-family:Georgia,serif; font-weight:700; color:${trendHex};">${trendDir}</div>
-            <div style="font-size:0.7rem; color:#6b7280; margin-top:4px;">Next period: ${pctChange}%</div>
+
+          <!-- Trend -->
+          <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; border:2px solid #e5e7eb; border-top:4px solid ${trendHex} !important; border-radius:6px; padding:14px 14px 12px; background:#f8fafc !important;">
+            <div style="font-size:0.55rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">Trend</div>
+            <div style="font-size:1.2rem; font-weight:900; color:${trendHex} !important; font-family:Georgia,serif; line-height:1;">${trendDir}</div>
+            <div style="font-size:0.65rem; color:#64748b; margin-top:5px;">Next period: <strong style="color:${trendHex} !important;">${pctSign}${pctChange}%</strong></div>
           </div>
-          <div style="border:1.5px solid #e5e7eb; border-radius:8px; padding:14px 16px; border-top:3px solid ${badgeHex};">
-            <div style="font-size:0.6rem; font-family:monospace; color:#9ca3af; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">Confidence</div>
-            <div style="font-size:1.5rem; font-family:Georgia,serif; font-weight:700; color:${badgeHex};">${conf}%</div>
-            <div style="font-size:0.7rem; color:${badgeHex}; margin-top:4px; font-weight:600;">${badgeLabel}</div>
+
+          <!-- Confidence -->
+          <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; border:2px solid #e5e7eb; border-top:4px solid ${badgeHex} !important; border-radius:6px; padding:14px 14px 12px; background:#f8fafc !important;">
+            <div style="font-size:0.55rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">Confidence</div>
+            <div style="font-size:1.55rem; font-weight:900; color:${badgeHex} !important; font-family:Georgia,serif; line-height:1;">${conf}%</div>
+            <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; display:inline-block; margin-top:5px; padding:2px 8px; border-radius:4px; background:${badgeBg} !important; color:${badgeHex} !important; font-size:0.58rem; font-weight:700; font-family:monospace; letter-spacing:0.06em;">${badgeLabel}</div>
           </div>
         </div>
 
-        <!-- CHART -->
+        <!-- ── CHART ── -->
         ${chartImg ? `
-        <div style="margin-bottom:28px;">
-          <div style="font-size:0.65rem; font-family:monospace; color:#9ca3af; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:10px;">Trend &amp; Forecast Chart</div>
-          <div style="border:1.5px solid #e5e7eb; border-radius:8px; overflow:hidden; padding:16px; background:#fafafa;">
+        <div style="margin-bottom:24px;">
+          <div style="font-size:0.6rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:8px;">Trend &amp; Forecast Chart</div>
+          <div style="border:2px solid #e5e7eb; border-radius:6px; padding:14px; background:#ffffff;">
             <img src="${chartImg}" style="width:100%; display:block;" />
           </div>
         </div>` : ''}
 
-        <!-- SCENARIO TABLE -->
-        <div style="margin-bottom:28px;">
-          <div style="font-size:0.65rem; font-family:monospace; color:#9ca3af; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:10px;">3-Period Scenario Forecast</div>
-          <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+        <!-- ── SCENARIO TABLE ── -->
+        <div>
+          <div style="font-size:0.6rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:8px;">3-Period Scenario Forecast</div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
             <thead>
-              <tr style="background:#0f1118; color:#fff;">
-                <th style="padding:11px 14px; text-align:left; font-weight:600; border-radius:6px 0 0 0;">Scenario</th>
-                <th style="padding:11px 14px; text-align:center; font-weight:600;">Period +1</th>
-                <th style="padding:11px 14px; text-align:center; font-weight:600;">Period +2</th>
-                <th style="padding:11px 14px; text-align:center; font-weight:600; border-radius:0 6px 0 0;">Period +3</th>
+              <tr style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#0d1117 !important;">
+                <th style="padding:11px 14px; text-align:left; font-weight:700; color:#ffffff !important; font-family:monospace; font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase;">Scenario</th>
+                <th style="padding:11px 14px; text-align:center; font-weight:700; color:#ffffff !important; font-family:monospace; font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase;">Period +1</th>
+                <th style="padding:11px 14px; text-align:center; font-weight:700; color:#ffffff !important; font-family:monospace; font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase;">Period +2</th>
+                <th style="padding:11px 14px; text-align:center; font-weight:700; color:#ffffff !important; font-family:monospace; font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase;">Period +3</th>
               </tr>
             </thead>
             <tbody>
-              <tr style="background:#f0fdf4; border-bottom:1px solid #e5e7eb;">
-                <td style="padding:11px 14px; font-weight:600; color:#15803d;">▲ Optimistic</td>
-                ${opt.map(v=>`<td style="padding:11px 14px; text-align:center; font-weight:700; color:#15803d; font-size:1rem;">${v.toFixed(2)}</td>`).join('')}
+              <tr style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#f0fdf4 !important; border-bottom:1px solid #bbf7d0;">
+                <td style="padding:12px 14px; font-weight:800; color:#15803d !important; font-size:0.88rem;">▲ Optimistic</td>
+                ${opt.map(v=>`<td style="padding:12px 14px; text-align:center; font-weight:900; color:#15803d !important; font-size:1.05rem; font-family:Georgia,serif;">${v.toFixed(2)}</td>`).join('')}
               </tr>
-              <tr style="background:#fffbeb; border-bottom:1px solid #e5e7eb;">
-                <td style="padding:11px 14px; font-weight:600; color:#92400e;">◆ Base</td>
-                ${base.map(v=>`<td style="padding:11px 14px; text-align:center; font-weight:700; color:#92400e; font-size:1rem;">${v.toFixed(2)}</td>`).join('')}
+              <tr style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fffbeb !important; border-bottom:1px solid #fde68a;">
+                <td style="padding:12px 14px; font-weight:800; color:#92400e !important; font-size:0.88rem;">◆ Base</td>
+                ${base.map(v=>`<td style="padding:12px 14px; text-align:center; font-weight:900; color:#92400e !important; font-size:1.05rem; font-family:Georgia,serif;">${v.toFixed(2)}</td>`).join('')}
               </tr>
-              <tr style="background:#fef2f2;">
-                <td style="padding:11px 14px; font-weight:600; color:#b91c1c;">▼ Pessimistic</td>
-                ${pess.map(v=>`<td style="padding:11px 14px; text-align:center; font-weight:700; color:#b91c1c; font-size:1rem;">${v.toFixed(2)}</td>`).join('')}
+              <tr style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fef2f2 !important; border-bottom:1px solid #fecaca;">
+                <td style="padding:12px 14px; font-weight:800; color:#b91c1c !important; font-size:0.88rem;">▼ Pessimistic</td>
+                ${pess.map(v=>`<td style="padding:12px 14px; text-align:center; font-weight:900; color:#b91c1c !important; font-size:1.05rem; font-family:Georgia,serif;">${v.toFixed(2)}</td>`).join('')}
               </tr>
             </tbody>
           </table>
         </div>
 
-        <!-- FOOTER -->
-        <div style="border-top:1px solid #e5e7eb; padding-top:16px; display:flex; justify-content:space-between; align-items:center;">
-          <div style="font-size:0.7rem; color:#9ca3af;">This report was generated by Paragon Analytics. For internal use only.</div>
-          <div style="font-size:0.7rem; color:#9ca3af; font-family:monospace;">paragon.analytics · ${new Date().getFullYear()}</div>
+        <!-- ── FOOTER ── -->
+        <div style="margin-top:28px; padding-top:14px; border-top:1px solid #d1d5db; display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:0.65rem; color:#6b7280; font-family:monospace;">This report was generated by Paragon Analytics. For internal use only.</div>
+          <div style="font-size:0.65rem; color:#6b7280; font-family:monospace;">paragon.analytics · ${new Date().getFullYear()}</div>
         </div>
 
       </div>
