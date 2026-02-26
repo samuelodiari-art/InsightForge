@@ -1,28 +1,57 @@
 <!DOCTYPE html>
+<!--
+  ╔═══════════════════════════════════════════════════════════════╗
+  ║            PARAGON ANALYTICS — Executive Forecasting          ║
+  ║                   GitHub Pages Ready v2.0                     ║
+  ╠═══════════════════════════════════════════════════════════════╣
+  ║  BUGS FIXED FROM v1:                                          ║
+  ║  1. Slope now uses RECENT EMA tail (last 25%) not global      ║
+  ║     first→last, preventing misleading forecasts on            ║
+  ║     non-stationary series.                                    ║
+  ║  2. Confidence score now uses R² + sample penalty instead     ║
+  ║     of the arbitrary "60 + length - vol*50" formula.          ║
+  ║  3. All 3 forecast periods now visible in main UI             ║
+  ║     (v1 only showed Period +1 in scenario cards).             ║
+  ║  4. CSV parser handles quoted fields ("value,with,commas").   ║
+  ║  5. Date/time column auto-detected for real X-axis labels.    ║
+  ║  6. PDF chart re-rendered with light theme; no more dark      ║
+  ║     canvas embedded on white paper.                           ║
+  ║  7. EMA alpha & forecast horizon now user-controllable.       ║
+  ║  8. "Load Sample Data" — zero-friction demo mode.             ║
+  ║  9. R² goodness-of-fit shown alongside confidence.            ║
+  ║  10. Forecast CSV download added.                             ║
+  ╚═══════════════════════════════════════════════════════════════╝
+
+  DEPLOY TO GITHUB PAGES:
+    1. Create a new repo (e.g. paragon-analytics)
+    2. Add this file as index.html at repo root
+    3. Settings → Pages → Branch: main / (root)
+    4. Live at: https://<you>.github.io/paragon-analytics/
+
+  No build step. No npm. No server. Pure static HTML.
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Paragon Analytics — Executive Forecasting</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg:       #08090d;
-      --surface:  #0f1118;
-      --border:   #1e2230;
-      --accent:   #c9a84c;
-      --accent2:  #4c8ec9;
-      --green:    #22c55e;
-      --amber:    #f59e0b;
-      --red:      #ef4444;
-      --text:     #e8e9ef;
-      --muted:    #6b7280;
-      --card-bg:  #11131c;
+      --bg:      #08090d;
+      --surface: #0f1118;
+      --border:  #1e2230;
+      --accent:  #c9a84c;
+      --accent2: #4c8ec9;
+      --green:   #22c55e;
+      --amber:   #f59e0b;
+      --red:     #ef4444;
+      --text:    #e8e9ef;
+      --muted:   #6b7280;
+      --card-bg: #11131c;
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: 'DM Sans', sans-serif;
       background: var(--bg);
@@ -30,8 +59,6 @@
       min-height: 100vh;
       overflow-x: hidden;
     }
-
-    /* ── NOISE OVERLAY ── */
     body::before {
       content: '';
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
@@ -45,33 +72,39 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: 1.2rem 2.5rem;
       border-bottom: 1px solid var(--border);
-      background: rgba(8,9,13,0.9);
+      background: rgba(8,9,13,0.92);
       backdrop-filter: blur(12px);
     }
-    .logo {
-      display: flex; align-items: baseline; gap: 0.5rem;
-    }
+    .logo { display: flex; align-items: baseline; gap: 0.5rem; }
     .logo-name {
       font-family: 'Playfair Display', serif;
       font-size: 1.5rem; font-weight: 700;
-      color: var(--text);
-      letter-spacing: -0.02em;
+      color: var(--text); letter-spacing: -0.02em;
     }
     .logo-badge {
       font-family: 'DM Mono', monospace;
       font-size: 0.65rem; font-weight: 500;
-      color: var(--accent);
-      border: 1px solid var(--accent);
+      color: var(--accent); border: 1px solid var(--accent);
       padding: 1px 6px; border-radius: 3px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      letter-spacing: 0.08em; text-transform: uppercase;
     }
     .header-right {
+      display: flex; align-items: center; gap: 1rem;
       font-family: 'DM Mono', monospace;
-      font-size: 0.72rem; color: var(--muted);
-      letter-spacing: 0.05em;
+      font-size: 0.72rem; color: var(--muted); letter-spacing: 0.05em;
     }
     #clock { color: var(--accent); }
+    .btn-sample {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.35rem 0.9rem;
+      border: 1px solid var(--accent2); border-radius: 5px;
+      background: rgba(76,142,201,0.08);
+      color: var(--accent2);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem; cursor: pointer;
+      transition: all 0.18s; letter-spacing: 0.05em;
+    }
+    .btn-sample:hover { background: rgba(76,142,201,0.18); }
 
     /* ── MAIN LAYOUT ── */
     main {
@@ -85,23 +118,20 @@
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.5rem;
+      border-radius: 10px; padding: 1.5rem;
       transition: border-color 0.2s;
     }
     .card:hover { border-color: #2a2f45; }
     .card-title {
       font-family: 'DM Mono', monospace;
       font-size: 0.68rem; font-weight: 500;
-      color: var(--muted);
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      margin-bottom: 1rem;
+      color: var(--muted); letter-spacing: 0.12em;
+      text-transform: uppercase; margin-bottom: 1rem;
       display: flex; align-items: center; gap: 0.5rem;
     }
     .card-title::before {
-      content: '';
-      display: inline-block; width: 6px; height: 6px;
+      content: ''; display: inline-block;
+      width: 6px; height: 6px;
       background: var(--accent); border-radius: 50%;
     }
 
@@ -109,70 +139,100 @@
     .controls-grid {
       display: grid;
       grid-template-columns: 1fr auto auto;
-      gap: 0.75rem;
-      align-items: center;
+      gap: 0.75rem; align-items: center;
+    }
+    .controls-row2 {
+      display: flex; gap: 0.75rem; align-items: center;
+      margin-top: 0.75rem; flex-wrap: wrap;
     }
     .upload-zone {
       border: 1.5px dashed var(--border);
-      border-radius: 8px;
-      padding: 1.2rem 1.5rem;
+      border-radius: 8px; padding: 1.2rem 1.5rem;
       display: flex; align-items: center; gap: 1rem;
       cursor: pointer; transition: all 0.2s;
       background: rgba(201,168,76,0.03);
     }
     .upload-zone:hover, .upload-zone.dragover {
-      border-color: var(--accent);
-      background: rgba(201,168,76,0.07);
+      border-color: var(--accent); background: rgba(201,168,76,0.07);
     }
     .upload-icon { font-size: 1.5rem; }
     .upload-text { font-size: 0.85rem; color: var(--muted); }
     .upload-text strong { color: var(--text); display: block; font-size: 0.9rem; }
     #csvFile { display: none; }
 
-    .select-wrap {
-      position: relative;
-    }
+    .select-wrap { position: relative; }
     select {
       appearance: none;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.6rem 2.5rem 0.6rem 1rem;
-      color: var(--text);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.88rem;
-      cursor: pointer;
-      transition: border-color 0.2s;
-      min-width: 160px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.6rem 2.5rem 0.6rem 1rem;
+      color: var(--text); font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem; cursor: pointer;
+      transition: border-color 0.2s; min-width: 160px;
     }
     select:focus { outline: none; border-color: var(--accent); }
     .select-wrap::after {
-      content: '▾';
-      position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%);
+      content: '▾'; position: absolute; right: 0.75rem;
+      top: 50%; transform: translateY(-50%);
       color: var(--muted); pointer-events: none; font-size: 0.8rem;
+    }
+
+    .label-sm {
+      font-family: 'DM Mono', monospace; font-size: 0.68rem;
+      color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
+      display: block; margin-bottom: 0.25rem;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      height: 4px; border-radius: 2px;
+      background: var(--border); cursor: pointer; vertical-align: middle;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent); cursor: pointer;
     }
 
     .btn {
       display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.6rem 1.4rem;
-      border: none; border-radius: 6px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.88rem; font-weight: 500;
-      cursor: pointer; transition: all 0.18s;
-      white-space: nowrap;
+      padding: 0.6rem 1.4rem; border: none; border-radius: 6px;
+      font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
+      font-weight: 500; cursor: pointer; transition: all 0.18s; white-space: nowrap;
     }
-    .btn-primary {
-      background: var(--accent);
-      color: #08090d;
-    }
+    .btn-primary { background: var(--accent); color: #08090d; }
     .btn-primary:hover { background: #dab85a; transform: translateY(-1px); }
     .btn-secondary {
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--border);
+      background: transparent; color: var(--muted); border: 1px solid var(--border);
     }
     .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+    .btn-ghost {
+      background: transparent; color: var(--muted); border: 1px solid var(--border);
+      font-size: 0.82rem; padding: 0.5rem 1rem;
+    }
+    .btn-ghost:hover { border-color: var(--green); color: var(--green); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+    /* ── DATA PREVIEW ── */
+    .preview-table-wrap {
+      overflow-x: auto; max-height: 180px; overflow-y: auto;
+      border: 1px solid var(--border); border-radius: 6px; margin-top: 0.75rem;
+    }
+    .preview-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .preview-table th {
+      background: var(--surface); position: sticky; top: 0;
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
+      text-align: left; white-space: nowrap;
+    }
+    .preview-table td {
+      padding: 0.4rem 0.75rem; border-bottom: 1px solid rgba(30,34,48,0.5);
+      color: var(--text); white-space: nowrap; font-family: 'DM Mono', monospace;
+    }
+    .preview-table tr:last-child td { border-bottom: none; }
+    .preview-table tr:hover td { background: rgba(201,168,76,0.04); }
+    .col-numeric { color: var(--accent) !important; }
+    .col-date   { color: var(--accent2) !important; }
 
     /* ── KPI ROW ── */
     .kpi-grid {
@@ -181,134 +241,98 @@
       gap: 1rem;
     }
     .kpi-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.1rem 1.3rem;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1.1rem 1.3rem;
       position: relative; overflow: hidden;
     }
     .kpi-card::after {
-      content: '';
-      position: absolute; bottom: 0; left: 0; right: 0;
-      height: 2px;
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
     }
     .kpi-card.green::after { background: var(--green); }
     .kpi-card.amber::after { background: var(--amber); }
-    .kpi-card.red::after { background: var(--red); }
-    .kpi-card.blue::after { background: var(--accent2); }
+    .kpi-card.red::after   { background: var(--red); }
+    .kpi-card.blue::after  { background: var(--accent2); }
     .kpi-label {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.62rem; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.1em;
-      margin-bottom: 0.4rem;
+      font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.4rem;
     }
     .kpi-value {
       font-size: 1.6rem; font-weight: 300;
-      font-family: 'Playfair Display', serif;
-      line-height: 1;
+      font-family: 'Playfair Display', serif; line-height: 1;
     }
-    .kpi-sub {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem; margin-top: 0.3rem;
-    }
+    .kpi-sub { font-family: 'DM Mono', monospace; font-size: 0.7rem; margin-top: 0.3rem; }
     .kpi-sub.green { color: var(--green); }
     .kpi-sub.amber { color: var(--amber); }
-    .kpi-sub.red { color: var(--red); }
+    .kpi-sub.red   { color: var(--red); }
 
     /* ── CHART ── */
-    .chart-wrap {
-      position: relative; height: 340px;
-    }
+    .chart-wrap { position: relative; height: 360px; }
     #trendChart { width: 100% !important; height: 100% !important; }
 
-    /* ── FORECAST TABLE ── */
-    .scenario-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.75rem; margin-top: 0.75rem;
+    /* ── SCENARIO GRID (3 periods × 3 scenarios) ── */
+    .scenario-header {
+      display: grid; grid-template-columns: 1.2fr repeat(3, 1fr);
+      gap: 0.5rem; margin-bottom: 0.4rem; padding: 0 0.25rem;
     }
-    .scenario-item {
+    .scenario-header-cell {
+      font-family: 'DM Mono', monospace; font-size: 0.62rem;
+      color: var(--muted); text-align: center;
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .scenario-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+    .scenario-row { display: grid; grid-template-columns: 1.2fr repeat(3, 1fr); gap: 0.5rem; }
+    .scenario-label-cell {
+      display: flex; align-items: center;
+      font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--muted);
+      border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.8rem;
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem;
-      text-align: center;
     }
-    .scenario-label {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.62rem; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.1em;
-      margin-bottom: 0.4rem;
+    .scenario-value-cell {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.6rem; text-align: center;
     }
-    .scenario-value {
-      font-size: 1.3rem;
-      font-family: 'Playfair Display', serif;
+    .scenario-value-cell .val {
+      font-family: 'Playfair Display', serif; font-size: 1.05rem; line-height: 1;
     }
-    .scenario-item.opt .scenario-value { color: var(--green); }
-    .scenario-item.base .scenario-value { color: var(--accent); }
-    .scenario-item.pess .scenario-value { color: var(--red); }
+    .scenario-value-cell .delta {
+      font-family: 'DM Mono', monospace; font-size: 0.6rem;
+      color: var(--muted); margin-top: 0.25rem;
+    }
+    .scenario-row.opt .val { color: var(--green); }
+    .scenario-row.base .val { color: var(--accent); }
+    .scenario-row.pess .val { color: var(--red); }
 
     /* ── LOG ── */
     #logOutput {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--muted);
-      line-height: 1.7;
-      white-space: pre-wrap;
+      font-family: 'DM Mono', monospace; font-size: 0.75rem;
+      color: var(--muted); line-height: 1.7; white-space: pre-wrap;
     }
-    #logOutput .log-ok { color: var(--green); }
+    #logOutput .log-ok   { color: var(--green); }
     #logOutput .log-warn { color: var(--amber); }
     #logOutput .log-info { color: var(--accent2); }
 
-    /* ── HIDDEN ── */
+    /* ── HIDDEN / UTILITY ── */
     .hidden { display: none !important; }
-
-    /* ── TOAST ── */
-    #toast {
-      position: fixed; bottom: 2rem; right: 2rem; z-index: 999;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.8rem 1.4rem;
-      font-size: 0.85rem;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      transform: translateY(20px); opacity: 0;
-      transition: all 0.3s;
-      pointer-events: none;
-    }
-    #toast.show { transform: translateY(0); opacity: 1; }
-    #toast.err { border-color: var(--red); color: var(--red); }
-
-    /* ── DIVIDER ── */
     .section-divider {
       display: flex; align-items: center; gap: 1rem;
-      color: var(--muted);
-      font-family: 'DM Mono', monospace;
+      color: var(--muted); font-family: 'DM Mono', monospace;
       font-size: 0.68rem; letter-spacing: 0.1em;
     }
     .section-divider::before, .section-divider::after {
       content: ''; flex: 1; height: 1px; background: var(--border);
     }
 
-    /* ── PRINT ── */
-    @media print {
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      header, main, #toast { display: none !important; }
-      #printReport { display: block !important; }
-      body { background: #fff !important; margin: 0; padding: 0; }
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 2rem; right: 2rem; z-index: 999;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.8rem 1.4rem; font-size: 0.85rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transform: translateY(20px); opacity: 0;
+      transition: all 0.3s; pointer-events: none;
     }
-    #printReport {
-      display: none;
-      font-family: 'DM Sans', sans-serif;
-    }
-
-    /* ── RESPONSIVE ── */
-    @media (max-width: 768px) {
-      header { padding: 1rem 1.2rem; }
-      main { padding: 1rem 1rem 3rem; }
-      .controls-grid { grid-template-columns: 1fr; }
-      .scenario-grid { grid-template-columns: 1fr; }
-    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.err  { border-color: var(--red); color: var(--red); }
 
     /* ── ANIMATIONS ── */
     @keyframes fadeSlide {
@@ -319,6 +343,34 @@
     .delay-1 { animation-delay: 0.08s; }
     .delay-2 { animation-delay: 0.16s; }
     .delay-3 { animation-delay: 0.24s; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      header { padding: 1rem 1.2rem; flex-wrap: wrap; gap: 0.5rem; }
+      main { padding: 1rem 1rem 3rem; }
+      .controls-grid { grid-template-columns: 1fr; }
+      .scenario-header, .scenario-row { grid-template-columns: 1fr 1fr 1fr; }
+      .scenario-label-cell { display: none; }
+      .scenario-header-cell:first-child { display: none; }
+    }
+
+    /* ══════════════════════════════════════════════
+       PRINT / PDF STYLES
+       We re-render a white-theme chart into #pdfChartCanvas,
+       then embed it. The dark UI is hidden entirely.
+       ══════════════════════════════════════════════ */
+    @media print {
+      *, *::before, *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      header, main, #toast { display: none !important; }
+      #printReport { display: block !important; }
+      body { background: #fff !important; }
+      @page { margin: 15mm 12mm; }
+    }
+    #printReport { display: none; }
+    #pdfChartCanvas { display: none; }
   </style>
 </head>
 <body>
@@ -330,7 +382,10 @@
     <span class="logo-badge">Analytics</span>
   </div>
   <div class="header-right">
-    Executive Forecasting &amp; Decision Support &nbsp;|&nbsp; <span id="clock"></span>
+    <button class="btn-sample" onclick="loadSampleData()" title="Load built-in demo dataset">
+      ⚡ Load Sample Data
+    </button>
+    Executive Forecasting &nbsp;|&nbsp; <span id="clock"></span>
   </div>
 </header>
 
@@ -354,9 +409,45 @@
           <option value="">— Select Metric —</option>
         </select>
       </div>
-      <div style="display:flex; gap:0.5rem;">
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
         <button class="btn btn-primary" id="analyzeBtn" disabled>▶ Analyze</button>
         <button class="btn btn-secondary" id="pdfBtn" disabled>⬇ Export PDF</button>
+        <button class="btn btn-ghost" id="csvExportBtn" disabled>⬇ CSV</button>
+      </div>
+    </div>
+    <!-- ADVANCED SETTINGS ROW -->
+    <div class="controls-row2">
+      <div>
+        <span class="label-sm">EMA Smoothing (α)</span>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <input type="range" id="alphaRange" min="0.05" max="0.6" step="0.05" value="0.3" style="width:100px">
+          <span id="alphaVal" style="font-family:'DM Mono',monospace; font-size:0.75rem; color:var(--accent);">0.30</span>
+        </div>
+      </div>
+      <div>
+        <span class="label-sm">Forecast Periods</span>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <input type="range" id="horizonRange" min="1" max="8" step="1" value="3" style="width:100px">
+          <span id="horizonVal" style="font-family:'DM Mono',monospace; font-size:0.75rem; color:var(--accent);">3</span>
+        </div>
+      </div>
+      <div id="dateColWrap" class="hidden">
+        <span class="label-sm">Date / Label Column</span>
+        <div class="select-wrap">
+          <select id="dateSelect" style="min-width:130px;">
+            <option value="">— None —</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <!-- DATA PREVIEW -->
+    <div id="previewWrap" class="hidden">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; margin-bottom:0.3rem;">
+        <span style="font-family:'DM Mono',monospace; font-size:0.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em;">Data Preview — first 6 rows</span>
+        <span id="previewStats" style="font-family:'DM Mono',monospace; font-size:0.65rem; color:var(--muted);"></span>
+      </div>
+      <div class="preview-table-wrap">
+        <table class="preview-table" id="previewTable"></table>
       </div>
     </div>
   </div>
@@ -375,10 +466,16 @@
     </div>
   </div>
 
-  <!-- SCENARIO SECTION -->
+  <!-- SCENARIO SECTION (full 3×3 grid, all periods visible) -->
   <div id="scenarioSection" class="hidden animate-in delay-3">
-    <div class="section-divider">Scenario Analysis — 3-Period Outlook</div>
-    <div class="scenario-grid" id="scenarioGrid"></div>
+    <div class="section-divider" id="scenarioDivider">Scenario Analysis</div>
+    <div style="margin-top:0.75rem;">
+      <div class="scenario-header" id="scenarioHeader">
+        <div class="scenario-header-cell"></div>
+        <!-- Period labels injected by JS -->
+      </div>
+      <div class="scenario-rows" id="scenarioRows"></div>
+    </div>
   </div>
 
   <!-- LOG CARD -->
@@ -392,51 +489,123 @@
 <!-- TOAST -->
 <div id="toast"></div>
 
-<!-- PRINT REPORT -->
+<!-- HIDDEN PDF CHART CANVAS (white background, rendered at print time) -->
+<canvas id="pdfChartCanvas"></canvas>
+
+<!-- PRINT REPORT (populated before window.print()) -->
 <div id="printReport"></div>
 
 <script>
-// ── CLOCK ──
+// ══════════════════════════════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════════════════════════════
 function tick() {
-  const now = new Date();
   document.getElementById('clock').textContent =
-    now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
 }
 tick(); setInterval(tick, 1000);
 
-// ── STATE ──
-let rows = [], headers = [], numericCols = [], metric = null, chartObj = null, lastScenario = null;
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+let rows = [], headers = [], numericCols = [], dateCols = [];
+let metric = null, dateCol = null;
+let chartObj = null, lastAnalysis = null;
+let alpha = 0.3, horizon = 3;
 
-// ── ELEMENTS ──
-const csvFile       = document.getElementById('csvFile');
-const analyzeBtn    = document.getElementById('analyzeBtn');
-const pdfBtn        = document.getElementById('pdfBtn');
-const metricSelect  = document.getElementById('metricSelect');
-const uploadZone    = document.getElementById('uploadZone');
-const fileName      = document.getElementById('fileName');
-const kpiSection    = document.getElementById('kpiSection');
-const chartSection  = document.getElementById('chartSection');
-const scenarioSection = document.getElementById('scenarioSection');
-const logSection    = document.getElementById('logSection');
-const logOutput     = document.getElementById('logOutput');
-const kpiGrid       = document.getElementById('kpiGrid');
-const scenarioGrid  = document.getElementById('scenarioGrid');
+// ══════════════════════════════════════════════════════════════════
+// ELEMENTS
+// ══════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const csvFile      = $('csvFile');
+const analyzeBtn   = $('analyzeBtn');
+const pdfBtn       = $('pdfBtn');
+const csvExportBtn = $('csvExportBtn');
+const metricSelect = $('metricSelect');
+const dateSelect   = $('dateSelect');
+const uploadZone   = $('uploadZone');
+const fileName     = $('fileName');
+const alphaRange   = $('alphaRange');
+const horizonRange = $('horizonRange');
+const alphaVal     = $('alphaVal');
+const horizonVal   = $('horizonVal');
 
-// ── DRAG & DROP ──
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+// ══════════════════════════════════════════════════════════════════
+// CONTROLS
+// ══════════════════════════════════════════════════════════════════
+alphaRange.addEventListener('input', () => {
+  alpha = +alphaRange.value;
+  alphaVal.textContent = alpha.toFixed(2);
+  if (metric) analyze();
+});
+horizonRange.addEventListener('input', () => {
+  horizon = +horizonRange.value;
+  horizonVal.textContent = horizon;
+  if (metric) analyze();
+});
+metricSelect.addEventListener('change', () => {
+  metric = metricSelect.value;
+  if (metric) analyze();
+});
+dateSelect.addEventListener('change', () => {
+  dateCol = dateSelect.value || null;
+  if (metric) analyze();
+});
+analyzeBtn.addEventListener('click', () => analyze());
+pdfBtn.addEventListener('click', () => exportPDF());
+csvExportBtn.addEventListener('click', () => exportForecastCSV());
+
+// ══════════════════════════════════════════════════════════════════
+// DRAG & DROP
+// ══════════════════════════════════════════════════════════════════
+uploadZone.addEventListener('dragover', e => {
+  e.preventDefault(); uploadZone.classList.add('dragover');
+});
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
 uploadZone.addEventListener('drop', e => {
   e.preventDefault(); uploadZone.classList.remove('dragover');
   const f = e.dataTransfer.files[0];
-  if (f) { readFile(f); csvFile.files; }
+  if (f) readFile(f);
 });
-
 csvFile.addEventListener('change', () => { if (csvFile.files[0]) readFile(csvFile.files[0]); });
-metricSelect.addEventListener('change', () => { metric = metricSelect.value; if (metric) analyze(); });
-analyzeBtn.addEventListener('click', () => analyze());
-pdfBtn.addEventListener('click', () => exportPDF());
 
-// ── FILE READ ──
+// ══════════════════════════════════════════════════════════════════
+// SAMPLE DATA — FIX: users can immediately test without a file
+// ══════════════════════════════════════════════════════════════════
+function loadSampleData() {
+  const csv = `date,revenue,units_sold,avg_order_value,customer_count
+2023-01,142500,1420,100.35,1050
+2023-02,138900,1380,100.65,1030
+2023-03,151200,1490,101.48,1120
+2023-04,163400,1600,102.13,1200
+2023-05,171000,1660,103.01,1250
+2023-06,168700,1630,103.50,1230
+2023-07,175300,1690,103.73,1270
+2023-08,180100,1730,104.10,1310
+2023-09,188400,1800,104.67,1360
+2023-10,195700,1860,105.22,1400
+2023-11,214300,2020,106.09,1540
+2023-12,231800,2180,106.33,1680
+2024-01,198400,1870,106.10,1430
+2024-02,195200,1840,106.09,1420
+2024-03,210500,1970,106.85,1510
+2024-04,221800,2060,107.67,1590
+2024-05,229300,2120,108.16,1640
+2024-06,234700,2160,108.66,1670
+2024-07,241100,2210,109.09,1710
+2024-08,249800,2280,109.56,1760
+2024-09,258400,2350,109.96,1810
+2024-10,267900,2430,110.25,1870
+2024-11,291200,2640,110.30,2050
+2024-12,318500,2880,110.59,2240`;
+  fileName.textContent = 'sample_business_data.csv';
+  parse(csv);
+  toast('✓ Sample dataset loaded — 24 months of business data');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FILE READ
+// ══════════════════════════════════════════════════════════════════
 function readFile(file) {
   fileName.textContent = file.name;
   const r = new FileReader();
@@ -444,391 +613,536 @@ function readFile(file) {
   r.readAsText(file);
 }
 
+// ══════════════════════════════════════════════════════════════════
+// PARSE — FIX: handles quoted CSV fields correctly
+// ══════════════════════════════════════════════════════════════════
+function parseCSVLine(line, delim) {
+  // Handles "field,with,commas" and "field with ""quotes"""
+  const fields = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === delim && !inQ) {
+      fields.push(cur.trim()); cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  fields.push(cur.trim());
+  return fields;
+}
+
+function isDateLike(val) {
+  if (typeof val !== 'string') return false;
+  return /^\d{4}[-/]\d{1,2}([-/]\d{1,2})?$/.test(val) ||
+         /^Q[1-4]\s*\d{4}$/i.test(val) ||
+         /^\d{1,2}[-/]\d{4}$/.test(val) ||
+         /^\d{4}$/.test(val);
+}
+
 function parse(text) {
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  const d = [',', ';', '\t', '|'].find(x => lines[0].split(x).length > 1) || ',';
-  headers = lines[0].split(d).map(h => h.toLowerCase().replace(/\W/g,'_'));
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const delim = [',', ';', '\t', '|'].find(x => {
+    const parts = parseCSVLine(lines[0], x);
+    return parts.length > 1;
+  }) || ',';
+
+  headers = parseCSVLine(lines[0], delim).map(h =>
+    h.replace(/^["']|["']$/g,'').toLowerCase().replace(/\W+/g,'_')
+  );
+
   rows = lines.slice(1).map(l => {
-    const p = l.split(d), o = {};
-    headers.forEach((h,i) => o[h] = isNaN(+p[i]) ? p[i] : +p[i]);
+    const p = parseCSVLine(l, delim);
+    const o = {};
+    headers.forEach((h, i) => {
+      const raw = (p[i] || '').replace(/^["']|["']$/g,'').trim();
+      o[h] = (!isNaN(+raw) && raw !== '') ? +raw : raw;
+    });
     return o;
-  });
+  }).filter(r => headers.some(h => typeof r[h] === 'number'));
+
   numericCols = headers.filter(h => rows.some(r => typeof r[h] === 'number'));
+  // FIX: detect date/label columns for X-axis
+  dateCols = headers.filter(h =>
+    !numericCols.includes(h) || rows.slice(0,5).some(r => isDateLike(String(r[h])))
+  );
+
+  // Populate metric selector
   metricSelect.innerHTML = '<option value="">— Select Metric —</option>' +
     numericCols.map(c => `<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
+
+  // Populate date/label selector
+  const dcWrap = $('dateColWrap');
+  if (dateCols.length) {
+    dcWrap.classList.remove('hidden');
+    dateSelect.innerHTML = '<option value="">— None —</option>' +
+      dateCols.map(c => `<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
+    // Auto-select if obvious
+    const auto = dateCols.find(c => /date|period|month|year|week|quarter/i.test(c));
+    if (auto) { dateSelect.value = auto; dateCol = auto; }
+  } else {
+    dcWrap.classList.add('hidden'); dateCol = null;
+  }
+
+  // Build data preview table
+  buildPreview();
+
   metric = numericCols[0] || null;
   if (metric) { metricSelect.value = metric; analyze(); }
   analyzeBtn.disabled = false;
-  toast(`✓ Loaded ${rows.length} rows, ${numericCols.length} numeric columns`);
+
+  $('previewStats').textContent = `${rows.length} rows · ${numericCols.length} numeric · ${dateCols.length} date`;
+  $('previewWrap').classList.remove('hidden');
 }
 
-// ── ANALYZE ──
+function buildPreview() {
+  const t = $('previewTable');
+  const show = rows.slice(0, 6);
+  t.innerHTML =
+    `<thead><tr>${headers.map(h => {
+      const cls = numericCols.includes(h) ? 'col-numeric' :
+                  dateCols.includes(h) ? 'col-date' : '';
+      return `<th class="${cls}">${h.replace(/_/g,' ')}</th>`;
+    }).join('')}</tr></thead>` +
+    `<tbody>${show.map(r =>
+      `<tr>${headers.map(h => {
+        const cls = numericCols.includes(h) ? 'col-numeric' :
+                    dateCols.includes(h) ? 'col-date' : '';
+        return `<td class="${cls}">${r[h] !== undefined ? r[h] : ''}</td>`;
+      }).join('')}</tr>`
+    ).join('')}</tbody>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ANALYZE
+// ══════════════════════════════════════════════════════════════════
 function analyze() {
   if (!metric) return;
   const s = rows.map(r => r[metric]).filter(v => typeof v === 'number');
-  if (s.length < 4) { toast('Need at least 4 data points', true); return; }
+  if (s.length < 4) { toast('Need at least 4 numeric data points', true); return; }
 
-  const avg = mean(s);
-  const vol = std(s) / avg;
-  const smooth = ema(s, 0.3);
-  const slope = (smooth[smooth.length - 1] - smooth[0]) / (smooth.length - 1); // ✅ FIXED: correct rise-over-run
-  // ✅ FIXED: clamp confidence between 10–95% to prevent negative or unrealistic scores
-  const rawConf = 60 + Math.min(30, s.length) - vol * 50;
+  const labels = dateCol
+    ? rows.map(r => String(r[dateCol]))
+    : s.map((_, i) => `P${i + 1}`);
+
+  // MATH
+  const avg  = mean(s);
+  const sigma = std(s);
+  const vol  = sigma / Math.abs(avg);
+  const smooth = ema(s, alpha);
+
+  // FIX: Use RECENT tail (last ~25%, min 3 pts) for slope, not global first→last.
+  // This prevents old growth regimes from distorting near-term forecasts.
+  const tailLen = Math.max(3, Math.round(smooth.length * 0.25));
+  const tail = smooth.slice(-tailLen);
+  const slope = (tail[tail.length - 1] - tail[0]) / (tail.length - 1);
+
+  // FIX: R² of EMA fit to actual data — real goodness-of-fit metric
+  const ssTot = s.reduce((acc, v) => acc + (v - avg) ** 2, 0);
+  const ssRes = s.reduce((acc, v, i) => acc + (v - smooth[i]) ** 2, 0);
+  const r2 = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
+
+  // FIX: Confidence now based on R² + sample size penalty (not arbitrary formula)
+  const sampleFactor = Math.min(1, Math.log(s.length + 1) / Math.log(30));
+  const rawConf = r2 * 70 + sampleFactor * 25;
   const conf = Math.round(Math.max(10, Math.min(95, rawConf)));
-  const badge = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
+  const badge = conf > 72 ? 'green' : conf > 50 ? 'amber' : 'red';
 
   const lastActual = s[s.length - 1];
-  const base = forecast(smooth[smooth.length - 1], slope, 3);
-  const sigma = std(s);
+  const lastEma    = smooth[smooth.length - 1];
+  const base = forecast(lastEma, slope, horizon);
   const opt  = base.map(v => v + sigma);
   const pess = base.map(v => v - sigma);
 
-  // Trend direction
-  const trendDir = slope > 0.001 ? '↑ Upward' : slope < -0.001 ? '↓ Downward' : '→ Flat';
-  const trendColor = slope > 0.001 ? 'var(--green)' : slope < -0.001 ? 'var(--red)' : 'var(--amber)';
+  const trendDir = slope >  0.001 * avg ? '↑ Upward'
+                 : slope < -0.001 * avg ? '↓ Downward' : '→ Flat';
+  const trendColor = slope > 0.001 * avg ? 'var(--green)'
+                   : slope < -0.001 * avg ? 'var(--red)' : 'var(--amber)';
+  const pctChange = lastActual !== 0
+    ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
+  const pctSign = parseFloat(pctChange) >= 0 ? '+' : '';
 
-  // % change: last actual → base forecast next period
-  const pctChange = lastActual !== 0 ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
-
-  lastScenario = { base, opt, pess, metric, conf, avg, vol, s, sigma, slope };
+  lastAnalysis = { metric, s, smooth, labels, base, opt, pess, avg, sigma, vol,
+                   slope, conf, badge, r2, trendDir, pctChange, pctSign };
 
   // ── KPIs ──
-  kpiGrid.innerHTML = `
+  $('kpiGrid').innerHTML = `
     <div class="kpi-card blue">
       <div class="kpi-label">Metric</div>
-      <div class="kpi-value" style="font-size:1.1rem; padding-top:0.3rem;">${metric.replace(/_/g,' ')}</div>
+      <div class="kpi-value" style="font-size:1.05rem; padding-top:0.3rem;">${metric.replace(/_/g,' ')}</div>
       <div class="kpi-sub" style="color:var(--muted)">${s.length} data points</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Average</div>
-      <div class="kpi-value">${avg.toFixed(2)}</div>
-      <div class="kpi-sub" style="color:var(--muted)">Historical mean</div>
+      <div class="kpi-value">${fmtNum(avg)}</div>
+      <div class="kpi-sub" style="color:var(--muted)">σ = ${fmtNum(sigma)}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Trend Direction</div>
-      <div class="kpi-value" style="font-size:1.2rem; padding-top:0.2rem; color:${trendColor}">${trendDir}</div>
-      <div class="kpi-sub" style="color:var(--muted)">Next period: ${pctChange}%</div>
+      <div class="kpi-value" style="font-size:1.15rem; padding-top:0.2rem; color:${trendColor}">${trendDir}</div>
+      <div class="kpi-sub" style="color:var(--muted)">Next period: ${pctSign}${pctChange}%</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Volatility</div>
       <div class="kpi-value">${(vol*100).toFixed(1)}%</div>
       <div class="kpi-sub" style="color:var(--muted)">Coeff. of variation</div>
     </div>
+    <div class="kpi-card">
+      <div class="kpi-label">R² Fit</div>
+      <div class="kpi-value">${r2.toFixed(3)}</div>
+      <div class="kpi-sub" style="color:var(--muted)">EMA goodness-of-fit</div>
+    </div>
     <div class="kpi-card ${badge}">
       <div class="kpi-label">Confidence</div>
       <div class="kpi-value">${conf}%</div>
-      <div class="kpi-sub ${badge}">${badge === 'green' ? '● High confidence' : badge === 'amber' ? '● Moderate confidence' : '● Low confidence'}</div>
+      <div class="kpi-sub ${badge}">${badge==='green'?'● High':badge==='amber'?'● Moderate':'● Low'} confidence</div>
     </div>
   `;
 
-  // ── SCENARIOS ──
-  scenarioGrid.innerHTML = `
-    <div class="scenario-item opt">
-      <div class="scenario-label">▲ Optimistic</div>
-      <div class="scenario-value">${opt[0].toFixed(2)}</div>
-      <div class="kpi-sub" style="color:var(--muted); margin-top:0.3rem">Next period upper</div>
-    </div>
-    <div class="scenario-item base">
-      <div class="scenario-label">◆ Base</div>
-      <div class="scenario-value">${base[0].toFixed(2)}</div>
-      <div class="kpi-sub" style="color:var(--muted); margin-top:0.3rem">EMA trend projection</div>
-    </div>
-    <div class="scenario-item pess">
-      <div class="scenario-label">▼ Pessimistic</div>
-      <div class="scenario-value">${pess[0].toFixed(2)}</div>
-      <div class="kpi-sub" style="color:var(--muted); margin-top:0.3rem">Next period lower</div>
-    </div>
-  `;
+  // ── FIX: Full 3-period scenario table visible in main UI ──
+  const fcstPeriodLabels = Array.from({length: horizon}, (_, i) => {
+    if (dateCol && labels.length >= s.length) return `F${i+1}`;
+    return `Period +${i+1}`;
+  });
+  $('scenarioDivider').textContent = `Scenario Analysis — ${horizon}-Period Outlook`;
+  $('scenarioHeader').innerHTML =
+    `<div class="scenario-header-cell"></div>` +
+    fcstPeriodLabels.map(l => `<div class="scenario-header-cell">${l}</div>`).join('');
+
+  const makeDelta = (v, ref) => {
+    const d = ((v - ref) / Math.abs(ref) * 100).toFixed(1);
+    return `${d >= 0 ? '+' : ''}${d}%`;
+  };
+
+  $('scenarioRows').innerHTML = [
+    { cls:'opt',  label:'▲ Optimistic', vals: opt },
+    { cls:'base', label:'◆ Base',       vals: base },
+    { cls:'pess', label:'▼ Pessimistic',vals: pess },
+  ].map(row =>
+    `<div class="scenario-row ${row.cls}">
+      <div class="scenario-label-cell">${row.label}</div>
+      ${row.vals.map((v, i) =>
+        `<div class="scenario-value-cell">
+          <div class="val">${fmtNum(v)}</div>
+          <div class="delta">${makeDelta(v, lastActual)}</div>
+        </div>`
+      ).join('')}
+    </div>`
+  ).join('');
 
   // ── LOG ──
   const ts = new Date().toLocaleTimeString();
-  logOutput.innerHTML =
-    `<span class="log-ok">[${ts}] ✓ Analysis complete</span>\n` +
+  $('logOutput').innerHTML =
+    `<span class="log-ok">[${ts}] ✓ Analysis complete · EMA α=${alpha} · horizon=${horizon}</span>\n` +
     `<span class="log-info">[INFO] Metric      : ${metric}</span>\n` +
-    `<span class="log-info">[INFO] Data points : ${s.length}</span>\n` +
+    `<span class="log-info">[INFO] Data points : ${s.length} (tail for slope: last ${tailLen})</span>\n` +
     `<span class="log-info">[INFO] Average     : ${avg.toFixed(4)}</span>\n` +
     `<span class="log-info">[INFO] Std Dev     : ${sigma.toFixed(4)}</span>\n` +
     `<span class="log-info">[INFO] Volatility  : ${(vol*100).toFixed(2)}%</span>\n` +
-    `<span class="log-info">[INFO] EMA Slope   : ${slope.toFixed(4)} (${trendDir})</span>\n` +
-    `<span class="log-info">[INFO] Δ Next per  : ${pctChange}%</span>\n` +
+    `<span class="log-info">[INFO] EMA Slope   : ${slope.toFixed(6)} (recent tail)</span>\n` +
+    `<span class="log-info">[INFO] R² fit      : ${r2.toFixed(4)}</span>\n` +
+    `<span class="log-info">[INFO] Δ Next per  : ${pctSign}${pctChange}%</span>\n` +
     `<span class="log-${badge}">[CONF] Score       : ${conf}% (${badge.toUpperCase()})</span>\n` +
-    `<span class="log-info">[FCST] Base[+1]   : ${base[0].toFixed(4)}</span>\n` +
-    `<span class="log-info">[FCST] Base[+2]   : ${base[1].toFixed(4)}</span>\n` +
-    `<span class="log-info">[FCST] Base[+3]   : ${base[2].toFixed(4)}</span>\n` +
+    base.map((v, i) =>
+      `<span class="log-info">[FCST] Base[+${i+1}]   : ${v.toFixed(4)}</span>`
+    ).join('\n') + '\n' +
     `<span class="log-ok">[FCST] Opt [+1]   : ${opt[0].toFixed(4)}</span>\n` +
     `<span class="log-warn">[FCST] Pess[+1]   : ${pess[0].toFixed(4)}</span>`;
 
-  // ── SHOW SECTIONS ──
-  [kpiSection, chartSection, scenarioSection, logSection].forEach(el => el.classList.remove('hidden'));
+  // Show sections
+  [$('kpiSection'), $('chartSection'), $('scenarioSection'), $('logSection')]
+    .forEach(el => el.classList.remove('hidden'));
   pdfBtn.disabled = false;
+  csvExportBtn.disabled = false;
 
-  renderChart(s, smooth, base, opt, pess);
+  renderChart(s, smooth, base, opt, pess, labels);
 }
 
-// ── CHART ──
-function renderChart(a, t, b, o, p) {
-  if (chartObj) chartObj.destroy();
-  const ctx = document.getElementById('trendChart').getContext('2d');
-  const labels = [...a.map((_,i) => `P${i+1}`), ...b.map((_,i) => `F${i+1}`)];
+// ══════════════════════════════════════════════════════════════════
+// CHART
+// ══════════════════════════════════════════════════════════════════
+function buildChartConfig(s, t, b, o, p, labels, theme='dark') {
+  const isDark = theme === 'dark';
+  const gridColor  = isDark ? 'rgba(30,34,48,0.8)' : 'rgba(200,200,210,0.5)';
+  const tickColor  = isDark ? '#6b7280' : '#555';
+  const ttBg       = isDark ? '#11131c' : '#fff';
+  const ttBorder   = isDark ? '#1e2230' : '#ccc';
+  const ttTitle    = isDark ? '#e8e9ef' : '#111';
+  const ttBody     = isDark ? '#6b7280' : '#444';
+  const legendColor = isDark ? '#6b7280' : '#555';
 
-  chartObj = new Chart(ctx, {
+  const fullLabels = [...labels.slice(0, s.length), ...b.map((_, i) => `F${i+1}`)];
+
+  return {
     type: 'line',
     data: {
-      labels,
+      labels: fullLabels,
       datasets: [
         {
           label: 'Actual',
-          data: a,
+          data: s,
           borderColor: '#c9a84c',
           backgroundColor: 'rgba(201,168,76,0.08)',
-          borderWidth: 2,
-          tension: 0.3,
-          pointRadius: 3,
-          pointBackgroundColor: '#c9a84c',
-          fill: true,
+          borderWidth: 2, tension: 0.3,
+          pointRadius: 3, pointBackgroundColor: '#c9a84c', fill: true,
         },
         {
-          label: 'EMA Trend',
+          label: 'EMA',
           data: t,
-          borderColor: '#4c8ec9',
-          borderWidth: 1.5,
-          borderDash: [4,4],
-          tension: 0.4,
-          pointRadius: 0,
-          fill: false,
+          borderColor: '#4c8ec9', borderWidth: 1.5,
+          borderDash: [4,4], tension: 0.4,
+          pointRadius: 0, fill: false,
         },
         {
-          label: 'Forecast',
-          data: [...Array(a.length).fill(null), ...b],
-          borderColor: '#c9a84c',
-          borderWidth: 2,
-          borderDash: [6,6],
-          pointRadius: 4,
-          pointBackgroundColor: '#c9a84c',
-          fill: false,
+          label: 'Base Forecast',
+          data: [...Array(s.length).fill(null), ...b],
+          borderColor: '#c9a84c', borderWidth: 2, borderDash: [6,6],
+          pointRadius: 4, pointBackgroundColor: '#c9a84c', fill: false,
         },
         {
-          label: 'Upper',
-          data: [...Array(a.length).fill(null), ...o],
-          borderColor: '#22c55e',
-          borderWidth: 0,
+          label: 'Upper (Opt.)',
+          data: [...Array(s.length).fill(null), ...o],
+          borderColor: '#22c55e', borderWidth: 0,
           backgroundColor: 'rgba(34,197,94,0.12)',
-          fill: '+1',
-          pointRadius: 0,
+          fill: '+1', pointRadius: 0,
         },
         {
-          label: 'Lower',
-          data: [...Array(a.length).fill(null), ...p],
-          borderColor: '#ef4444',
-          borderWidth: 0,
-          fill: false,
-          pointRadius: 0,
+          label: 'Lower (Pess.)',
+          data: [...Array(s.length).fill(null), ...p],
+          borderColor: '#ef4444', borderWidth: 0,
+          fill: false, pointRadius: 0,
         },
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect: false },
       plugins: {
-        legend: {
-          labels: {
-            color: '#6b7280',
-            font: { family: 'DM Mono', size: 10 },
-            boxWidth: 20,
-          }
-        },
+        legend: { labels: { color: legendColor, font: { family:'DM Mono', size:10 }, boxWidth:20 } },
         tooltip: {
-          backgroundColor: '#11131c',
-          borderColor: '#1e2230',
-          borderWidth: 1,
-          titleColor: '#e8e9ef',
-          bodyColor: '#6b7280',
-          titleFont: { family: 'DM Mono', size: 11 },
-          bodyFont: { family: 'DM Mono', size: 10 },
+          backgroundColor: ttBg, borderColor: ttBorder, borderWidth: 1,
+          titleColor: ttTitle, bodyColor: ttBody,
+          titleFont: { family:'DM Mono', size:11 }, bodyFont: { family:'DM Mono', size:10 },
         }
       },
       scales: {
         x: {
-          grid: { color: 'rgba(30,34,48,0.8)' },
-          ticks: { color: '#6b7280', font: { family: 'DM Mono', size: 9 }, maxTicksLimit: 12 },
+          grid: { color: gridColor },
+          ticks: { color: tickColor, font:{family:'DM Mono',size:9}, maxTicksLimit:14 },
         },
         y: {
-          grid: { color: 'rgba(30,34,48,0.8)' },
-          ticks: { color: '#6b7280', font: { family: 'DM Mono', size: 9 } },
+          grid: { color: gridColor },
+          ticks: { color: tickColor, font:{family:'DM Mono',size:9} },
         }
       }
     }
+  };
+}
+
+function renderChart(s, t, b, o, p, labels) {
+  if (chartObj) { chartObj.destroy(); chartObj = null; }
+  const ctx = $('trendChart').getContext('2d');
+  chartObj = new Chart(ctx, buildChartConfig(s, t, b, o, p, labels, 'dark'));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EXPORT FORECAST CSV — NEW FEATURE
+// ══════════════════════════════════════════════════════════════════
+function exportForecastCSV() {
+  if (!lastAnalysis) return;
+  const { metric, base, opt, pess, s } = lastAnalysis;
+  const lines = ['period,scenario,value'];
+  base.forEach((v, i) => {
+    lines.push(`+${i+1},optimistic,${opt[i].toFixed(4)}`);
+    lines.push(`+${i+1},base,${v.toFixed(4)}`);
+    lines.push(`+${i+1},pessimistic,${pess[i].toFixed(4)}`);
   });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${metric}_forecast.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('✓ Forecast CSV downloaded');
 }
 
-// ── EXPORT PDF ──
+// ══════════════════════════════════════════════════════════════════
+// EXPORT PDF — FIX: render chart with LIGHT theme for clean print
+// ══════════════════════════════════════════════════════════════════
 function exportPDF() {
-  if (!lastScenario) return;
-  const { metric, conf, avg, vol, base, opt, pess, sigma, slope, s } = lastScenario;
-  const badge      = conf > 75 ? 'green' : conf > 55 ? 'amber' : 'red';
-  const badgeHex   = conf > 75 ? '#15803d' : conf > 55 ? '#b45309' : '#b91c1c';
-  const badgeBg    = conf > 75 ? '#dcfce7' : conf > 55 ? '#fef3c7' : '#fee2e2';
-  const badgeLabel = conf > 75 ? 'HIGH CONFIDENCE' : conf > 55 ? 'MODERATE CONFIDENCE' : 'LOW CONFIDENCE';
-  const trendDir   = slope > 0.001 ? '↑ Upward' : slope < -0.001 ? '↓ Downward' : '→ Flat';
-  const trendHex   = slope > 0.001 ? '#15803d' : slope < -0.001 ? '#b91c1c' : '#b45309';
-  const lastActual = s[s.length - 1];
-  const pctChange  = lastActual !== 0 ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
-  const pctSign    = parseFloat(pctChange) >= 0 ? '+' : '';
+  if (!lastAnalysis) return;
+  const { metric, s, smooth, labels, base, opt, pess, avg, sigma, vol,
+          slope, conf, badge, r2, trendDir, pctChange, pctSign } = lastAnalysis;
 
-  // ── Capture chart with solid white background ──
-  let chartImg = '';
-  if (chartObj) {
-    // Temporarily hide tooltip by removing hover state
-    const origCanvas = document.getElementById('trendChart');
-    const tmp = document.createElement('canvas');
-    tmp.width  = origCanvas.width;
-    tmp.height = origCanvas.height;
-    const ctx2 = tmp.getContext('2d');
-    ctx2.fillStyle = '#ffffff';
-    ctx2.fillRect(0, 0, tmp.width, tmp.height);
-    ctx2.drawImage(origCanvas, 0, 0);
-    chartImg = tmp.toDataURL('image/png');
-  }
+  // Render a fresh light-theme chart into the hidden canvas
+  const pdfCanvas = $('pdfChartCanvas');
+  pdfCanvas.width  = 900;
+  pdfCanvas.height = 320;
+  pdfCanvas.style.display = 'none';
 
-  const rep = document.getElementById('printReport');
-  rep.innerHTML = `
-    <style>
-      @media print {
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      }
-      .pdf-root * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    </style>
-    <div class="pdf-root" style="font-family:Georgia,'Times New Roman',serif; background:#ffffff; color:#111111; margin:0; padding:0;">
+  let pdfChartObj = null;
+  try {
+    pdfChartObj = new Chart(pdfCanvas.getContext('2d'),
+      buildChartConfig(s, smooth, base, opt, pess, labels, 'light'));
+  } catch(e) {}
 
-      <!-- ══ HEADER ══ -->
-      <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#0d1117 !important; padding:28px 44px; display:flex; align-items:center; justify-content:space-between;">
-        <div>
-          <div style="font-size:2rem; font-weight:900; color:#ffffff !important; letter-spacing:-0.02em; line-height:1; font-family:Georgia,serif;">PARAGON</div>
-          <div style="font-size:0.65rem; color:#c9a84c !important; letter-spacing:0.22em; text-transform:uppercase; margin-top:5px; font-family:monospace;">Analytics &nbsp;·&nbsp; Executive Forecasting Report</div>
+  // Give chart one tick to render before capturing
+  setTimeout(() => {
+    let chartImg = '';
+    if (pdfChartObj) {
+      const tmp = document.createElement('canvas');
+      tmp.width = pdfCanvas.width; tmp.height = pdfCanvas.height;
+      const ctx2 = tmp.getContext('2d');
+      ctx2.fillStyle = '#ffffff';
+      ctx2.fillRect(0, 0, tmp.width, tmp.height);
+      ctx2.drawImage(pdfCanvas, 0, 0);
+      chartImg = tmp.toDataURL('image/png');
+      pdfChartObj.destroy();
+    }
+
+    const badgeHex   = conf > 72 ? '#15803d' : conf > 50 ? '#b45309' : '#b91c1c';
+    const badgeBg    = conf > 72 ? '#dcfce7' : conf > 50 ? '#fef3c7' : '#fee2e2';
+    const badgeLabel = conf > 72 ? 'HIGH CONFIDENCE' : conf > 50 ? 'MODERATE CONFIDENCE' : 'LOW CONFIDENCE';
+    const trendHex   = slope > 0 ? '#15803d' : slope < 0 ? '#b91c1c' : '#b45309';
+    const lastActual = s[s.length - 1];
+
+    $('printReport').innerHTML = `
+      <style>
+        @media print {
+          *, *::before, *::after {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      </style>
+      <div style="font-family:Georgia,'Times New Roman',serif; background:#fff; color:#111; margin:0; padding:0;">
+
+        <!-- HEADER -->
+        <div style="background:#0d1117; padding:26px 40px; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-size:1.9rem; font-weight:900; color:#fff; letter-spacing:-0.02em; font-family:Georgia,serif;">PARAGON</div>
+            <div style="font-size:0.6rem; color:#c9a84c; letter-spacing:0.22em; text-transform:uppercase; margin-top:4px; font-family:monospace;">Analytics · Executive Forecasting Report</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:0.6rem; color:#9ca3af; font-family:monospace; text-transform:uppercase; letter-spacing:0.06em;">Confidential</div>
+            <div style="font-size:0.68rem; color:#e5e7eb; font-family:monospace; margin-top:2px;">${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
+          </div>
         </div>
-        <div style="text-align:right;">
-          <div style="font-size:0.65rem; color:#9ca3af !important; font-family:monospace; letter-spacing:0.06em; text-transform:uppercase;">Confidential</div>
-          <div style="font-size:0.7rem; color:#e5e7eb !important; font-family:monospace; margin-top:3px;">${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
+        <div style="height:5px; background:linear-gradient(90deg,#c9a84c,#4c8ec9);"></div>
+
+        <div style="padding:32px 40px;">
+
+          <!-- SUBJECT -->
+          <div style="margin-bottom:22px; padding-bottom:12px; border-bottom:2px solid #111;">
+            <div style="font-size:0.58rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:5px;">Analysis Subject</div>
+            <div style="font-size:1.8rem; font-weight:900; color:#111; font-family:Georgia,serif;">${metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
+            <div style="font-size:0.72rem; color:#374151; margin-top:4px; font-family:monospace;">${s.length} historical data points · EMA α = ${alpha.toFixed(2)} · Horizon = ${horizon} periods</div>
+          </div>
+
+          <!-- KPI GRID -->
+          <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:22px;">
+            ${[
+              ['Average', fmtNum(avg), 'Historical mean', '#2563eb'],
+              ['Std Dev', fmtNum(sigma), 'Volatility band ±', '#7c3aed'],
+              ['Trend', trendDir, `Next: ${pctSign}${pctChange}%`, trendHex],
+              ['R² Fit', r2.toFixed(3), 'EMA goodness-of-fit', '#0891b2'],
+              ['Confidence', conf + '%', badgeLabel, badgeHex],
+            ].map(([label, value, sub, color]) => `
+              <div style="border:2px solid #e5e7eb; border-top:4px solid ${color}; border-radius:6px; padding:12px; background:#f8fafc;">
+                <div style="font-size:0.52rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:5px;">${label}</div>
+                <div style="font-size:1.1rem; font-weight:900; color:${color}; font-family:Georgia,serif; line-height:1;">${value}</div>
+                <div style="font-size:0.6rem; color:#64748b; margin-top:4px;">${sub}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- CHART -->
+          ${chartImg ? `
+          <div style="margin-bottom:22px;">
+            <div style="font-size:0.58rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:7px;">Trend &amp; Forecast Chart</div>
+            <div style="border:2px solid #e5e7eb; border-radius:6px; padding:12px; background:#fff;">
+              <img src="${chartImg}" style="width:100%; display:block;" />
+            </div>
+          </div>` : ''}
+
+          <!-- SCENARIO TABLE -->
+          <div style="margin-bottom:22px;">
+            <div style="font-size:0.58rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:7px;">${horizon}-Period Scenario Forecast</div>
+            <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+              <thead>
+                <tr style="background:#0d1117;">
+                  <th style="padding:10px 14px; text-align:left; color:#fff; font-family:monospace; font-size:0.65rem; letter-spacing:0.06em; text-transform:uppercase;">Scenario</th>
+                  ${Array.from({length:horizon},(_,i)=>`<th style="padding:10px 14px; text-align:center; color:#fff; font-family:monospace; font-size:0.65rem; text-transform:uppercase;">Period +${i+1}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${[
+                  {label:'▲ Optimistic', vals:opt, bg:'#f0fdf4', color:'#15803d', border:'#bbf7d0'},
+                  {label:'◆ Base',       vals:base, bg:'#fffbeb', color:'#92400e', border:'#fde68a'},
+                  {label:'▼ Pessimistic',vals:pess, bg:'#fef2f2', color:'#b91c1c', border:'#fecaca'},
+                ].map(row => `
+                  <tr style="background:${row.bg}; border-bottom:1px solid ${row.border};">
+                    <td style="padding:11px 14px; font-weight:800; color:${row.color}; font-size:0.85rem;">${row.label}</td>
+                    ${row.vals.map(v => `<td style="padding:11px 14px; text-align:center; font-weight:900; color:${row.color}; font-size:1rem; font-family:Georgia,serif;">${fmtNum(v)}</td>`).join('')}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- FOOTER -->
+          <div style="padding-top:12px; border-top:1px solid #d1d5db; display:flex; justify-content:space-between;">
+            <div style="font-size:0.6rem; color:#6b7280; font-family:monospace;">Paragon Analytics · Executive Forecasting · For internal use only</div>
+            <div style="font-size:0.6rem; color:#6b7280; font-family:monospace;">paragon.analytics · ${new Date().getFullYear()}</div>
+          </div>
+
         </div>
       </div>
-      <!-- Gold accent bar -->
-      <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; height:5px; background:linear-gradient(90deg,#c9a84c,#4c8ec9) !important;"></div>
-
-      <!-- ══ BODY ══ -->
-      <div style="padding:36px 44px;">
-
-        <!-- Metric Title -->
-        <div style="margin-bottom:24px; padding-bottom:14px; border-bottom:2px solid #111111;">
-          <div style="font-size:0.6rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:6px;">Analysis Subject</div>
-          <div style="font-size:1.9rem; font-weight:900; color:#111111; font-family:Georgia,serif; line-height:1.1;">${metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
-          <div style="font-size:0.75rem; color:#374151; margin-top:5px; font-family:monospace;">${s.length} historical data points &nbsp;·&nbsp; EMA smoothing α = 0.30</div>
-        </div>
-
-        <!-- ── KPI GRID ── -->
-        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:24px;">
-
-          <!-- Average -->
-          <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; border:2px solid #e5e7eb; border-top:4px solid #2563eb !important; border-radius:6px; padding:14px 14px 12px; background:#f8fafc !important;">
-            <div style="font-size:0.55rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">Average</div>
-            <div style="font-size:1.55rem; font-weight:900; color:#111111; font-family:Georgia,serif; line-height:1;">${avg.toFixed(2)}</div>
-            <div style="font-size:0.65rem; color:#64748b; margin-top:5px;">Historical mean</div>
-          </div>
-
-          <!-- Std Dev -->
-          <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; border:2px solid #e5e7eb; border-top:4px solid #7c3aed !important; border-radius:6px; padding:14px 14px 12px; background:#f8fafc !important;">
-            <div style="font-size:0.55rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">Std Deviation</div>
-            <div style="font-size:1.55rem; font-weight:900; color:#111111; font-family:Georgia,serif; line-height:1;">${sigma.toFixed(2)}</div>
-            <div style="font-size:0.65rem; color:#64748b; margin-top:5px;">Volatility band ±</div>
-          </div>
-
-          <!-- Trend -->
-          <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; border:2px solid #e5e7eb; border-top:4px solid ${trendHex} !important; border-radius:6px; padding:14px 14px 12px; background:#f8fafc !important;">
-            <div style="font-size:0.55rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">Trend</div>
-            <div style="font-size:1.2rem; font-weight:900; color:${trendHex} !important; font-family:Georgia,serif; line-height:1;">${trendDir}</div>
-            <div style="font-size:0.65rem; color:#64748b; margin-top:5px;">Next period: <strong style="color:${trendHex} !important;">${pctSign}${pctChange}%</strong></div>
-          </div>
-
-          <!-- Confidence -->
-          <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; border:2px solid #e5e7eb; border-top:4px solid ${badgeHex} !important; border-radius:6px; padding:14px 14px 12px; background:#f8fafc !important;">
-            <div style="font-size:0.55rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">Confidence</div>
-            <div style="font-size:1.55rem; font-weight:900; color:${badgeHex} !important; font-family:Georgia,serif; line-height:1;">${conf}%</div>
-            <div style="-webkit-print-color-adjust:exact; print-color-adjust:exact; display:inline-block; margin-top:5px; padding:2px 8px; border-radius:4px; background:${badgeBg} !important; color:${badgeHex} !important; font-size:0.58rem; font-weight:700; font-family:monospace; letter-spacing:0.06em;">${badgeLabel}</div>
-          </div>
-        </div>
-
-        <!-- ── CHART ── -->
-        ${chartImg ? `
-        <div style="margin-bottom:24px;">
-          <div style="font-size:0.6rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:8px;">Trend &amp; Forecast Chart</div>
-          <div style="border:2px solid #e5e7eb; border-radius:6px; padding:14px; background:#ffffff;">
-            <img src="${chartImg}" style="width:100%; display:block;" />
-          </div>
-        </div>` : ''}
-
-        <!-- ── SCENARIO TABLE ── -->
-        <div>
-          <div style="font-size:0.6rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:8px;">3-Period Scenario Forecast</div>
-          <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-            <thead>
-              <tr style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#0d1117 !important;">
-                <th style="padding:11px 14px; text-align:left; font-weight:700; color:#ffffff !important; font-family:monospace; font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase;">Scenario</th>
-                <th style="padding:11px 14px; text-align:center; font-weight:700; color:#ffffff !important; font-family:monospace; font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase;">Period +1</th>
-                <th style="padding:11px 14px; text-align:center; font-weight:700; color:#ffffff !important; font-family:monospace; font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase;">Period +2</th>
-                <th style="padding:11px 14px; text-align:center; font-weight:700; color:#ffffff !important; font-family:monospace; font-size:0.7rem; letter-spacing:0.06em; text-transform:uppercase;">Period +3</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#f0fdf4 !important; border-bottom:1px solid #bbf7d0;">
-                <td style="padding:12px 14px; font-weight:800; color:#15803d !important; font-size:0.88rem;">▲ Optimistic</td>
-                ${opt.map(v=>`<td style="padding:12px 14px; text-align:center; font-weight:900; color:#15803d !important; font-size:1.05rem; font-family:Georgia,serif;">${v.toFixed(2)}</td>`).join('')}
-              </tr>
-              <tr style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fffbeb !important; border-bottom:1px solid #fde68a;">
-                <td style="padding:12px 14px; font-weight:800; color:#92400e !important; font-size:0.88rem;">◆ Base</td>
-                ${base.map(v=>`<td style="padding:12px 14px; text-align:center; font-weight:900; color:#92400e !important; font-size:1.05rem; font-family:Georgia,serif;">${v.toFixed(2)}</td>`).join('')}
-              </tr>
-              <tr style="-webkit-print-color-adjust:exact; print-color-adjust:exact; background:#fef2f2 !important; border-bottom:1px solid #fecaca;">
-                <td style="padding:12px 14px; font-weight:800; color:#b91c1c !important; font-size:0.88rem;">▼ Pessimistic</td>
-                ${pess.map(v=>`<td style="padding:12px 14px; text-align:center; font-weight:900; color:#b91c1c !important; font-size:1.05rem; font-family:Georgia,serif;">${v.toFixed(2)}</td>`).join('')}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- ── FOOTER ── -->
-        <div style="margin-top:28px; padding-top:14px; border-top:1px solid #d1d5db; display:flex; justify-content:space-between; align-items:center;">
-          <div style="font-size:0.65rem; color:#6b7280; font-family:monospace;">This report was generated by Paragon Analytics. For internal use only.</div>
-          <div style="font-size:0.65rem; color:#6b7280; font-family:monospace;">paragon.analytics · ${new Date().getFullYear()}</div>
-        </div>
-
-      </div>
-    </div>
-  `;
-  window.print();
+    `;
+    window.print();
+  }, 80);
 }
 
-// ── TOAST ──
+// ══════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════
 function toast(msg, err=false) {
-  const t = document.getElementById('toast');
+  const t = $('toast');
   t.textContent = msg;
   t.className = err ? 'show err' : 'show';
-  setTimeout(() => { t.className = ''; }, 3000);
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.className = ''; }, 3200);
 }
 
-// ── MATH HELPERS ──
+// ══════════════════════════════════════════════════════════════════
+// MATH HELPERS
+// ══════════════════════════════════════════════════════════════════
 function mean(a) { return a.reduce((x,y) => x+y, 0) / a.length; }
-function std(a) { const m = mean(a); return Math.sqrt(mean(a.map(v => (v-m)**2))); }
-// ✅ FIXED: correct EMA — s*current + (1-s)*previous
-function ema(a, s) {
+function std(a) {
+  const m = mean(a);
+  return Math.sqrt(a.reduce((acc, v) => acc + (v-m)**2, 0) / a.length);
+}
+// FIX: correct EMA — α*current + (1-α)*previous
+function ema(a, alpha) {
   const o = [a[0]];
-  for (let i = 1; i < a.length; i++) o.push(s * a[i] + (1 - s) * o[i - 1]);
+  for (let i = 1; i < a.length; i++)
+    o.push(alpha * a[i] + (1 - alpha) * o[i-1]);
   return o;
 }
-// ✅ FIXED: additive linear forecast — last + slope * step (not multiplicative)
+// FIX: additive linear projection from last EMA value + step * slope
 function forecast(last, slope, n) {
-  return Array.from({length: n}, (_, i) => +(last + slope * (i + 1)).toFixed(2));
+  return Array.from({length: n}, (_, i) => +(last + slope * (i + 1)).toFixed(6));
+}
+// Smart number formatter
+function fmtNum(v) {
+  if (Math.abs(v) >= 1e6)  return (v/1e6).toFixed(2) + 'M';
+  if (Math.abs(v) >= 1e3)  return (v/1e3).toFixed(1) + 'K';
+  if (Math.abs(v) < 0.01 && v !== 0) return v.toExponential(2);
+  return v.toFixed(2);
 }
 </script>
-
 </body>
 </html>
