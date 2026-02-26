@@ -36,6 +36,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Paragon Analytics — Executive Forecasting</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -354,23 +355,8 @@
       .scenario-header-cell:first-child { display: none; }
     }
 
-    /* ══════════════════════════════════════════════
-       PRINT / PDF STYLES
-       We re-render a white-theme chart into #pdfChartCanvas,
-       then embed it. The dark UI is hidden entirely.
-       ══════════════════════════════════════════════ */
-    @media print {
-      *, *::before, *::after {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      header, main, #toast { display: none !important; }
-      #printReport { display: block !important; }
-      body { background: #fff !important; }
-      @page { margin: 15mm 12mm; }
-    }
-    #printReport { display: none; }
-    #pdfChartCanvas { display: none; }
+    /* ── HIDDEN CANVAS for PDF chart rendering ── */
+    #pdfChartCanvas { display: none; position: absolute; left: -9999px; }
   </style>
 </head>
 <body>
@@ -489,11 +475,8 @@
 <!-- TOAST -->
 <div id="toast"></div>
 
-<!-- HIDDEN PDF CHART CANVAS (white background, rendered at print time) -->
+<!-- HIDDEN PDF CHART CANVAS — jsPDF renders a light-theme chart here -->
 <canvas id="pdfChartCanvas"></canvas>
-
-<!-- PRINT REPORT (populated before window.print()) -->
-<div id="printReport"></div>
 
 <script>
 // ══════════════════════════════════════════════════════════════════
@@ -970,140 +953,279 @@ function exportForecastCSV() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// EXPORT PDF — FIX: render chart with LIGHT theme for clean print
+// EXPORT PDF — uses jsPDF directly; no window.print(), no CSS tricks
+// Builds and downloads a real .pdf file that works in every browser.
 // ══════════════════════════════════════════════════════════════════
-function exportPDF() {
+async function exportPDF() {
   if (!lastAnalysis) return;
-  const { metric, s, smooth, labels, base, opt, pess, avg, sigma, vol,
-          slope, conf, badge, r2, trendDir, pctChange, pctSign } = lastAnalysis;
+  if (!window.jspdf) { toast('PDF library not loaded yet — try again in a moment', true); return; }
 
-  // Render a fresh light-theme chart into the hidden canvas
-  const pdfCanvas = $('pdfChartCanvas');
-  pdfCanvas.width  = 900;
-  pdfCanvas.height = 320;
-  pdfCanvas.style.display = 'none';
+  pdfBtn.disabled = true;
+  pdfBtn.textContent = '⏳ Building PDF…';
 
-  let pdfChartObj = null;
+  const { metric, s, smooth, labels, base, opt, pess, avg, sigma,
+          slope, conf, r2, trendDir, pctChange, pctSign } = lastAnalysis;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  // ── A4 layout constants ──
+  const PW = 210, PH = 297;
+  const ML = 14, MR = 14, MT = 0;
+  const CW = PW - ML - MR;  // content width = 182 mm
+  let Y = MT;                // cursor Y position
+
+  // ── Colour helpers ──
+  const hexToRgb = hex => {
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    return [r, g, b];
+  };
+  const setFill   = hex => { const [r,g,b] = hexToRgb(hex); doc.setFillColor(r,g,b); };
+  const setDraw   = hex => { const [r,g,b] = hexToRgb(hex); doc.setDrawColor(r,g,b); };
+  const setTextC  = hex => { const [r,g,b] = hexToRgb(hex); doc.setTextColor(r,g,b); };
+  const fillRect  = (x,y,w,h) => doc.rect(x, y, w, h, 'F');
+  const drawRect  = (x,y,w,h) => doc.rect(x, y, w, h, 'S');
+
+  const badgeHex  = conf > 72 ? '#15803d' : conf > 50 ? '#b45309' : '#b91c1c';
+  const trendHex  = slope > 0 ? '#15803d' : slope < 0 ? '#b91c1c' : '#b45309';
+  const badgeLabel= conf > 72 ? 'HIGH CONFIDENCE' : conf > 50 ? 'MODERATE CONFIDENCE' : 'LOW CONFIDENCE';
+  const lastActual = s[s.length - 1];
+
+  // ════════════════════════════════════════
+  // 1. HEADER BAR (dark background)
+  // ════════════════════════════════════════
+  setFill('#0d1117'); fillRect(0, 0, PW, 28);
+
+  // Gold accent bar below header
+  // Gradient approximated as two rects
+  setFill('#c9a84c'); fillRect(0, 28, CW * 0.55, 2.5);
+  setFill('#4c8ec9'); fillRect(ML + CW * 0.55, 28, CW * 0.45, 2.5);
+
+  // Logo text
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  setTextC('#ffffff');
+  doc.text('PARAGON', ML, 17);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  setTextC('#c9a84c');
+  doc.text('ANALYTICS  ·  EXECUTIVE FORECASTING REPORT', ML, 23);
+
+  // Date top-right
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  setTextC('#9ca3af');
+  const dateStr = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  doc.text('CONFIDENTIAL', PW - MR, 14, { align: 'right' });
+  setTextC('#e5e7eb');
+  doc.text(dateStr, PW - MR, 21, { align: 'right' });
+
+  Y = 37;
+
+  // ════════════════════════════════════════
+  // 2. SUBJECT
+  // ════════════════════════════════════════
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  setTextC('#6b7280');
+  doc.text('ANALYSIS SUBJECT', ML, Y);
+  Y += 5;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  setTextC('#111111');
+  const title = metric.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+  doc.text(title, ML, Y);
+  Y += 5;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  setTextC('#6b7280');
+  doc.text(`${s.length} historical data points  ·  EMA α = ${alpha.toFixed(2)}  ·  Horizon = ${horizon} periods`, ML, Y);
+  Y += 3;
+
+  // Divider line
+  setDraw('#111111');
+  doc.setLineWidth(0.5);
+  doc.line(ML, Y, PW - MR, Y);
+  Y += 6;
+
+  // ════════════════════════════════════════
+  // 3. KPI BOXES (5 across)
+  // ════════════════════════════════════════
+  const kpis = [
+    { label: 'AVERAGE',    value: fmtNum(avg),       sub: 'Historical mean',     color: '#2563eb' },
+    { label: 'STD DEV',    value: fmtNum(sigma),      sub: 'Volatility band ±',   color: '#7c3aed' },
+    { label: 'TREND',      value: trendDir,            sub: `Next: ${pctSign}${pctChange}%`, color: trendHex },
+    { label: 'R² FIT',     value: r2.toFixed(3),      sub: 'EMA goodness-of-fit', color: '#0891b2' },
+    { label: 'CONFIDENCE', value: conf + '%',          sub: badgeLabel,            color: badgeHex  },
+  ];
+
+  const boxW = (CW - 4 * 2.5) / 5;  // 5 boxes with 2.5mm gaps
+  const boxH = 22;
+
+  kpis.forEach((k, i) => {
+    const bx = ML + i * (boxW + 2.5);
+    const by = Y;
+
+    // Box background
+    setFill('#f8fafc'); fillRect(bx, by, boxW, boxH);
+    // Border
+    setDraw('#e5e7eb'); doc.setLineWidth(0.3); drawRect(bx, by, boxW, boxH);
+    // Top colour bar
+    setFill(k.color); fillRect(bx, by, boxW, 1.5);
+
+    // Label
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.5);
+    setTextC('#64748b');
+    doc.text(k.label, bx + boxW/2, by + 6, { align: 'center' });
+
+    // Value
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(k.value.length > 9 ? 8 : 11);
+    setTextC(k.color);
+    doc.text(k.value, bx + boxW/2, by + 13, { align: 'center' });
+
+    // Sub label
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5);
+    setTextC('#64748b');
+    // Wrap if needed
+    const subLines = doc.splitTextToSize(k.sub, boxW - 2);
+    doc.text(subLines, bx + boxW/2, by + 18, { align: 'center' });
+  });
+
+  Y += boxH + 7;
+
+  // ════════════════════════════════════════
+  // 4. CHART IMAGE (light-theme re-render)
+  // ════════════════════════════════════════
   try {
-    pdfChartObj = new Chart(pdfCanvas.getContext('2d'),
-      buildChartConfig(s, smooth, base, opt, pess, labels, 'light'));
-  } catch(e) {}
+    const pdfCanvas = $('pdfChartCanvas');
+    pdfCanvas.width  = 1100;
+    pdfCanvas.height = 380;
+    pdfCanvas.style.display = 'none';
 
-  // Give chart one tick to render before capturing
-  setTimeout(() => {
-    let chartImg = '';
-    if (pdfChartObj) {
-      const tmp = document.createElement('canvas');
-      tmp.width = pdfCanvas.width; tmp.height = pdfCanvas.height;
-      const ctx2 = tmp.getContext('2d');
-      ctx2.fillStyle = '#ffffff';
-      ctx2.fillRect(0, 0, tmp.width, tmp.height);
-      ctx2.drawImage(pdfCanvas, 0, 0);
-      chartImg = tmp.toDataURL('image/png');
-      pdfChartObj.destroy();
-    }
+    // Destroy any previous pdf chart
+    if (window._pdfChartObj) { try { window._pdfChartObj.destroy(); } catch(e){} }
 
-    const badgeHex   = conf > 72 ? '#15803d' : conf > 50 ? '#b45309' : '#b91c1c';
-    const badgeBg    = conf > 72 ? '#dcfce7' : conf > 50 ? '#fef3c7' : '#fee2e2';
-    const badgeLabel = conf > 72 ? 'HIGH CONFIDENCE' : conf > 50 ? 'MODERATE CONFIDENCE' : 'LOW CONFIDENCE';
-    const trendHex   = slope > 0 ? '#15803d' : slope < 0 ? '#b91c1c' : '#b45309';
-    const lastActual = s[s.length - 1];
+    window._pdfChartObj = new Chart(
+      pdfCanvas.getContext('2d'),
+      buildChartConfig(s, smooth, base, opt, pess, labels, 'light')
+    );
 
-    $('printReport').innerHTML = `
-      <style>
-        @media print {
-          *, *::before, *::after {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-        }
-      </style>
-      <div style="font-family:Georgia,'Times New Roman',serif; background:#fff; color:#111; margin:0; padding:0;">
+    // Wait for Chart.js to finish rendering
+    await new Promise(resolve => setTimeout(resolve, 120));
 
-        <!-- HEADER -->
-        <div style="background:#0d1117; padding:26px 40px; display:flex; align-items:center; justify-content:space-between;">
-          <div>
-            <div style="font-size:1.9rem; font-weight:900; color:#fff; letter-spacing:-0.02em; font-family:Georgia,serif;">PARAGON</div>
-            <div style="font-size:0.6rem; color:#c9a84c; letter-spacing:0.22em; text-transform:uppercase; margin-top:4px; font-family:monospace;">Analytics · Executive Forecasting Report</div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:0.6rem; color:#9ca3af; font-family:monospace; text-transform:uppercase; letter-spacing:0.06em;">Confidential</div>
-            <div style="font-size:0.68rem; color:#e5e7eb; font-family:monospace; margin-top:2px;">${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
-          </div>
-        </div>
-        <div style="height:5px; background:linear-gradient(90deg,#c9a84c,#4c8ec9);"></div>
+    const tmp = document.createElement('canvas');
+    tmp.width = pdfCanvas.width; tmp.height = pdfCanvas.height;
+    const ctx2 = tmp.getContext('2d');
+    ctx2.fillStyle = '#ffffff';
+    ctx2.fillRect(0, 0, tmp.width, tmp.height);
+    ctx2.drawImage(pdfCanvas, 0, 0);
+    const chartImg = tmp.toDataURL('image/png');
 
-        <div style="padding:32px 40px;">
+    window._pdfChartObj.destroy();
+    window._pdfChartObj = null;
 
-          <!-- SUBJECT -->
-          <div style="margin-bottom:22px; padding-bottom:12px; border-bottom:2px solid #111;">
-            <div style="font-size:0.58rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:5px;">Analysis Subject</div>
-            <div style="font-size:1.8rem; font-weight:900; color:#111; font-family:Georgia,serif;">${metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
-            <div style="font-size:0.72rem; color:#374151; margin-top:4px; font-family:monospace;">${s.length} historical data points · EMA α = ${alpha.toFixed(2)} · Horizon = ${horizon} periods</div>
-          </div>
+    // Section label
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    setTextC('#6b7280');
+    doc.text('TREND & FORECAST CHART', ML, Y);
+    Y += 3;
 
-          <!-- KPI GRID -->
-          <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:22px;">
-            ${[
-              ['Average', fmtNum(avg), 'Historical mean', '#2563eb'],
-              ['Std Dev', fmtNum(sigma), 'Volatility band ±', '#7c3aed'],
-              ['Trend', trendDir, `Next: ${pctSign}${pctChange}%`, trendHex],
-              ['R² Fit', r2.toFixed(3), 'EMA goodness-of-fit', '#0891b2'],
-              ['Confidence', conf + '%', badgeLabel, badgeHex],
-            ].map(([label, value, sub, color]) => `
-              <div style="border:2px solid #e5e7eb; border-top:4px solid ${color}; border-radius:6px; padding:12px; background:#f8fafc;">
-                <div style="font-size:0.52rem; font-family:monospace; color:#64748b; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:5px;">${label}</div>
-                <div style="font-size:1.1rem; font-weight:900; color:${color}; font-family:Georgia,serif; line-height:1;">${value}</div>
-                <div style="font-size:0.6rem; color:#64748b; margin-top:4px;">${sub}</div>
-              </div>
-            `).join('')}
-          </div>
+    // Chart border box
+    setDraw('#e5e7eb'); doc.setLineWidth(0.3);
+    const chartH = 58;
+    drawRect(ML, Y, CW, chartH);
+    doc.addImage(chartImg, 'PNG', ML + 1, Y + 1, CW - 2, chartH - 2);
+    Y += chartH + 7;
 
-          <!-- CHART -->
-          ${chartImg ? `
-          <div style="margin-bottom:22px;">
-            <div style="font-size:0.58rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:7px;">Trend &amp; Forecast Chart</div>
-            <div style="border:2px solid #e5e7eb; border-radius:6px; padding:12px; background:#fff;">
-              <img src="${chartImg}" style="width:100%; display:block;" />
-            </div>
-          </div>` : ''}
+  } catch(e) {
+    // Chart capture failed silently — PDF continues without it
+    console.warn('Chart capture failed:', e);
+    Y += 4;
+  }
 
-          <!-- SCENARIO TABLE -->
-          <div style="margin-bottom:22px;">
-            <div style="font-size:0.58rem; font-family:monospace; color:#6b7280; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:7px;">${horizon}-Period Scenario Forecast</div>
-            <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
-              <thead>
-                <tr style="background:#0d1117;">
-                  <th style="padding:10px 14px; text-align:left; color:#fff; font-family:monospace; font-size:0.65rem; letter-spacing:0.06em; text-transform:uppercase;">Scenario</th>
-                  ${Array.from({length:horizon},(_,i)=>`<th style="padding:10px 14px; text-align:center; color:#fff; font-family:monospace; font-size:0.65rem; text-transform:uppercase;">Period +${i+1}</th>`).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${[
-                  {label:'▲ Optimistic', vals:opt, bg:'#f0fdf4', color:'#15803d', border:'#bbf7d0'},
-                  {label:'◆ Base',       vals:base, bg:'#fffbeb', color:'#92400e', border:'#fde68a'},
-                  {label:'▼ Pessimistic',vals:pess, bg:'#fef2f2', color:'#b91c1c', border:'#fecaca'},
-                ].map(row => `
-                  <tr style="background:${row.bg}; border-bottom:1px solid ${row.border};">
-                    <td style="padding:11px 14px; font-weight:800; color:${row.color}; font-size:0.85rem;">${row.label}</td>
-                    ${row.vals.map(v => `<td style="padding:11px 14px; text-align:center; font-weight:900; color:${row.color}; font-size:1rem; font-family:Georgia,serif;">${fmtNum(v)}</td>`).join('')}
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
+  // ════════════════════════════════════════
+  // 5. SCENARIO TABLE
+  // ════════════════════════════════════════
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  setTextC('#6b7280');
+  doc.text(`${horizon}-PERIOD SCENARIO FORECAST`, ML, Y);
+  Y += 4;
 
-          <!-- FOOTER -->
-          <div style="padding-top:12px; border-top:1px solid #d1d5db; display:flex; justify-content:space-between;">
-            <div style="font-size:0.6rem; color:#6b7280; font-family:monospace;">Paragon Analytics · Executive Forecasting · For internal use only</div>
-            <div style="font-size:0.6rem; color:#6b7280; font-family:monospace;">paragon.analytics · ${new Date().getFullYear()}</div>
-          </div>
+  const scenarios = [
+    { label: '▲ Optimistic',  vals: opt,  bg: '#f0fdf4', color: '#15803d' },
+    { label: '◆ Base',         vals: base, bg: '#fffbeb', color: '#92400e' },
+    { label: '▼ Pessimistic',  vals: pess, bg: '#fef2f2', color: '#b91c1c' },
+  ];
 
-        </div>
-      </div>
-    `;
-    window.print();
-  }, 80);
+  const colW = CW / (horizon + 1);
+  const rowH = 11;
+  const tblX = ML;
+
+  // Header row
+  setFill('#0d1117'); fillRect(tblX, Y, CW, rowH);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  setTextC('#ffffff');
+  doc.text('SCENARIO', tblX + colW * 0.5, Y + 7, { align: 'center' });
+  for (let i = 0; i < horizon; i++) {
+    doc.text(`PERIOD +${i+1}`, tblX + colW * (i + 1) + colW * 0.5, Y + 7, { align: 'center' });
+  }
+  Y += rowH;
+
+  // Data rows
+  const borderColors = ['#bbf7d0', '#fde68a', '#fecaca'];
+  scenarios.forEach((row, ri) => {
+    setFill(row.bg); fillRect(tblX, Y, CW, rowH);
+    setDraw(borderColors[ri]); doc.setLineWidth(0.2); drawRect(tblX, Y, CW, rowH);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    setTextC(row.color);
+    doc.text(row.label, tblX + colW * 0.5, Y + 7, { align: 'center' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    row.vals.forEach((v, i) => {
+      doc.text(fmtNum(v), tblX + colW * (i + 1) + colW * 0.5, Y + 7.5, { align: 'center' });
+    });
+
+    Y += rowH;
+  });
+
+  Y += 8;
+
+  // ════════════════════════════════════════
+  // 6. FOOTER
+  // ════════════════════════════════════════
+  setDraw('#d1d5db'); doc.setLineWidth(0.3);
+  doc.line(ML, Y, PW - MR, Y);
+  Y += 4;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  setTextC('#9ca3af');
+  doc.text('Paragon Analytics · Executive Forecasting · For internal use only', ML, Y);
+  doc.text(`paragon.analytics · ${new Date().getFullYear()}`, PW - MR, Y, { align: 'right' });
+
+  // ════════════════════════════════════════
+  // SAVE
+  // ════════════════════════════════════════
+  const safeName = metric.replace(/\W+/g, '_').toLowerCase();
+  doc.save(`paragon_${safeName}_report.pdf`);
+
+  pdfBtn.disabled = false;
+  pdfBtn.textContent = '⬇ Export PDF';
+  toast('✓ PDF downloaded successfully');
 }
 
 // ══════════════════════════════════════════════════════════════════
