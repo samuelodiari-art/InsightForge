@@ -917,7 +917,118 @@ async function exportPDF(){
     Y+=RH;
   });
   draw('#cbd5e1');doc.setLineWidth(0.4);DR(TX,Y-RH*3,CW,RH*3);
+
+  // ── PAGE 1 FOOTER ──
   fill('#0d1117');FR(0,282,PW,15);doc.setFont('helvetica','normal');doc.setFontSize(6);text('#6b7280');
+  doc.text('Paragon Analytics  -  Executive Forecasting  -  For internal use only',ML,288);
+  doc.text(`paragon.analytics  -  ${new Date().getFullYear()}`,PW-MR,288,{align:'right'});
+  text('#c9a84c');doc.text('CONFIDENTIAL',PW/2,292,{align:'center'});
+
+  // ── PAGE 2: EXECUTIVE SUMMARY ──
+  doc.addPage();
+  Y=0;
+
+  // Page 2 header bar (slimmer)
+  fill('#0d1117');FR(0,0,PW,18);
+  fill('#c9a84c');FR(0,18,PW*0.5,2);
+  fill('#4c8ec9');FR(PW*0.5,18,PW*0.5,2);
+  doc.setFont('helvetica','bold');doc.setFontSize(11);text('#ffffff');doc.text('PARAGON',ML,12);
+  doc.setFont('helvetica','normal');doc.setFontSize(6);text('#c9a84c');doc.text('ANALYTICS',ML+28,12);
+  doc.setFont('helvetica','normal');doc.setFontSize(6);text('#9ca3af');
+  doc.text('EXECUTIVE SUMMARY  —  PAGE 2',PW-MR,12,{align:'right'});
+  Y=28;
+
+  // Regime block
+  if(regime){
+    const rHex=regime.color.replace('var(--green)','#16a34a').replace('var(--red)','#dc2626').replace('var(--amber)','#ca8a04').replace('var(--muted)','#64748b');
+    const regBg=regime.color==='var(--green)'?'#f0fdf4':regime.color==='var(--red)'?'#fef2f2':'#fffbeb';
+    const regBorder=regime.color==='var(--green)'?'#86efac':regime.color==='var(--red)'?'#fca5a5':'#fcd34d';
+    fill(regBg);FR(ML,Y,CW,14);
+    fill(rHex);FR(ML,Y,3,14);
+    draw(regBorder);doc.setLineWidth(0.4);DR(ML,Y,CW,14);
+    doc.setFont('helvetica','bold');doc.setFontSize(10);text(rHex);
+    doc.text(regime.regime,ML+7,Y+6.5);
+    if(regime.breakDetected){
+      doc.setFont('helvetica','bold');doc.setFontSize(6.5);text('#b91c1c');
+      doc.text('⚡ STRUCTURAL BREAK DETECTED',ML+7,Y+11.5);
+    }
+    doc.setFont('helvetica','normal');doc.setFontSize(7);text('#64748b');
+    doc.text(regime.desc,PW-MR,Y+9,{align:'right'});
+    Y+=20;
+  }
+
+  // Section label
+  doc.setFont('helvetica','normal');doc.setFontSize(6);text('#9ca3af');
+  doc.text('EXECUTIVE SUMMARY',ML,Y);
+  draw('#cccccc');doc.setLineWidth(0.3);LN(ML+42,Y-1,PW-MR,Y-1);
+  Y+=5;
+
+  // Strip HTML tags from narrative text for PDF rendering
+  const rawNarrative=($('narrativeText').innerText||$('narrativeText').textContent||'').replace(/\s+/g,' ').trim();
+  // Split narrative into sentences for paragraph rendering
+  const sentences=rawNarrative.match(/[^.!?]+[.!?]+/g)||[rawNarrative];
+
+  // Render each sentence as a wrapped paragraph with a left accent bar
+  const lineH=4.8;
+  sentences.forEach((sentence,si)=>{
+    const cleanSentence=sentence.trim();
+    if(!cleanSentence)return;
+    const wrapped=doc.splitTextToSize(cleanSentence,CW-8);
+    const blockH=wrapped.length*lineH+4;
+    // Alternating subtle background
+    if(si%2===0){fill('#f8fafc');FR(ML,Y,CW,blockH);}
+    fill('#c9a84c');FR(ML,Y,1.5,blockH);
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);text('#1e293b');
+    wrapped.forEach((line,li)=>{doc.text(line,ML+6,Y+lineH*(li+0.8));});
+    Y+=blockH+2;
+  });
+
+  Y+=4;
+
+  // Disclaimer box
+  fill('#fff7ed');FR(ML,Y,CW,10);
+  draw('#fed7aa');doc.setLineWidth(0.3);DR(ML,Y,CW,10);
+  fill('#f97316');FR(ML,Y,1.5,10);
+  doc.setFont('helvetica','bold');doc.setFontSize(6);text('#9a3412');
+  doc.text('⚠  DISCLAIMER',ML+5,Y+4.5);
+  doc.setFont('helvetica','normal');doc.setFontSize(6);text('#7c2d12');
+  const discl=doc.splitTextToSize('Model-generated summary. Conclusions are derived from statistical patterns only and do not account for external business context. Validate with domain knowledge before presenting to stakeholders.',CW-20);
+  doc.text(discl[0]||'',ML+26,Y+4.5);
+  if(discl[1])doc.text(discl[1],ML+5,Y+8.5);
+  Y+=16;
+
+  // Accuracy snapshot table
+  doc.setFont('helvetica','normal');doc.setFontSize(6);text('#9ca3af');
+  doc.text('MODEL ACCURACY SNAPSHOT',ML,Y);
+  draw('#cccccc');doc.setLineWidth(0.3);LN(ML+56,Y-1,PW-MR,Y-1);
+  Y+=4;
+
+  const snapRows=[
+    ['Metric Analysed', metric.replace(/_/g,' ')],
+    ['Data Points', String(s.length)],
+    ['Forecast Accuracy (MAPE)', mq.mapeIsHO?`${mq.mape.toFixed(1)}% — out-of-sample holdout (n=${mq.holdoutSize})`:`${mq.mape.toFixed(1)}% — in-sample approximation`],
+    ['Directional Accuracy', `${mq.dirAcc.toFixed(0)}%${mq.holdoutDA!==null?' (full series) / '+mq.holdoutDA.toFixed(0)+'% (holdout)':' (full series)'}`],
+    ['Model vs Naive Baseline', mq.emaBeat?`EMA outperforms by ${(mq.naiveM-mq.mape).toFixed(1)}% MAPE`:(mq.naiveM!==null?`Comparable to naive (${mq.naiveM.toFixed(1)}% MAPE)`:'Holdout not available')],
+    ['Confidence Score', `${conf}%  —  ${conf>72?'HIGH':conf>50?'MODERATE':'LOW'}${mq.confEst?' (estimated, small sample)':' (holdout-grounded)'}`],
+    ['Current Regime', regime?`${regime.regime}${regime.breakDetected?' — structural break detected':'  — stable phase'}`:'Insufficient data for regime classification'],
+    ['Seasonality', mq.seasonality?`${mq.seasonality.period}-period cycle detected (correlation ${(mq.seasonality.strength*100).toFixed(0)}%)`:'None detected'],
+    ['Anomalies', mq.outliers.length>0?`${mq.outliers.length} point(s) outside IQR bounds at periods: ${mq.outliers.map(o=>o.index+1).join(', ')}`:'No statistical outliers detected'],
+  ];
+  const COL1=55,COL2=CW-COL1,RH2=7;
+  snapRows.forEach((row,i)=>{
+    fill(i%2===0?'#f8fafc':'#ffffff');FR(ML,Y,CW,RH2);
+    draw('#e2e8f0');doc.setLineWidth(0.15);LN(ML,Y+RH2,ML+CW,Y+RH2);
+    doc.setFont('helvetica','bold');doc.setFontSize(6.5);text('#475569');
+    doc.text(row[0],ML+3,Y+4.8);
+    doc.setFont('helvetica','normal');doc.setFontSize(6.5);text('#1e293b');
+    const val=doc.splitTextToSize(row[1],COL2-4);
+    doc.text(val[0]||'',ML+COL1,Y+4.8);
+    Y+=RH2;
+  });
+  draw('#cbd5e1');doc.setLineWidth(0.4);DR(ML,Y-RH2*snapRows.length,CW,RH2*snapRows.length);
+
+  // Page 2 footer
+  fill('#0d1117');FR(0,282,PW,15);
   doc.text('Paragon Analytics  -  Executive Forecasting  -  For internal use only',ML,288);
   doc.text(`paragon.analytics  -  ${new Date().getFullYear()}`,PW-MR,288,{align:'right'});
   text('#c9a84c');doc.text('CONFIDENTIAL',PW/2,292,{align:'center'});
