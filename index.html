@@ -854,17 +854,39 @@ function analyze() {
 // ══════════════════════════════════════════════════════════════════
 // CHART
 // ══════════════════════════════════════════════════════════════════
-function buildChartConfig(s, t, b, o, p, labels, theme='dark') {
-  const isDark = theme === 'dark';
-  const gridColor  = isDark ? 'rgba(30,34,48,0.8)' : 'rgba(200,200,210,0.5)';
-  const tickColor  = isDark ? '#6b7280' : '#555';
-  const ttBg       = isDark ? '#11131c' : '#fff';
-  const ttBorder   = isDark ? '#1e2230' : '#ccc';
-  const ttTitle    = isDark ? '#e8e9ef' : '#111';
-  const ttBody     = isDark ? '#6b7280' : '#444';
-  const legendColor = isDark ? '#6b7280' : '#555';
+// fontScale: 1 = normal browser render, ~3.5 = PDF high-res canvas render
+// The PDF canvas is 1400px wide but displayed at ~180mm in the PDF page,
+// so Chart.js fonts/lines must be scaled up ~3-4x to stay legible.
+function buildChartConfig(s, t, b, o, p, labels, theme='dark', fontScale=1) {
+  const isDark      = theme === 'dark';
+  const isPDF       = fontScale > 1;
+  const gridColor   = isDark ? 'rgba(30,34,48,0.8)' : 'rgba(190,200,215,0.7)';
+  const tickColor   = isDark ? '#6b7280' : '#334155';
+  const legendColor = isDark ? '#9ca3af' : '#334155';
+  const ttBg        = isDark ? '#11131c' : '#ffffff';
+  const ttBorder    = isDark ? '#1e2230' : '#cbd5e1';
+  const ttTitle     = isDark ? '#e8e9ef' : '#0f172a';
+  const ttBody      = isDark ? '#6b7280' : '#475569';
 
-  const fullLabels = [...labels.slice(0, s.length), ...b.map((_, i) => `F${i+1}`)];
+  const lineWidth  = isPDF ? 5   : 2;
+  const emaWidth   = isPDF ? 3.5 : 1.5;
+  const pointR     = isPDF ? 7   : 3;
+  const fcstPtR    = isPDF ? 9   : 4;
+  const tickSz     = Math.round(9  * fontScale);
+  const legendSz   = Math.round(10 * fontScale);
+
+  const fullLabels = [
+    ...labels.slice(0, s.length),
+    ...b.map((_, i) => `F${i + 1}`)
+  ];
+
+  // Y-axis: show K/M so large numbers don't overflow the axis
+  const yTickCb = (val) => {
+    if (Math.abs(val) >= 1e6) return (val/1e6).toFixed(1) + 'M';
+    if (Math.abs(val) >= 1e3) return (val/1e3).toFixed(1) + 'K';
+    if (Math.abs(val) < 0.01 && val !== 0) return val.toExponential(1);
+    return val.toFixed(val % 1 === 0 ? 0 : 2);
+  };
 
   return {
     type: 'line',
@@ -875,62 +897,106 @@ function buildChartConfig(s, t, b, o, p, labels, theme='dark') {
           label: 'Actual',
           data: s,
           borderColor: '#c9a84c',
-          backgroundColor: 'rgba(201,168,76,0.08)',
-          borderWidth: 2, tension: 0.3,
-          pointRadius: 3, pointBackgroundColor: '#c9a84c', fill: true,
+          backgroundColor: 'rgba(201,168,76,0.10)',
+          borderWidth: lineWidth, tension: 0.3,
+          pointRadius: pointR,
+          pointBackgroundColor: '#c9a84c',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: isPDF ? 2 : 1,
+          fill: true,
         },
         {
-          label: 'EMA',
+          label: 'EMA Trend',
           data: t,
-          borderColor: '#4c8ec9', borderWidth: 1.5,
-          borderDash: [4,4], tension: 0.4,
-          pointRadius: 0, fill: false,
+          borderColor: '#4c8ec9', borderWidth: emaWidth,
+          borderDash: isPDF ? [12, 8] : [4, 4],
+          tension: 0.4, pointRadius: 0, fill: false,
         },
         {
           label: 'Base Forecast',
           data: [...Array(s.length).fill(null), ...b],
-          borderColor: '#c9a84c', borderWidth: 2, borderDash: [6,6],
-          pointRadius: 4, pointBackgroundColor: '#c9a84c', fill: false,
+          borderColor: '#c9a84c', borderWidth: lineWidth,
+          borderDash: isPDF ? [16, 8] : [6, 6],
+          pointRadius: fcstPtR,
+          pointBackgroundColor: '#c9a84c',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: isPDF ? 2 : 1,
+          fill: false,
         },
         {
           label: 'Upper (Opt.)',
           data: [...Array(s.length).fill(null), ...o],
-          borderColor: '#22c55e', borderWidth: 0,
-          backgroundColor: 'rgba(34,197,94,0.12)',
+          borderColor: '#22c55e', borderWidth: isPDF ? 3 : 0,
+          backgroundColor: 'rgba(34,197,94,0.13)',
           fill: '+1', pointRadius: 0,
         },
         {
           label: 'Lower (Pess.)',
           data: [...Array(s.length).fill(null), ...p],
-          borderColor: '#ef4444', borderWidth: 0,
+          borderColor: '#ef4444', borderWidth: isPDF ? 3 : 0,
           fill: false, pointRadius: 0,
         },
       ]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode:'index', intersect: false },
+      responsive: !isPDF,          // true for live browser chart, false for PDF canvas
+      maintainAspectRatio: false,
+      animation: { duration: 0 },  // No animation so capture is instant
+      interaction: { mode: 'index', intersect: false },
+      layout: {
+        padding: {
+          top:    isPDF ? 30 : 10,
+          right:  isPDF ? 50 : 10,
+          bottom: isPDF ? 10 :  5,
+          left:   isPDF ? 10 :  5,
+        }
+      },
       plugins: {
-        legend: { labels: { color: legendColor, font: { family:'DM Mono', size:10 }, boxWidth:20 } },
+        legend: {
+          display: true,
+          labels: {
+            color: legendColor,
+            font: { family: 'monospace', size: legendSz },
+            boxWidth: isPDF ? 50 : 20,
+            padding:  isPDF ? 30 : 10,
+          }
+        },
         tooltip: {
+          enabled: !isPDF,
           backgroundColor: ttBg, borderColor: ttBorder, borderWidth: 1,
           titleColor: ttTitle, bodyColor: ttBody,
-          titleFont: { family:'DM Mono', size:11 }, bodyFont: { family:'DM Mono', size:10 },
+          titleFont: { family: 'monospace', size: 11 },
+          bodyFont:  { family: 'monospace', size: 10 },
         }
       },
       scales: {
         x: {
-          grid: { color: gridColor },
-          ticks: { color: tickColor, font:{family:'DM Mono',size:9}, maxTicksLimit:14 },
+          grid: { color: gridColor, lineWidth: isPDF ? 1.5 : 1 },
+          border: { color: isDark ? '#374151' : '#64748b', width: isPDF ? 2 : 1 },
+          ticks: {
+            color: tickColor,
+            font: { family: 'monospace', size: tickSz, weight: isPDF ? '700' : '400' },
+            maxTicksLimit: isPDF ? 10 : 14,
+            maxRotation: isPDF ? 45 : 0,
+            minRotation: isPDF ? 30 : 0,
+          }
         },
         y: {
-          grid: { color: gridColor },
-          ticks: { color: tickColor, font:{family:'DM Mono',size:9} },
+          grid: { color: gridColor, lineWidth: isPDF ? 1.5 : 1 },
+          border: { color: isDark ? '#374151' : '#64748b', width: isPDF ? 2 : 1 },
+          ticks: {
+            color: tickColor,
+            font: { family: 'monospace', size: tickSz, weight: isPDF ? '700' : '400' },
+            callback: yTickCb,
+            maxTicksLimit: 8,
+          }
         }
       }
     }
   };
 }
+
+
 
 function renderChart(s, t, b, o, p, labels) {
   if (chartObj) { chartObj.destroy(); chartObj = null; }
@@ -1020,8 +1086,8 @@ async function exportPDF() {
   try {
     const pdfCanvas = $('pdfChartCanvas');
     // Size it generously for high-res output
-    pdfCanvas.width  = 1400;
-    pdfCanvas.height = 480;
+    pdfCanvas.width  = 1600;
+    pdfCanvas.height = 560;
 
     if (window._pdfChartObj) {
       try { window._pdfChartObj.destroy(); } catch(e) {}
@@ -1030,7 +1096,7 @@ async function exportPDF() {
 
     window._pdfChartObj = new Chart(
       pdfCanvas.getContext('2d'),
-      buildChartConfig(s, smooth, base, opt, pess, labels, 'light')
+      buildChartConfig(s, smooth, base, opt, pess, labels, 'light', 3.5)
     );
 
     // Wait: rAF ensures paint, then extra 220ms for Chart.js animation
@@ -1172,7 +1238,7 @@ async function exportPDF() {
   doc.text('TREND & FORECAST CHART', ML, Y);
   Y += 3;
 
-  const CHART_H = 68;
+  const CHART_H = 75;
   if (chartImg) {
     fill('#ffffff'); FR(ML, Y, CW, CHART_H);
     draw('#e2e8f0'); doc.setLineWidth(0.3); DR(ML, Y, CW, CHART_H);
