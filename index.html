@@ -2,33 +2,19 @@
 <!--
   ╔═══════════════════════════════════════════════════════════════╗
   ║            PARAGON ANALYTICS — Executive Forecasting          ║
-  ║                   GitHub Pages Ready v2.0                     ║
+  ║                   GitHub Pages Ready v3.1                     ║
   ╠═══════════════════════════════════════════════════════════════╣
-  ║  BUGS FIXED FROM v1:                                          ║
-  ║  1. Slope now uses RECENT EMA tail (last 25%) not global      ║
-  ║     first→last, preventing misleading forecasts on            ║
-  ║     non-stationary series.                                    ║
-  ║  2. Confidence score now uses R² + sample penalty instead     ║
-  ║     of the arbitrary "60 + length - vol*50" formula.          ║
-  ║  3. All 3 forecast periods now visible in main UI             ║
-  ║     (v1 only showed Period +1 in scenario cards).             ║
-  ║  4. CSV parser handles quoted fields ("value,with,commas").   ║
-  ║  5. Date/time column auto-detected for real X-axis labels.    ║
-  ║  6. PDF chart re-rendered with light theme; no more dark      ║
-  ║     canvas embedded on white paper.                           ║
-  ║  7. EMA alpha & forecast horizon now user-controllable.       ║
-  ║  8. "Load Sample Data" — zero-friction demo mode.             ║
-  ║  9. R² goodness-of-fit shown alongside confidence.            ║
-  ║  10. Forecast CSV download added.                             ║
+  ║  CORRECTIONS FROM v3.0:                                       ║
+  ║  1. Holdout MAPE — true out-of-sample validation (25% split)  ║
+  ║     replaces misleading in-sample EMA vs actual comparison    ║
+  ║  2. Confidence Score — now derived from holdout MAPE +        ║
+  ║     directional accuracy + sample size; no longer uses        ║
+  ║     the invented R²×70 + sampleFactor×25 formula             ║
+  ║  3. Naive comparison — uses same holdout period for fair      ║
+  ║     apples-to-apples EMA vs naive benchmarking               ║
+  ║  4. Small-dataset fallback — graceful degradation when        ║
+  ║     series is too short for a meaningful holdout split        ║
   ╚═══════════════════════════════════════════════════════════════╝
-
-  DEPLOY TO GITHUB PAGES:
-    1. Create a new repo (e.g. paragon-analytics)
-    2. Add this file as index.html at repo root
-    3. Settings → Pages → Branch: main / (root)
-    4. Live at: https://<you>.github.io/paragon-analytics/
-
-  No build step. No npm. No server. Pure static HTML.
 -->
 <html lang="en">
 <head>
@@ -67,7 +53,6 @@
       opacity: 0.6;
     }
 
-    /* ── HEADER ── */
     header {
       position: relative; z-index: 10;
       display: flex; align-items: center; justify-content: space-between;
@@ -107,7 +92,6 @@
     }
     .btn-sample:hover { background: rgba(76,142,201,0.18); }
 
-    /* ── MAIN LAYOUT ── */
     main {
       position: relative; z-index: 1;
       max-width: 1200px; margin: 0 auto;
@@ -115,7 +99,6 @@
       display: flex; flex-direction: column; gap: 1.5rem;
     }
 
-    /* ── CARD ── */
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -136,7 +119,6 @@
       background: var(--accent); border-radius: 50%;
     }
 
-    /* ── CONTROLS ── */
     .controls-grid {
       display: grid;
       grid-template-columns: 1fr auto auto;
@@ -213,7 +195,6 @@
     .btn-ghost:hover { border-color: var(--green); color: var(--green); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
 
-    /* ── DATA PREVIEW ── */
     .preview-table-wrap {
       overflow-x: auto; max-height: 180px; overflow-y: auto;
       border: 1px solid var(--border); border-radius: 6px; margin-top: 0.75rem;
@@ -235,10 +216,9 @@
     .col-numeric { color: var(--accent) !important; }
     .col-date   { color: var(--accent2) !important; }
 
-    /* ── KPI ROW ── */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 1rem;
     }
     .kpi-card {
@@ -266,11 +246,9 @@
     .kpi-sub.amber { color: var(--amber); }
     .kpi-sub.red   { color: var(--red); }
 
-    /* ── CHART ── */
     .chart-wrap { position: relative; height: 360px; }
     #trendChart { width: 100% !important; height: 100% !important; }
 
-    /* ── SCENARIO GRID (3 periods × 3 scenarios) ── */
     .scenario-header {
       display: grid; grid-template-columns: 1.2fr repeat(3, 1fr);
       gap: 0.5rem; margin-bottom: 0.4rem; padding: 0 0.25rem;
@@ -303,7 +281,6 @@
     .scenario-row.base .val { color: var(--accent); }
     .scenario-row.pess .val { color: var(--red); }
 
-    /* ── LOG ── */
     #logOutput {
       font-family: 'DM Mono', monospace; font-size: 0.75rem;
       color: var(--muted); line-height: 1.7; white-space: pre-wrap;
@@ -312,7 +289,6 @@
     #logOutput .log-warn { color: var(--amber); }
     #logOutput .log-info { color: var(--accent2); }
 
-    /* ── HIDDEN / UTILITY ── */
     .hidden { display: none !important; }
     .section-divider {
       display: flex; align-items: center; gap: 1rem;
@@ -323,7 +299,6 @@
       content: ''; flex: 1; height: 1px; background: var(--border);
     }
 
-    /* ── TOAST ── */
     #toast {
       position: fixed; bottom: 2rem; right: 2rem; z-index: 999;
       background: var(--surface); border: 1px solid var(--border);
@@ -335,7 +310,6 @@
     #toast.show { transform: translateY(0); opacity: 1; }
     #toast.err  { border-color: var(--red); color: var(--red); }
 
-    /* ── ANIMATIONS ── */
     @keyframes fadeSlide {
       from { opacity: 0; transform: translateY(12px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -345,7 +319,6 @@
     .delay-2 { animation-delay: 0.16s; }
     .delay-3 { animation-delay: 0.24s; }
 
-    /* ── RESPONSIVE ── */
     @media (max-width: 768px) {
       header { padding: 1rem 1.2rem; flex-wrap: wrap; gap: 0.5rem; }
       main { padding: 1rem 1rem 3rem; }
@@ -355,9 +328,6 @@
       .scenario-header-cell:first-child { display: none; }
     }
 
-    /* ── HIDDEN CANVAS for PDF chart rendering ──
-       MUST NOT be display:none — Chart.js won't paint into a hidden canvas.
-       Position off-screen so it's invisible but still rendered. ── */
     #pdfChartCanvas {
       position: fixed;
       top: -9999px; left: -9999px;
@@ -368,7 +338,6 @@
 </head>
 <body>
 
-<!-- HEADER -->
 <header>
   <div class="logo">
     <span class="logo-name">Paragon</span>
@@ -382,10 +351,8 @@
   </div>
 </header>
 
-<!-- MAIN -->
 <main>
 
-  <!-- CONTROLS CARD -->
   <div class="card animate-in">
     <div class="card-title">Data Input &amp; Configuration</div>
     <div class="controls-grid">
@@ -408,7 +375,6 @@
         <button class="btn btn-ghost" id="csvExportBtn" disabled>⬇ CSV</button>
       </div>
     </div>
-    <!-- ADVANCED SETTINGS ROW -->
     <div class="controls-row2">
       <div>
         <span class="label-sm">EMA Smoothing (α)</span>
@@ -433,7 +399,6 @@
         </div>
       </div>
     </div>
-    <!-- DATA PREVIEW -->
     <div id="previewWrap" class="hidden">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; margin-bottom:0.3rem;">
         <span style="font-family:'DM Mono',monospace; font-size:0.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em;">Data Preview — first 6 rows</span>
@@ -445,13 +410,11 @@
     </div>
   </div>
 
-  <!-- KPI ROW -->
   <div id="kpiSection" class="hidden animate-in delay-1">
     <div class="card-title" style="margin-bottom:0.75rem;">Business Summary</div>
     <div class="kpi-grid" id="kpiGrid"></div>
   </div>
 
-  <!-- CHART CARD -->
   <div id="chartSection" class="card hidden animate-in delay-2">
     <div class="card-title">Trend &amp; Forecast</div>
     <div class="chart-wrap">
@@ -459,19 +422,16 @@
     </div>
   </div>
 
-  <!-- SCENARIO SECTION (full 3×3 grid, all periods visible) -->
   <div id="scenarioSection" class="hidden animate-in delay-3">
     <div class="section-divider" id="scenarioDivider">Scenario Analysis</div>
     <div style="margin-top:0.75rem;">
       <div class="scenario-header" id="scenarioHeader">
         <div class="scenario-header-cell"></div>
-        <!-- Period labels injected by JS -->
       </div>
       <div class="scenario-rows" id="scenarioRows"></div>
     </div>
   </div>
 
-  <!-- LOG CARD -->
   <div id="logSection" class="card hidden">
     <div class="card-title">Analysis Log</div>
     <pre id="logOutput"></pre>
@@ -479,10 +439,7 @@
 
 </main>
 
-<!-- TOAST -->
 <div id="toast"></div>
-
-<!-- HIDDEN PDF CHART CANVAS — jsPDF renders a light-theme chart here -->
 <canvas id="pdfChartCanvas"></canvas>
 
 <script>
@@ -503,9 +460,6 @@ let metric = null, dateCol = null;
 let chartObj = null, lastAnalysis = null;
 let alpha = 0.3, horizon = 3;
 
-// ══════════════════════════════════════════════════════════════════
-// ELEMENTS
-// ══════════════════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
 const csvFile      = $('csvFile');
 const analyzeBtn   = $('analyzeBtn');
@@ -521,46 +475,83 @@ const alphaVal     = $('alphaVal');
 const horizonVal   = $('horizonVal');
 
 // ══════════════════════════════════════════════════════════════════
+// DEBOUNCE
+// ══════════════════════════════════════════════════════════════════
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+}
+
+// ══════════════════════════════════════════════════════════════════
 // CONTROLS
 // ══════════════════════════════════════════════════════════════════
-alphaRange.addEventListener('input', () => {
+alphaRange.addEventListener('input', debounce(() => {
   alpha = +alphaRange.value;
   alphaVal.textContent = alpha.toFixed(2);
   if (metric) analyze();
-});
-horizonRange.addEventListener('input', () => {
+}, 100));
+
+horizonRange.addEventListener('input', debounce(() => {
   horizon = +horizonRange.value;
   horizonVal.textContent = horizon;
   if (metric) analyze();
-});
+}, 100));
+
 metricSelect.addEventListener('change', () => {
   metric = metricSelect.value;
+  saveSettings();
   if (metric) analyze();
 });
+
 dateSelect.addEventListener('change', () => {
   dateCol = dateSelect.value || null;
   if (metric) analyze();
 });
+
 analyzeBtn.addEventListener('click', () => analyze());
 pdfBtn.addEventListener('click', () => exportPDF());
 csvExportBtn.addEventListener('click', () => exportForecastCSV());
 
 // ══════════════════════════════════════════════════════════════════
+// SETTINGS PERSISTENCE
+// ══════════════════════════════════════════════════════════════════
+function saveSettings() {
+  try {
+    localStorage.setItem('paragon_settings', JSON.stringify({
+      alpha, horizon, lastMetric: metric, timestamp: Date.now()
+    }));
+  } catch(e) {}
+}
+
+function loadSettings() {
+  try {
+    const saved = localStorage.getItem('paragon_settings');
+    if (saved) {
+      const s = JSON.parse(saved);
+      if (Date.now() - s.timestamp < 30 * 24 * 60 * 60 * 1000) {
+        alpha = s.alpha || 0.3; horizon = s.horizon || 3;
+        alphaRange.value = alpha; horizonRange.value = horizon;
+        alphaVal.textContent = alpha.toFixed(2); horizonVal.textContent = horizon;
+        return s.lastMetric;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════════
 // DRAG & DROP
 // ══════════════════════════════════════════════════════════════════
-uploadZone.addEventListener('dragover', e => {
-  e.preventDefault(); uploadZone.classList.add('dragover');
-});
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
 uploadZone.addEventListener('drop', e => {
   e.preventDefault(); uploadZone.classList.remove('dragover');
-  const f = e.dataTransfer.files[0];
-  if (f) readFile(f);
+  const f = e.dataTransfer.files[0]; if (f) readFile(f);
 });
 csvFile.addEventListener('change', () => { if (csvFile.files[0]) readFile(csvFile.files[0]); });
 
 // ══════════════════════════════════════════════════════════════════
-// SAMPLE DATA — FIX: users can immediately test without a file
+// SAMPLE DATA
 // ══════════════════════════════════════════════════════════════════
 function loadSampleData() {
   const csv = `date,revenue,units_sold,avg_order_value,customer_count
@@ -594,7 +585,7 @@ function loadSampleData() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// FILE READ
+// FILE READ + PARSE
 // ══════════════════════════════════════════════════════════════════
 function readFile(file) {
   fileName.textContent = file.name;
@@ -603,107 +594,251 @@ function readFile(file) {
   r.readAsText(file);
 }
 
-// ══════════════════════════════════════════════════════════════════
-// PARSE — FIX: handles quoted CSV fields correctly
-// ══════════════════════════════════════════════════════════════════
 function parseCSVLine(line, delim) {
-  // Handles "field,with,commas" and "field with ""quotes"""
-  const fields = [];
-  let cur = '', inQ = false;
+  const fields = []; let cur = '', inQ = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
-    if (c === '"') {
-      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if (c === delim && !inQ) {
-      fields.push(cur.trim()); cur = '';
-    } else {
-      cur += c;
-    }
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if (c === delim && !inQ) { fields.push(cur.trim()); cur = ''; }
+    else cur += c;
   }
-  fields.push(cur.trim());
-  return fields;
+  fields.push(cur.trim()); return fields;
 }
 
 function isDateLike(val) {
   if (typeof val !== 'string') return false;
   return /^\d{4}[-/]\d{1,2}([-/]\d{1,2})?$/.test(val) ||
-         /^Q[1-4]\s*\d{4}$/i.test(val) ||
-         /^\d{1,2}[-/]\d{4}$/.test(val) ||
+         /^Q[1-4]\s*\d{4}$/i.test(val) || /^\d{1,2}[-/]\d{4}$/.test(val) ||
          /^\d{4}$/.test(val);
 }
 
 function parse(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
-  const delim = [',', ';', '\t', '|'].find(x => {
-    const parts = parseCSVLine(lines[0], x);
-    return parts.length > 1;
-  }) || ',';
-
+  const delim = [',', ';', '\t', '|'].find(x => parseCSVLine(lines[0], x).length > 1) || ',';
   headers = parseCSVLine(lines[0], delim).map(h =>
-    h.replace(/^["']|["']$/g,'').toLowerCase().replace(/\W+/g,'_')
-  );
-
+    h.replace(/^["']|["']$/g,'').toLowerCase().replace(/\W+/g,'_'));
   rows = lines.slice(1).map(l => {
-    const p = parseCSVLine(l, delim);
-    const o = {};
+    const p = parseCSVLine(l, delim); const o = {};
     headers.forEach((h, i) => {
       const raw = (p[i] || '').replace(/^["']|["']$/g,'').trim();
       o[h] = (!isNaN(+raw) && raw !== '') ? +raw : raw;
-    });
-    return o;
+    }); return o;
   }).filter(r => headers.some(h => typeof r[h] === 'number'));
 
   numericCols = headers.filter(h => rows.some(r => typeof r[h] === 'number'));
-  // FIX: detect date/label columns for X-axis
   dateCols = headers.filter(h =>
-    !numericCols.includes(h) || rows.slice(0,5).some(r => isDateLike(String(r[h])))
-  );
+    !numericCols.includes(h) || rows.slice(0,5).some(r => isDateLike(String(r[h]))));
 
-  // Populate metric selector
   metricSelect.innerHTML = '<option value="">— Select Metric —</option>' +
     numericCols.map(c => `<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
 
-  // Populate date/label selector
   const dcWrap = $('dateColWrap');
   if (dateCols.length) {
     dcWrap.classList.remove('hidden');
     dateSelect.innerHTML = '<option value="">— None —</option>' +
       dateCols.map(c => `<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
-    // Auto-select if obvious
     const auto = dateCols.find(c => /date|period|month|year|week|quarter/i.test(c));
     if (auto) { dateSelect.value = auto; dateCol = auto; }
-  } else {
-    dcWrap.classList.add('hidden'); dateCol = null;
-  }
+  } else { dcWrap.classList.add('hidden'); dateCol = null; }
 
-  // Build data preview table
   buildPreview();
-
-  metric = numericCols[0] || null;
+  const lastMetric = loadSettings();
+  metric = lastMetric && numericCols.includes(lastMetric) ? lastMetric : (numericCols[0] || null);
   if (metric) { metricSelect.value = metric; analyze(); }
   analyzeBtn.disabled = false;
-
   $('previewStats').textContent = `${rows.length} rows · ${numericCols.length} numeric · ${dateCols.length} date`;
   $('previewWrap').classList.remove('hidden');
 }
 
 function buildPreview() {
-  const t = $('previewTable');
-  const show = rows.slice(0, 6);
-  t.innerHTML =
-    `<thead><tr>${headers.map(h => {
-      const cls = numericCols.includes(h) ? 'col-numeric' :
-                  dateCols.includes(h) ? 'col-date' : '';
-      return `<th class="${cls}">${h.replace(/_/g,' ')}</th>`;
-    }).join('')}</tr></thead>` +
-    `<tbody>${show.map(r =>
-      `<tr>${headers.map(h => {
-        const cls = numericCols.includes(h) ? 'col-numeric' :
-                    dateCols.includes(h) ? 'col-date' : '';
-        return `<td class="${cls}">${r[h] !== undefined ? r[h] : ''}</td>`;
-      }).join('')}</tr>`
-    ).join('')}</tbody>`;
+  const t = $('previewTable'); const show = rows.slice(0, 6);
+  t.innerHTML = `<thead><tr>${headers.map(h => {
+    const cls = numericCols.includes(h) ? 'col-numeric' : dateCols.includes(h) ? 'col-date' : '';
+    return `<th class="${cls}">${h.replace(/_/g,' ')}</th>`;
+  }).join('')}</tr></thead>` +
+  `<tbody>${show.map(r => `<tr>${headers.map(h => {
+    const cls = numericCols.includes(h) ? 'col-numeric' : dateCols.includes(h) ? 'col-date' : '';
+    return `<td class="${cls}">${r[h] !== undefined ? r[h] : ''}</td>`;
+  }).join('')}</tr>`).join('')}</tbody>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MATH HELPERS
+// ══════════════════════════════════════════════════════════════════
+function mean(a) { return a.reduce((x,y) => x+y, 0) / a.length; }
+
+function std(a) {
+  const m = mean(a);
+  return Math.sqrt(a.reduce((acc, v) => acc + (v-m)**2, 0) / a.length);
+}
+
+function ema(a, alpha) {
+  const o = [a[0]];
+  for (let i = 1; i < a.length; i++)
+    o.push(alpha * a[i] + (1 - alpha) * o[i-1]);
+  return o;
+}
+
+function forecast(last, slope, n) {
+  return Array.from({length: n}, (_, i) => +(last + slope * (i + 1)).toFixed(6));
+}
+
+/**
+ * MAPE — Mean Absolute Percentage Error.
+ * Only defined where actual !== 0.
+ */
+function mape(actual, predicted) {
+  let sum = 0, count = 0;
+  for (let i = 0; i < Math.min(actual.length, predicted.length); i++) {
+    if (actual[i] !== 0) {
+      sum += Math.abs((actual[i] - predicted[i]) / actual[i]);
+      count++;
+    }
+  }
+  return count > 0 ? (sum / count * 100) : 0;
+}
+
+function directionalAccuracy(actual, predicted) {
+  if (actual.length < 2 || predicted.length < 2) return 0;
+  let correct = 0, total = 0;
+  for (let i = 1; i < Math.min(actual.length, predicted.length); i++) {
+    if (Math.sign(actual[i] - actual[i-1]) === Math.sign(predicted[i] - predicted[i-1])) correct++;
+    total++;
+  }
+  return total > 0 ? (correct / total * 100) : 0;
+}
+
+function maxDrawdown(series) {
+  let peak = -Infinity, maxDD = 0;
+  for (const v of series) {
+    if (v > peak) peak = v;
+    const dd = (peak - v) / peak;
+    if (dd > maxDD) maxDD = dd;
+  }
+  return maxDD * 100;
+}
+
+function detectSeasonality(series, maxPeriod = 12) {
+  if (series.length < maxPeriod * 2) return null;
+  const correlation = (x, y) => {
+    const n = Math.min(x.length, y.length);
+    const mx = mean(x.slice(0,n)), my = mean(y.slice(0,n));
+    let num = 0, denx = 0, deny = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = x[i]-mx, dy = y[i]-my;
+      num += dx*dy; denx += dx*dx; deny += dy*dy;
+    }
+    return num / Math.sqrt(denx * deny);
+  };
+  let bestLag = null, bestCorr = 0;
+  for (let lag = 2; lag <= maxPeriod; lag++) {
+    const c = correlation(series.slice(0,-lag), series.slice(lag));
+    if (c > bestCorr && c > 0.3) { bestCorr = c; bestLag = lag; }
+  }
+  return bestLag ? { period: bestLag, strength: bestCorr } : null;
+}
+
+function detectOutliers(series) {
+  const sorted = [...series].sort((a,b) => a-b);
+  const q1 = sorted[Math.floor(sorted.length * 0.25)];
+  const q3 = sorted[Math.floor(sorted.length * 0.75)];
+  const iqr = q3 - q1;
+  const lower = q1 - 1.5 * iqr, upper = q3 + 1.5 * iqr;
+  return series.map((v,i) => ({index:i, value:v, isOutlier: v<lower||v>upper}))
+               .filter(x => x.isOutlier);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FIX 1 — HOLDOUT VALIDATION
+// Holds out the last 25% of the series (minimum 3 points) as a
+// true out-of-sample test set. Trains EMA on the remaining data,
+// generates step-ahead forecasts into the holdout window, and
+// calculates MAPE on those unseen points. The same holdout is used
+// to benchmark against a naive (last-value) forecast, making the
+// EMA-vs-naive comparison a fair apples-to-apples test.
+//
+// Returns null when the series is too short for a meaningful split
+// (< 8 points), triggering a transparent fallback in the UI.
+// ══════════════════════════════════════════════════════════════════
+function holdoutValidation(series, alpha) {
+  const MIN_TRAIN = 5;
+  const MIN_HOLDOUT = 3;
+  if (series.length < MIN_TRAIN + MIN_HOLDOUT) return null; // too small
+
+  const holdoutSize = Math.max(MIN_HOLDOUT, Math.round(series.length * 0.25));
+  const train   = series.slice(0, -holdoutSize);
+  const holdout = series.slice(-holdoutSize);
+
+  if (train.length < MIN_TRAIN) return null;
+
+  // EMA on training data only
+  const trainSmooth = ema(train, alpha);
+  const lastEma     = trainSmooth[trainSmooth.length - 1];
+
+  // Slope from the tail of the training EMA (same logic as main analyze)
+  const tailLen    = Math.max(3, Math.round(trainSmooth.length * 0.25));
+  const tail       = trainSmooth.slice(-tailLen);
+  const trainSlope = (tail[tail.length - 1] - tail[0]) / (tail.length - 1);
+
+  // Generate one forecast per holdout step (iterated, not direct)
+  const emaForecast = forecast(lastEma, trainSlope, holdoutSize);
+
+  // Naive baseline: repeat last observed training value for each holdout step
+  const naiveForecast = Array(holdoutSize).fill(train[train.length - 1]);
+
+  return {
+    holdoutSize,
+    holdoutActual:   holdout,
+    emaForecast,
+    naiveForecast,
+    holdoutMape:     mape(holdout, emaForecast),
+    naiveMape:       mape(holdout, naiveForecast),
+    holdoutDirAcc:   directionalAccuracy(holdout, emaForecast),
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FIX 2 — CONFIDENCE SCORE
+// Replaces the previous R²×70 + sampleFactor×25 formula, which
+// inflated confidence for any autocorrelated series regardless of
+// actual predictive accuracy.
+//
+// The new score has three grounded components:
+//   • MAPE factor  (55 pts max) — inverts holdout MAPE on a curve
+//     capped at 50%: a 0% MAPE gives full marks; 50%+ gives zero.
+//   • Directional accuracy (30 pts max) — proportion of correct
+//     up/down calls on holdout; 100% gives full marks.
+//   • Sample size factor  (15 pts max) — log-scaled, saturates
+//     around 30 data points to avoid over-rewarding large datasets.
+//
+// When no holdout is available (< 8 points), the score is capped
+// at 60 and flagged as estimated so users know it is less reliable.
+// ══════════════════════════════════════════════════════════════════
+function computeConfidence(holdoutResult, dirAcc, sampleSize) {
+  const sampleFactor = Math.min(1, Math.log(sampleSize + 1) / Math.log(30));
+
+  if (!holdoutResult) {
+    // Insufficient data for holdout — partial score, capped lower
+    const raw = dirAcc * 0.4 + sampleFactor * 20;
+    return { score: Math.round(Math.max(10, Math.min(60, raw))), estimated: true };
+  }
+
+  // Primary driver: out-of-sample MAPE (0% → 1.0, 50%+ → 0.0)
+  const mapeFactor = Math.max(0, 1 - holdoutResult.holdoutMape / 50);
+
+  // Directional accuracy on holdout (0–1)
+  const dirFactor = holdoutResult.holdoutDirAcc / 100;
+
+  const raw = mapeFactor * 55 + dirFactor * 30 + sampleFactor * 15;
+  return { score: Math.round(Math.max(10, Math.min(95, raw))), estimated: false };
+}
+
+function fmtNum(v) {
+  if (!isFinite(v) || isNaN(v)) return '—';
+  if (Math.abs(v) >= 1e6)  return (v/1e6).toFixed(2) + 'M';
+  if (Math.abs(v) >= 1e3)  return (v/1e3).toFixed(1) + 'K';
+  if (Math.abs(v) < 0.01 && v !== 0) return v.toExponential(2);
+  return v.toFixed(2);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -718,29 +853,21 @@ function analyze() {
     ? rows.map(r => String(r[dateCol]))
     : s.map((_, i) => `P${i + 1}`);
 
-  // MATH
-  const avg  = mean(s);
+  const avg   = mean(s);
   const sigma = std(s);
-  const vol  = sigma / Math.abs(avg);
+  const vol   = sigma / Math.abs(avg);
   const smooth = ema(s, alpha);
 
-  // FIX: Use RECENT tail (last ~25%, min 3 pts) for slope, not global first→last.
-  // This prevents old growth regimes from distorting near-term forecasts.
   const tailLen = Math.max(3, Math.round(smooth.length * 0.25));
-  const tail = smooth.slice(-tailLen);
-  const slope = (tail[tail.length - 1] - tail[0]) / (tail.length - 1);
+  const tail    = smooth.slice(-tailLen);
+  const slope   = (tail[tail.length - 1] - tail[0]) / (tail.length - 1);
 
-  // FIX: R² of EMA fit to actual data — real goodness-of-fit metric
+  // R² (goodness of fit for EMA smoother — kept for log transparency)
   const ssTot = s.reduce((acc, v) => acc + (v - avg) ** 2, 0);
   const ssRes = s.reduce((acc, v, i) => acc + (v - smooth[i]) ** 2, 0);
-  const r2 = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
+  const r2    = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
 
-  // FIX: Confidence now based on R² + sample size penalty (not arbitrary formula)
-  const sampleFactor = Math.min(1, Math.log(s.length + 1) / Math.log(30));
-  const rawConf = r2 * 70 + sampleFactor * 25;
-  const conf = Math.round(Math.max(10, Math.min(95, rawConf)));
-  const badge = conf > 72 ? 'green' : conf > 50 ? 'amber' : 'red';
-
+  // Forecasts
   const lastActual = s[s.length - 1];
   const lastEma    = smooth[smooth.length - 1];
   const base = forecast(lastEma, slope, horizon);
@@ -755,10 +882,67 @@ function analyze() {
     ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
   const pctSign = parseFloat(pctChange) >= 0 ? '+' : '';
 
-  lastAnalysis = { metric, s, smooth, labels, base, opt, pess, avg, sigma, vol,
-                   slope, conf, badge, r2, trendDir, pctChange, pctSign };
+  // Seasonality / outliers (unchanged, data quality metrics)
+  const seasonality = detectSeasonality(s);
+  const outliers    = detectOutliers(s);
 
-  // ── KPIs ──
+  // In-sample directional accuracy (for display in KPI alongside holdout)
+  const inSampleDirAcc = directionalAccuracy(s, smooth);
+
+  // ── FIX: TRUE OUT-OF-SAMPLE HOLDOUT VALIDATION ──────────────────
+  const holdout = holdoutValidation(s, alpha);
+
+  // ── FIX: GROUNDED CONFIDENCE SCORE ──────────────────────────────
+  const { score: conf, estimated: confEstimated } = computeConfidence(holdout, inSampleDirAcc, s.length);
+  const badge = conf > 72 ? 'green' : conf > 50 ? 'amber' : 'red';
+
+  // Surface the holdout MAPE as the headline accuracy metric.
+  // Fall back to in-sample (with disclaimer) only when data is too short.
+  const displayMape     = holdout ? holdout.holdoutMape : mape(s.slice(1), smooth.slice(1));
+  const mapeIsHoldout   = holdout !== null;
+  const emaBeatsNaive   = holdout ? holdout.holdoutMape < holdout.naiveMape
+                                  : false; // can't claim win without holdout
+  const naiveMapeVal    = holdout ? holdout.naiveMape : null;
+
+  const maxDD = maxDrawdown(s);
+
+  lastAnalysis = {
+    metric, s, smooth, labels, base, opt, pess, avg, sigma, vol,
+    slope, conf, badge, r2, trendDir, pctChange, pctSign,
+    modelQuality: {
+      mape: displayMape,
+      mapeIsHoldout,
+      holdoutSize: holdout ? holdout.holdoutSize : 0,
+      directionalAccuracy: inSampleDirAcc,
+      holdoutDirAcc: holdout ? holdout.holdoutDirAcc : null,
+      maxDrawdown: maxDD,
+      seasonality,
+      outliers,
+      emaBeatsNaive,
+      naiveMape: naiveMapeVal,
+      confEstimated,
+    }
+  };
+
+  const mq = lastAnalysis.modelQuality;
+
+  // ── KPI GRID ─────────────────────────────────────────────────────
+  const seasonText  = mq.seasonality
+    ? `${mq.seasonality.period}-period cycle (${(mq.seasonality.strength*100).toFixed(0)}%)`
+    : 'None detected';
+  const outlierText = mq.outliers.length > 0
+    ? `${mq.outliers.length} outlier${mq.outliers.length > 1 ? 's' : ''} detected`
+    : 'No outliers';
+
+  // Accuracy card label changes depending on whether holdout was possible
+  const mapeLabel = mq.mapeIsHoldout
+    ? `Holdout MAPE (n=${mq.holdoutSize})`
+    : 'In-Sample MAPE ⚠';
+  const mapeQuality = mq.mape < 10 ? 'Excellent' : mq.mape < 20 ? 'Good' : 'Poor';
+  const mapeClass   = mq.mape < 10 ? 'green' : mq.mape < 20 ? 'amber' : 'red';
+
+  const confLabel = mq.confEstimated ? 'Confidence (est.)' : 'Confidence Score';
+
   $('kpiGrid').innerHTML = `
     <div class="kpi-card blue">
       <div class="kpi-label">Metric</div>
@@ -776,27 +960,65 @@ function analyze() {
       <div class="kpi-sub" style="color:var(--muted)">Next period: ${pctSign}${pctChange}%</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Volatility</div>
-      <div class="kpi-value">${(vol*100).toFixed(1)}%</div>
-      <div class="kpi-sub" style="color:var(--muted)">Coeff. of variation</div>
+      <div class="kpi-label">${mapeLabel}</div>
+      <div class="kpi-value">${mq.mape.toFixed(1)}%</div>
+      <div class="kpi-sub ${mapeClass}">
+        ● ${mapeQuality}${mq.mapeIsHoldout ? ' · out-of-sample' : ' · no holdout'}
+      </div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">R² Fit</div>
-      <div class="kpi-value">${r2.toFixed(3)}</div>
-      <div class="kpi-sub" style="color:var(--muted)">EMA goodness-of-fit</div>
+      <div class="kpi-label">Directional Accuracy</div>
+      <div class="kpi-value">${mq.directionalAccuracy.toFixed(0)}%</div>
+      <div class="kpi-sub" style="color:var(--muted)">
+        ${mq.holdoutDirAcc !== null ? `Holdout: ${mq.holdoutDirAcc.toFixed(0)}%` : 'In-sample (full series)'}
+      </div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Max Drawdown</div>
+      <div class="kpi-value">${mq.maxDrawdown.toFixed(1)}%</div>
+      <div class="kpi-sub ${mq.maxDrawdown < 10 ? 'green' : mq.maxDrawdown < 25 ? 'amber' : 'red'}">
+        Peak-to-trough risk
+      </div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Seasonality</div>
+      <div class="kpi-value" style="font-size:1.05rem; padding-top:0.3rem; color:${mq.seasonality ? 'var(--accent)' : 'var(--muted)'}">
+        ${mq.seasonality ? mq.seasonality.period + '-period' : 'None'}
+      </div>
+      <div class="kpi-sub" style="color:var(--muted)">${seasonText}</div>
+    </div>
+    <div class="kpi-card ${mq.outliers.length > 0 ? 'amber' : ''}">
+      <div class="kpi-label">Data Quality</div>
+      <div class="kpi-value" style="font-size:1.05rem; padding-top:0.3rem;">
+        ${mq.outliers.length > 0 ? mq.outliers.length + ' issues' : 'Clean'}
+      </div>
+      <div class="kpi-sub ${mq.outliers.length > 0 ? 'amber' : 'green'}">${outlierText}</div>
+    </div>
+    <div class="kpi-card ${mq.emaBeatsNaive ? 'green' : 'amber'}">
+      <div class="kpi-label">Model vs Naive</div>
+      <div class="kpi-value" style="font-size:1.05rem; padding-top:0.3rem;">
+        ${mq.emaBeatsNaive ? 'EMA ✓' : mq.naiveMape !== null ? 'Caution' : 'N/A'}
+      </div>
+      <div class="kpi-sub ${mq.emaBeatsNaive ? 'green' : 'amber'}">
+        ${mq.emaBeatsNaive
+          ? `Beats naive by ${(mq.naiveMape - mq.mape).toFixed(1)}% MAPE`
+          : mq.naiveMape !== null
+            ? `Naive MAPE: ${mq.naiveMape.toFixed(1)}%`
+            : 'Insufficient data for holdout'}
+      </div>
     </div>
     <div class="kpi-card ${badge}">
-      <div class="kpi-label">Confidence</div>
+      <div class="kpi-label">${confLabel}</div>
       <div class="kpi-value">${conf}%</div>
-      <div class="kpi-sub ${badge}">${badge==='green'?'● High':badge==='amber'?'● Moderate':'● Low'} confidence</div>
+      <div class="kpi-sub ${badge}">
+        ${badge==='green'?'● High':badge==='amber'?'● Moderate':'● Low'}
+        ${mq.confEstimated ? ' (estimated)' : ''}
+      </div>
     </div>
   `;
 
-  // ── FIX: Full 3-period scenario table visible in main UI ──
-  const fcstPeriodLabels = Array.from({length: horizon}, (_, i) => {
-    if (dateCol && labels.length >= s.length) return `F${i+1}`;
-    return `Period +${i+1}`;
-  });
+  // ── SCENARIO TABLE ───────────────────────────────────────────────
+  const fcstPeriodLabels = Array.from({length: horizon}, (_, i) => `F${i+1}`);
   $('scenarioDivider').textContent = `Scenario Analysis — ${horizon}-Period Outlook`;
   $('scenarioHeader').innerHTML =
     `<div class="scenario-header-cell"></div>` +
@@ -808,45 +1030,53 @@ function analyze() {
   };
 
   $('scenarioRows').innerHTML = [
-    { cls:'opt',  label:'▲ Optimistic', vals: opt },
-    { cls:'base', label:'◆ Base',       vals: base },
-    { cls:'pess', label:'▼ Pessimistic',vals: pess },
+    { cls:'opt',  label:'▲ Optimistic',  vals: opt  },
+    { cls:'base', label:'◆ Base',        vals: base },
+    { cls:'pess', label:'▼ Pessimistic', vals: pess },
   ].map(row =>
     `<div class="scenario-row ${row.cls}">
       <div class="scenario-label-cell">${row.label}</div>
-      ${row.vals.map((v, i) =>
+      ${row.vals.map(v =>
         `<div class="scenario-value-cell">
           <div class="val">${fmtNum(v)}</div>
           <div class="delta">${makeDelta(v, lastActual)}</div>
-        </div>`
-      ).join('')}
+        </div>`).join('')}
     </div>`
   ).join('');
 
-  // ── LOG ──
+  // ── ENHANCED LOG ─────────────────────────────────────────────────
   const ts = new Date().toLocaleTimeString();
   $('logOutput').innerHTML =
     `<span class="log-ok">[${ts}] ✓ Analysis complete · EMA α=${alpha} · horizon=${horizon}</span>\n` +
-    `<span class="log-info">[INFO] Metric      : ${metric}</span>\n` +
-    `<span class="log-info">[INFO] Data points : ${s.length} (tail for slope: last ${tailLen})</span>\n` +
-    `<span class="log-info">[INFO] Average     : ${avg.toFixed(4)}</span>\n` +
-    `<span class="log-info">[INFO] Std Dev     : ${sigma.toFixed(4)}</span>\n` +
-    `<span class="log-info">[INFO] Volatility  : ${(vol*100).toFixed(2)}%</span>\n` +
-    `<span class="log-info">[INFO] EMA Slope   : ${slope.toFixed(6)} (recent tail)</span>\n` +
-    `<span class="log-info">[INFO] R² fit      : ${r2.toFixed(4)}</span>\n` +
-    `<span class="log-info">[INFO] Δ Next per  : ${pctSign}${pctChange}%</span>\n` +
-    `<span class="log-${badge}">[CONF] Score       : ${conf}% (${badge.toUpperCase()})</span>\n` +
-    base.map((v, i) =>
-      `<span class="log-info">[FCST] Base[+${i+1}]   : ${v.toFixed(4)}</span>`
-    ).join('\n') + '\n' +
-    `<span class="log-ok">[FCST] Opt [+1]   : ${opt[0].toFixed(4)}</span>\n` +
+    `<span class="log-info">[INFO] Metric         : ${metric}</span>\n` +
+    `<span class="log-info">[INFO] Data points    : ${s.length} (tail for slope: last ${tailLen})</span>\n` +
+    `<span class="log-info">[INFO] Average        : ${avg.toFixed(4)}</span>\n` +
+    `<span class="log-info">[INFO] Std Dev        : ${sigma.toFixed(4)}</span>\n` +
+    `<span class="log-info">[INFO] Volatility     : ${(vol*100).toFixed(2)}%</span>\n` +
+    `<span class="log-info">[INFO] EMA Slope      : ${slope.toFixed(6)}</span>\n` +
+    `<span class="log-info">[INFO] R² (smoother)  : ${r2.toFixed(4)} — fit only, not predictive</span>\n` +
+    (holdout
+      ? `<span class="log-info">[HOLD] Split          : train=${s.length - holdout.holdoutSize}, test=${holdout.holdoutSize} (25% holdout)</span>\n` +
+        `<span class="log-info">[HOLD] EMA MAPE       : ${holdout.holdoutMape.toFixed(2)}% (out-of-sample)</span>\n` +
+        `<span class="log-info">[HOLD] Naive MAPE     : ${holdout.naiveMape.toFixed(2)}% (last-value baseline)</span>\n` +
+        `<span class="log-${holdout.holdoutMape < holdout.naiveMape ? 'ok' : 'warn'}">[HOLD] vs Naive       : EMA ${holdout.holdoutMape < holdout.naiveMape ? 'wins' : 'loses/ties'} (ΔMAPE=${(holdout.naiveMape - holdout.holdoutMape).toFixed(2)}%)</span>\n` +
+        `<span class="log-info">[HOLD] Directional    : ${holdout.holdoutDirAcc.toFixed(1)}% (holdout)</span>\n`
+      : `<span class="log-warn">[HOLD] Skipped        : < 8 points — no holdout split possible</span>\n` +
+        `<span class="log-warn">[HOLD] MAPE shown     : in-sample approximation — interpret cautiously</span>\n`
+    ) +
+    `<span class="log-info">[INFO] Directional    : ${inSampleDirAcc.toFixed(1)}% (full series)</span>\n` +
+    `<span class="log-info">[INFO] Max Drawdown   : ${maxDD.toFixed(2)}%</span>\n` +
+    (mq.seasonality ? `<span class="log-warn">[SEAS] Detected       : ${mq.seasonality.period}-period cycle (r=${mq.seasonality.strength.toFixed(2)})</span>\n` : '') +
+    (mq.outliers.length > 0 ? `<span class="log-warn">[DATA] Outliers       : ${mq.outliers.map(o => `#${o.index}=${o.value.toFixed(1)}`).join(', ')}</span>\n` : '') +
+    `<span class="log-info">[INFO] Δ Next period  : ${pctSign}${pctChange}%</span>\n` +
+    `<span class="log-${badge}">[CONF] Score          : ${conf}%${confEstimated ? ' (estimated — small sample)' : ' (holdout-grounded)'} → ${badge.toUpperCase()}</span>\n` +
+    base.map((v, i) => `<span class="log-info">[FCST] Base[+${i+1}]    : ${v.toFixed(4)}</span>`).join('\n') + '\n' +
+    `<span class="log-ok">[FCST] Opt [+1]    : ${opt[0].toFixed(4)}</span>\n` +
     `<span class="log-warn">[FCST] Pess[+1]   : ${pess[0].toFixed(4)}</span>`;
 
-  // Show sections
   [$('kpiSection'), $('chartSection'), $('scenarioSection'), $('logSection')]
     .forEach(el => el.classList.remove('hidden'));
-  pdfBtn.disabled = false;
-  csvExportBtn.disabled = false;
+  pdfBtn.disabled = false; csvExportBtn.disabled = false;
 
   renderChart(s, smooth, base, opt, pess, labels);
 }
@@ -854,162 +1084,83 @@ function analyze() {
 // ══════════════════════════════════════════════════════════════════
 // CHART
 // ══════════════════════════════════════════════════════════════════
-// fontScale: 1 = normal browser render, ~3.5 = PDF high-res canvas render
-// The PDF canvas is 1400px wide but displayed at ~180mm in the PDF page,
-// so Chart.js fonts/lines must be scaled up ~3-4x to stay legible.
 function buildChartConfig(s, t, b, o, p, labels, theme='dark', fontScale=1) {
-  const isDark      = theme === 'dark';
-  const isPDF       = fontScale > 1;
-  const gridColor   = isDark ? 'rgba(30,34,48,0.8)' : 'rgba(190,200,215,0.7)';
-  const tickColor   = isDark ? '#6b7280' : '#334155';
-  const legendColor = isDark ? '#9ca3af' : '#334155';
-  const ttBg        = isDark ? '#11131c' : '#ffffff';
-  const ttBorder    = isDark ? '#1e2230' : '#cbd5e1';
-  const ttTitle     = isDark ? '#e8e9ef' : '#0f172a';
-  const ttBody      = isDark ? '#6b7280' : '#475569';
-
-  const lineWidth  = isPDF ? 5   : 2;
-  const emaWidth   = isPDF ? 3.5 : 1.5;
-  const pointR     = isPDF ? 7   : 3;
-  const fcstPtR    = isPDF ? 9   : 4;
-  const tickSz     = Math.round(9  * fontScale);
-  const legendSz   = Math.round(10 * fontScale);
-
-  const fullLabels = [
-    ...labels.slice(0, s.length),
-    ...b.map((_, i) => `F${i + 1}`)
-  ];
-
-  // Y-axis: show K/M so large numbers don't overflow the axis
-  const yTickCb = (val) => {
-    if (Math.abs(val) >= 1e6) return (val/1e6).toFixed(1) + 'M';
-    if (Math.abs(val) >= 1e3) return (val/1e3).toFixed(1) + 'K';
+  const isDark = theme === 'dark', isPDF = fontScale > 1;
+  const gridColor = isDark ? 'rgba(30,34,48,0.8)' : 'rgba(190,200,215,0.7)';
+  const tickColor = isDark ? '#6b7280' : '#334155';
+  const ttBg = isDark ? '#11131c' : '#ffffff';
+  const ttBorder = isDark ? '#1e2230' : '#cbd5e1';
+  const ttTitle = isDark ? '#e8e9ef' : '#0f172a';
+  const ttBody  = isDark ? '#6b7280' : '#475569';
+  const lineWidth = isPDF ? 5 : 2, emaWidth = isPDF ? 3.5 : 1.5;
+  const pointR = isPDF ? 7 : 3, fcstPtR = isPDF ? 9 : 4;
+  const tickSz = Math.round(9 * fontScale), legendSz = Math.round(10 * fontScale);
+  const fullLabels = [...labels.slice(0, s.length), ...b.map((_,i) => `F${i+1}`)];
+  const yTickCb = val => {
+    if (Math.abs(val) >= 1e6) return (val/1e6).toFixed(1)+'M';
+    if (Math.abs(val) >= 1e3) return (val/1e3).toFixed(1)+'K';
     if (Math.abs(val) < 0.01 && val !== 0) return val.toExponential(1);
     return val.toFixed(val % 1 === 0 ? 0 : 2);
   };
-
   return {
     type: 'line',
     data: {
       labels: fullLabels,
       datasets: [
-        {
-          label: 'Actual',
-          data: s,
-          borderColor: '#c9a84c',
-          backgroundColor: 'rgba(201,168,76,0.10)',
-          borderWidth: lineWidth, tension: 0.3,
-          pointRadius: pointR,
-          pointBackgroundColor: '#c9a84c',
-          pointBorderColor: '#ffffff',
-          pointBorderWidth: isPDF ? 2 : 1,
-          fill: true,
-        },
-        {
-          label: 'EMA Trend',
-          data: t,
-          borderColor: '#4c8ec9', borderWidth: emaWidth,
-          borderDash: isPDF ? [12, 8] : [4, 4],
-          tension: 0.4, pointRadius: 0, fill: false,
-        },
-        {
-          label: 'Base Forecast',
-          data: [...Array(s.length).fill(null), ...b],
-          borderColor: '#c9a84c', borderWidth: lineWidth,
-          borderDash: isPDF ? [16, 8] : [6, 6],
-          pointRadius: fcstPtR,
-          pointBackgroundColor: '#c9a84c',
-          pointBorderColor: '#ffffff',
-          pointBorderWidth: isPDF ? 2 : 1,
-          fill: false,
-        },
-        {
-          label: 'Upper (Opt.)',
-          data: [...Array(s.length).fill(null), ...o],
-          borderColor: '#22c55e', borderWidth: isPDF ? 3 : 0,
-          backgroundColor: 'rgba(34,197,94,0.13)',
-          fill: '+1', pointRadius: 0,
-        },
-        {
-          label: 'Lower (Pess.)',
-          data: [...Array(s.length).fill(null), ...p],
-          borderColor: '#ef4444', borderWidth: isPDF ? 3 : 0,
-          fill: false, pointRadius: 0,
-        },
+        { label:'Actual', data:s, borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,0.10)',
+          borderWidth:lineWidth, tension:0.3, pointRadius:pointR,
+          pointBackgroundColor:'#c9a84c', pointBorderColor:'#ffffff',
+          pointBorderWidth:isPDF?2:1, fill:true },
+        { label:'EMA Trend', data:t, borderColor:'#4c8ec9', borderWidth:emaWidth,
+          borderDash:isPDF?[12,8]:[4,4], tension:0.4, pointRadius:0, fill:false },
+        { label:'Base Forecast', data:[...Array(s.length).fill(null), ...b],
+          borderColor:'#c9a84c', borderWidth:lineWidth, borderDash:isPDF?[16,8]:[6,6],
+          pointRadius:fcstPtR, pointBackgroundColor:'#c9a84c', pointBorderColor:'#ffffff',
+          pointBorderWidth:isPDF?2:1, fill:false },
+        { label:'Upper (Opt.)', data:[...Array(s.length).fill(null), ...o],
+          borderColor:'#22c55e', borderWidth:isPDF?3:0,
+          backgroundColor:'rgba(34,197,94,0.13)', fill:'+1', pointRadius:0 },
+        { label:'Lower (Pess.)', data:[...Array(s.length).fill(null), ...p],
+          borderColor:'#ef4444', borderWidth:isPDF?3:0, fill:false, pointRadius:0 },
       ]
     },
     options: {
-      responsive: !isPDF,          // true for live browser chart, false for PDF canvas
-      maintainAspectRatio: false,
-      animation: { duration: 0 },  // No animation so capture is instant
-      interaction: { mode: 'index', intersect: false },
-      layout: {
-        padding: {
-          top:    isPDF ? 30 : 10,
-          right:  isPDF ? 50 : 10,
-          bottom: isPDF ? 10 :  5,
-          left:   isPDF ? 10 :  5,
-        }
-      },
+      responsive:!isPDF, maintainAspectRatio:false,
+      animation:{duration:0}, interaction:{mode:'index', intersect:false},
+      layout:{ padding:{ top:isPDF?30:10, right:isPDF?50:10, bottom:isPDF?10:5, left:isPDF?10:5 } },
       plugins: {
-        legend: {
-          display: true,
-          labels: {
-            color: legendColor,
-            font: { family: 'monospace', size: legendSz },
-            boxWidth: isPDF ? 50 : 20,
-            padding:  isPDF ? 30 : 10,
-          }
-        },
-        tooltip: {
-          enabled: !isPDF,
-          backgroundColor: ttBg, borderColor: ttBorder, borderWidth: 1,
-          titleColor: ttTitle, bodyColor: ttBody,
-          titleFont: { family: 'monospace', size: 11 },
-          bodyFont:  { family: 'monospace', size: 10 },
-        }
+        legend:{ display:true, labels:{ color:isDark?'#9ca3af':'#334155',
+          font:{family:'monospace', size:legendSz}, boxWidth:isPDF?50:20, padding:isPDF?30:10 } },
+        tooltip:{ enabled:!isPDF, backgroundColor:ttBg, borderColor:ttBorder, borderWidth:1,
+          titleColor:ttTitle, bodyColor:ttBody,
+          titleFont:{family:'monospace',size:11}, bodyFont:{family:'monospace',size:10} }
       },
       scales: {
-        x: {
-          grid: { color: gridColor, lineWidth: isPDF ? 1.5 : 1 },
-          border: { color: isDark ? '#374151' : '#64748b', width: isPDF ? 2 : 1 },
-          ticks: {
-            color: tickColor,
-            font: { family: 'monospace', size: tickSz, weight: isPDF ? '700' : '400' },
-            maxTicksLimit: isPDF ? 10 : 14,
-            maxRotation: isPDF ? 45 : 0,
-            minRotation: isPDF ? 30 : 0,
-          }
-        },
-        y: {
-          grid: { color: gridColor, lineWidth: isPDF ? 1.5 : 1 },
-          border: { color: isDark ? '#374151' : '#64748b', width: isPDF ? 2 : 1 },
-          ticks: {
-            color: tickColor,
-            font: { family: 'monospace', size: tickSz, weight: isPDF ? '700' : '400' },
-            callback: yTickCb,
-            maxTicksLimit: 8,
-          }
-        }
+        x:{ grid:{color:gridColor, lineWidth:isPDF?1.5:1},
+            border:{color:isDark?'#374151':'#64748b', width:isPDF?2:1},
+            ticks:{color:tickColor, font:{family:'monospace',size:tickSz, weight:isPDF?'700':'400'},
+              maxTicksLimit:isPDF?10:14, maxRotation:isPDF?45:0, minRotation:isPDF?30:0} },
+        y:{ grid:{color:gridColor, lineWidth:isPDF?1.5:1},
+            border:{color:isDark?'#374151':'#64748b', width:isPDF?2:1},
+            ticks:{color:tickColor, font:{family:'monospace',size:tickSz, weight:isPDF?'700':'400'},
+              callback:yTickCb, maxTicksLimit:8} }
       }
     }
   };
 }
 
-
-
 function renderChart(s, t, b, o, p, labels) {
   if (chartObj) { chartObj.destroy(); chartObj = null; }
-  const ctx = $('trendChart').getContext('2d');
-  chartObj = new Chart(ctx, buildChartConfig(s, t, b, o, p, labels, 'dark'));
+  chartObj = new Chart($('trendChart').getContext('2d'),
+    buildChartConfig(s, t, b, o, p, labels, 'dark'));
 }
 
 // ══════════════════════════════════════════════════════════════════
-// EXPORT FORECAST CSV — NEW FEATURE
+// EXPORT CSV
 // ══════════════════════════════════════════════════════════════════
 function exportForecastCSV() {
   if (!lastAnalysis) return;
-  const { metric, base, opt, pess, s } = lastAnalysis;
+  const { metric, base, opt, pess } = lastAnalysis;
   const lines = ['period,scenario,value'];
   base.forEach((v, i) => {
     lines.push(`+${i+1},optimistic,${opt[i].toFixed(4)}`);
@@ -1018,352 +1169,203 @@ function exportForecastCSV() {
   });
   const blob = new Blob([lines.join('\n')], {type:'text/csv'});
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${metric}_forecast.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(blob); a.download = `${metric}_forecast.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
   toast('✓ Forecast CSV downloaded');
 }
 
 // ══════════════════════════════════════════════════════════════════
-// EXPORT PDF — jsPDF programmatic build, no window.print()
-//
-// KEY FIXES vs broken version:
-//  1. All Unicode/emoji replaced with ASCII — jsPDF Helvetica can't
-//     render ↑ ▲ ◆ ▼ → they silently become "!" or "%".
-//  2. Chart canvas is position:fixed off-screen (NOT display:none)
-//     so Chart.js actually paints before we capture it.
-//  3. We await a requestAnimationFrame + 200ms so the GPU flush
-//     completes before toDataURL() — prevents blank chart captures.
-//  4. Tighter layout with a real sidebar, better typography, and
-//     a stats mini-table below the chart for a premium feel.
+// EXPORT PDF
 // ══════════════════════════════════════════════════════════════════
 async function exportPDF() {
   if (!lastAnalysis) return;
-  if (!window.jspdf) { toast('PDF library not loaded — try again in a moment', true); return; }
-
-  pdfBtn.disabled = true;
-  pdfBtn.textContent = 'Building PDF...';
+  if (!window.jspdf) { toast('PDF library not loaded — try again', true); return; }
+  pdfBtn.disabled = true; pdfBtn.textContent = 'Building PDF...';
 
   const { metric, s, smooth, labels, base, opt, pess, avg, sigma,
-          slope, conf, r2, trendDir, pctChange, pctSign } = lastAnalysis;
+          slope, conf, r2, trendDir, pctChange, pctSign, modelQuality: mq } = lastAnalysis;
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  // ── Layout ──
-  const PW = 210;
-  const ML = 12, MR = 12;
-  const CW = PW - ML - MR;  // 186 mm
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const PW = 210, ML = 12, MR = 12, CW = PW - ML - MR;
   let Y = 0;
 
-  // ── Helpers ──
   const rgb  = hex => [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
-  const fill  = hex => { const [r,g,b] = rgb(hex); doc.setFillColor(r,g,b); };
-  const draw  = hex => { const [r,g,b] = rgb(hex); doc.setDrawColor(r,g,b); };
-  const text  = hex => { const [r,g,b] = rgb(hex); doc.setTextColor(r,g,b); };
-  const FR    = (x,y,w,h) => doc.rect(x, y, w, h, 'F');
-  const DR    = (x,y,w,h) => doc.rect(x, y, w, h, 'S');
-  const FDR   = (x,y,w,h) => doc.rect(x, y, w, h, 'FD');
-  const LN    = (x1,y1,x2,y2) => doc.line(x1,y1,x2,y2);
+  const fill = hex => { const [r,g,b] = rgb(hex); doc.setFillColor(r,g,b); };
+  const draw = hex => { const [r,g,b] = rgb(hex); doc.setDrawColor(r,g,b); };
+  const text = hex => { const [r,g,b] = rgb(hex); doc.setTextColor(r,g,b); };
+  const FR   = (x,y,w,h) => doc.rect(x,y,w,h,'F');
+  const DR   = (x,y,w,h) => doc.rect(x,y,w,h,'S');
+  const LN   = (x1,y1,x2,y2) => doc.line(x1,y1,x2,y2);
 
-  // Determine badge colours (ASCII-safe labels only)
   const isHigh = conf > 72, isMid = conf > 50;
   const badgeHex   = isHigh ? '#15803d' : isMid ? '#b45309' : '#b91c1c';
   const badgeBg    = isHigh ? '#f0fdf4' : isMid ? '#fffbeb' : '#fef2f2';
   const badgeLabel = isHigh ? 'HIGH CONFIDENCE' : isMid ? 'MODERATE CONFIDENCE' : 'LOW CONFIDENCE';
-  // ASCII-safe trend label (no arrow Unicode)
-  const trendAscii = slope > 0.001 * avg ? 'Upward (+)' : slope < -0.001 * avg ? 'Downward (-)' : 'Flat (~)';
-  const trendHex   = slope > 0.001 * avg ? '#15803d' : slope < -0.001 * avg ? '#b91c1c' : '#b45309';
   const lastActual = s[s.length - 1];
 
-  // ════════════════════════════════════════════════════════
-  // STEP 1 — Capture chart BEFORE building PDF
-  //           Canvas must NOT be display:none for this to work.
-  //           We use requestAnimationFrame to ensure GPU flush.
-  // ════════════════════════════════════════════════════════
   let chartImg = null;
   try {
     const pdfCanvas = $('pdfChartCanvas');
-    // Size it generously for high-res output
-    pdfCanvas.width  = 1600;
-    pdfCanvas.height = 560;
-
-    if (window._pdfChartObj) {
-      try { window._pdfChartObj.destroy(); } catch(e) {}
-      window._pdfChartObj = null;
-    }
-
-    window._pdfChartObj = new Chart(
-      pdfCanvas.getContext('2d'),
-      buildChartConfig(s, smooth, base, opt, pess, labels, 'light', 3.5)
-    );
-
-    // Wait: rAF ensures paint, then extra 220ms for Chart.js animation
+    pdfCanvas.width = 1600; pdfCanvas.height = 560;
+    if (window._pdfChartObj) { try { window._pdfChartObj.destroy(); } catch(e){} window._pdfChartObj = null; }
+    window._pdfChartObj = new Chart(pdfCanvas.getContext('2d'),
+      buildChartConfig(s, smooth, base, opt, pess, labels, 'light', 3.5));
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 220)));
-
-    // Composite onto white background
     const tmp = document.createElement('canvas');
     tmp.width = pdfCanvas.width; tmp.height = pdfCanvas.height;
     const ctx2 = tmp.getContext('2d');
-    ctx2.fillStyle = '#ffffff';
-    ctx2.fillRect(0, 0, tmp.width, tmp.height);
+    ctx2.fillStyle = '#ffffff'; ctx2.fillRect(0,0,tmp.width,tmp.height);
     ctx2.drawImage(pdfCanvas, 0, 0);
     chartImg = tmp.toDataURL('image/png', 0.95);
+    window._pdfChartObj.destroy(); window._pdfChartObj = null;
+  } catch(e) { console.warn('Chart capture failed:', e); }
 
-    window._pdfChartObj.destroy();
-    window._pdfChartObj = null;
-  } catch(e) {
-    console.warn('Chart capture failed:', e);
-  }
-
-  // ════════════════════════════════════════════════════════
-  // STEP 2 — HEADER BAND
-  // ════════════════════════════════════════════════════════
-  const HDR_H = 30;
-  fill('#0d1117'); FR(0, 0, PW, HDR_H);
-
-  // Left gold bar accent
-  fill('#c9a84c'); FR(0, HDR_H, PW * 0.5, 2.5);
-  fill('#4c8ec9'); FR(PW * 0.5, HDR_H, PW * 0.5, 2.5);
-
-  doc.setFont('times', 'bold');
-  doc.setFontSize(20);
-  text('#ffffff');
+  // Header
+  fill('#0d1117'); FR(0,0,PW,30);
+  fill('#c9a84c'); FR(0,30,PW*0.5,2.5);
+  fill('#4c8ec9'); FR(PW*0.5,30,PW*0.5,2.5);
+  doc.setFont('helvetica','bold'); doc.setFontSize(20); text('#ffffff');
   doc.text('PARAGON', ML, 18);
-
-  doc.setFont('times', 'normal');
-  doc.setFontSize(6.5);
-  text('#c9a84c');
+  doc.setFont('helvetica','normal'); doc.setFontSize(6.5); text('#c9a84c');
   doc.text('ANALYTICS  -  EXECUTIVE FORECASTING REPORT', ML, 25);
-
-  doc.setFont('times', 'normal');
-  doc.setFontSize(6.5);
   text('#9ca3af');
-  const dateStr = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  doc.text('CONFIDENTIAL', PW - MR, 17, { align: 'right' });
+  doc.text('CONFIDENTIAL', PW-MR, 17, {align:'right'});
   text('#e5e7eb');
-  doc.text(dateStr, PW - MR, 24, { align: 'right' });
+  doc.text(new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}), PW-MR, 24, {align:'right'});
 
-  Y = HDR_H + 9;
-
-  // ════════════════════════════════════════════════════════
-  // STEP 3 — SUBJECT BLOCK
-  // ════════════════════════════════════════════════════════
-  doc.setFont('times', 'normal');
-  doc.setFontSize(6.5);
-  text('#9ca3af');
-  doc.text('ANALYSIS SUBJECT', ML, Y);
-  Y += 5;
-
-  const title = metric.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
-  doc.setFont('times', 'bold');
-  doc.setFontSize(17);
-  text('#111111');
+  Y = 39;
+  doc.setFont('helvetica','normal'); doc.setFontSize(6.5); text('#9ca3af');
+  doc.text('ANALYSIS SUBJECT', ML, Y); Y += 5;
+  const title = metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  doc.setFont('helvetica','bold'); doc.setFontSize(17); text('#111111');
   doc.text(title, ML, Y);
-
-  // Confidence pill — top-right aligned with title
-  const pillTxt = `${conf}%  ${badgeLabel}`;
-  doc.setFont('times', 'bold');
-  doc.setFontSize(6.5);
+  const pillTxt = `${conf}%  ${badgeLabel}${mq.confEstimated?' (est.)':''}`;
+  doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
   const pillW = doc.getTextWidth(pillTxt) + 6;
-  fill(badgeBg); FR(PW - MR - pillW, Y - 6, pillW, 8);
-  draw(badgeHex); doc.setLineWidth(0.25); DR(PW - MR - pillW, Y - 6, pillW, 8);
-  text(badgeHex);
-  doc.text(pillTxt, PW - MR - pillW + 3, Y - 0.5);
-
+  fill(badgeBg); FR(PW-MR-pillW, Y-6, pillW, 8);
+  draw(badgeHex); doc.setLineWidth(0.25); DR(PW-MR-pillW, Y-6, pillW, 8);
+  text(badgeHex); doc.text(pillTxt, PW-MR-pillW+3, Y-0.5);
   Y += 5;
-  doc.setFont('times', 'normal');
-  doc.setFontSize(7.5);
-  text('#6b7280');
-  doc.text(`${s.length} historical data points   EMA alpha = ${alpha.toFixed(2)}   Horizon = ${horizon} periods`, ML, Y);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); text('#6b7280');
+  const mapeDesc = mq.mapeIsHoldout ? `Holdout MAPE: ${mq.mape.toFixed(1)}%  (n=${mq.holdoutSize} held out)` : `MAPE: ${mq.mape.toFixed(1)}% (in-sample approx.)`;
+  doc.text(`${s.length} data points   EMA α = ${alpha.toFixed(2)}   Horizon = ${horizon}   ${mapeDesc}`, ML, Y);
   Y += 3;
+  draw('#cccccc'); doc.setLineWidth(0.4); LN(ML, Y, PW-MR, Y); Y += 6;
 
-  draw('#cccccc'); doc.setLineWidth(0.4);
-  LN(ML, Y, PW - MR, Y);
-  Y += 6;
-
-  // ════════════════════════════════════════════════════════
-  // STEP 4 — KPI BOXES (5 across, fixed-width, no Unicode)
-  // ════════════════════════════════════════════════════════
+  // KPI boxes
   const kpis = [
-    { label: 'AVERAGE',     value: fmtNum(avg),       sub: 'Historical mean',      color: '#2563eb' },
-    { label: 'STD DEVIATION',value: fmtNum(sigma),    sub: 'Volatility band (+/-)', color: '#7c3aed' },
-    { label: 'TREND',        value: trendAscii,        sub: `Next per.: ${pctSign}${pctChange}%`, color: trendHex },
-    { label: 'R-SQUARED',    value: r2.toFixed(3),    sub: 'EMA goodness of fit',   color: '#0891b2' },
-    { label: 'CONFIDENCE',   value: conf + '%',        sub: badgeLabel,              color: badgeHex  },
+    { label:'AVERAGE',    value:fmtNum(avg),    sub:'Historical mean',   color:'#2563eb' },
+    { label:mq.mapeIsHoldout?'HOLDOUT MAPE':'MAPE (est.)',
+                          value:mq.mape.toFixed(1)+'%',
+                                                sub:mq.mapeIsHoldout?'Out-of-sample':'In-sample only',
+                                                color:mq.mape<10?'#16a34a':mq.mape<20?'#ca8a04':'#dc2626' },
+    { label:'DIRECTIONAL',value:mq.directionalAccuracy.toFixed(0)+'%',
+                                                sub:'Trend accuracy',    color:'#0891b2' },
+    { label:'MAX DRAWDOWN',value:mq.maxDrawdown.toFixed(1)+'%',
+                                                sub:'Peak-to-trough',   color:mq.maxDrawdown<10?'#16a34a':mq.maxDrawdown<25?'#ca8a04':'#dc2626' },
+    { label:'R² SMOOTH',  value:r2.toFixed(3),  sub:'Fit only, not pred.',color:'#7c3aed' },
+    { label:'CONFIDENCE', value:conf+'%',        sub:badgeLabel,         color:badgeHex  },
   ];
-
-  const GAP  = 2.5;
-  const BOX_W = (CW - GAP * 4) / 5;
-  const BOX_H = 20;
-
-  kpis.forEach((k, i) => {
-    const bx = ML + i * (BOX_W + GAP);
-    const by = Y;
-
-    fill('#f8fafc'); FR(bx, by, BOX_W, BOX_H);
-    draw('#e2e8f0'); doc.setLineWidth(0.25); DR(bx, by, BOX_W, BOX_H);
-    fill(k.color); FR(bx, by, BOX_W, 1.8);  // top colour accent
-
-    // Label
-    doc.setFont('times', 'normal');
-    doc.setFontSize(5);
-    text('#94a3b8');
-    doc.text(k.label, bx + BOX_W / 2, by + 6.5, { align: 'center' });
-
-    // Value — shrink font if too wide
-    doc.setFont('times', 'bold');
-    let vSize = k.value.length > 10 ? 8.5 : 11;
-    doc.setFontSize(vSize);
-    text(k.color);
-    doc.text(k.value, bx + BOX_W / 2, by + 13, { align: 'center' });
-
-    // Sub-label (may wrap)
-    doc.setFont('times', 'normal');
-    doc.setFontSize(4.8);
-    text('#94a3b8');
-    const subLines = doc.splitTextToSize(k.sub, BOX_W - 2);
-    doc.text(subLines[0], bx + BOX_W / 2, by + 17.5, { align: 'center' });
+  const GAP=2.5, BOX_W=(CW-GAP*5)/6, BOX_H=20;
+  kpis.forEach((k,i) => {
+    const bx=ML+i*(BOX_W+GAP), by=Y;
+    fill('#f8fafc'); FR(bx,by,BOX_W,BOX_H);
+    draw('#e2e8f0'); doc.setLineWidth(0.25); DR(bx,by,BOX_W,BOX_H);
+    fill(k.color); FR(bx,by,BOX_W,1.8);
+    doc.setFont('helvetica','normal'); doc.setFontSize(5); text('#94a3b8');
+    doc.text(k.label, bx+BOX_W/2, by+6.5, {align:'center'});
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(k.value.length>10?8.5:11); text(k.color);
+    doc.text(k.value, bx+BOX_W/2, by+13, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(4.8); text('#94a3b8');
+    doc.text(doc.splitTextToSize(k.sub,BOX_W-2)[0], bx+BOX_W/2, by+17.5, {align:'center'});
   });
+  Y += BOX_H+7;
 
-  Y += BOX_H + 7;
-
-  // ════════════════════════════════════════════════════════
-  // STEP 5 — CHART
-  // ════════════════════════════════════════════════════════
-  doc.setFont('times', 'normal');
-  doc.setFontSize(6);
-  text('#9ca3af');
-  doc.text('TREND & FORECAST CHART', ML, Y);
-  Y += 3;
-
+  // Chart
+  doc.setFont('helvetica','normal'); doc.setFontSize(6); text('#9ca3af');
+  doc.text('TREND & FORECAST CHART', ML, Y); Y += 3;
   const CHART_H = 75;
   if (chartImg) {
-    fill('#ffffff'); FR(ML, Y, CW, CHART_H);
-    draw('#e2e8f0'); doc.setLineWidth(0.3); DR(ML, Y, CW, CHART_H);
-    doc.addImage(chartImg, 'PNG', ML + 1.5, Y + 1.5, CW - 3, CHART_H - 3);
+    fill('#ffffff'); FR(ML,Y,CW,CHART_H);
+    draw('#e2e8f0'); doc.setLineWidth(0.3); DR(ML,Y,CW,CHART_H);
+    doc.addImage(chartImg,'PNG',ML+1.5,Y+1.5,CW-3,CHART_H-3);
   } else {
-    // Fallback placeholder if capture failed
-    fill('#f8fafc'); FR(ML, Y, CW, CHART_H);
-    draw('#e2e8f0'); doc.setLineWidth(0.3); DR(ML, Y, CW, CHART_H);
-    doc.setFont('times', 'normal'); doc.setFontSize(8); text('#9ca3af');
-    doc.text('Chart not available', ML + CW/2, Y + CHART_H/2, { align: 'center' });
+    fill('#f8fafc'); FR(ML,Y,CW,CHART_H);
+    draw('#e2e8f0'); doc.setLineWidth(0.3); DR(ML,Y,CW,CHART_H);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); text('#9ca3af');
+    doc.text('Chart not available', ML+CW/2, Y+CHART_H/2, {align:'center'});
   }
-  Y += CHART_H + 5;
+  Y += CHART_H+5;
 
-  // Mini stats row below chart
+  // Stats strip
   const stats = [
-    { label: 'DATA POINTS',  val: String(s.length) },
-    { label: 'MINIMUM',      val: fmtNum(Math.min(...s)) },
-    { label: 'MAXIMUM',      val: fmtNum(Math.max(...s)) },
-    { label: 'LAST ACTUAL',  val: fmtNum(lastActual) },
-    { label: 'EMA (LAST)',   val: fmtNum(smooth[smooth.length-1]) },
-    { label: 'SLOPE',        val: slope.toFixed(4) },
+    {label:'DATA POINTS', val:String(s.length)},
+    {label:'MINIMUM',     val:fmtNum(Math.min(...s))},
+    {label:'MAXIMUM',     val:fmtNum(Math.max(...s))},
+    {label:'LAST ACTUAL', val:fmtNum(lastActual)},
+    {label:'EMA (LAST)',  val:fmtNum(smooth[smooth.length-1])},
+    {label:'SLOPE',       val:slope.toFixed(4)},
   ];
-  const STAT_W = CW / stats.length;
-  const STAT_H = 10;
-  stats.forEach((st, i) => {
-    const sx = ML + i * STAT_W;
-    fill(i % 2 === 0 ? '#f8fafc' : '#f1f5f9'); FR(sx, Y, STAT_W, STAT_H);
-    draw('#e2e8f0'); doc.setLineWidth(0.2); DR(sx, Y, STAT_W, STAT_H);
-    doc.setFont('times', 'normal'); doc.setFontSize(4.8); text('#94a3b8');
-    doc.text(st.label, sx + STAT_W/2, Y + 3.8, { align: 'center' });
-    doc.setFont('times', 'bold'); doc.setFontSize(7); text('#1e293b');
-    doc.text(st.val, sx + STAT_W/2, Y + 8, { align: 'center' });
+  const STAT_W=CW/stats.length, STAT_H=10;
+  stats.forEach((st,i) => {
+    const sx=ML+i*STAT_W;
+    fill(i%2===0?'#f8fafc':'#f1f5f9'); FR(sx,Y,STAT_W,STAT_H);
+    draw('#e2e8f0'); doc.setLineWidth(0.2); DR(sx,Y,STAT_W,STAT_H);
+    doc.setFont('helvetica','normal'); doc.setFontSize(4.8); text('#94a3b8');
+    doc.text(st.label, sx+STAT_W/2, Y+3.8, {align:'center'});
+    doc.setFont('helvetica','bold'); doc.setFontSize(7); text('#1e293b');
+    doc.text(st.val, sx+STAT_W/2, Y+8, {align:'center'});
   });
-  Y += STAT_H + 7;
+  Y += STAT_H+7;
 
-  // ════════════════════════════════════════════════════════
-  // STEP 6 — SCENARIO TABLE (ASCII labels — no Unicode arrows)
-  // ════════════════════════════════════════════════════════
-  doc.setFont('times', 'normal');
-  doc.setFontSize(6);
-  text('#9ca3af');
-  doc.text(`${horizon}-PERIOD SCENARIO FORECAST`, ML, Y);
-  Y += 3;
-
-  // ASCII replacements for ▲ ◆ ▼
+  // Scenario table
+  doc.setFont('helvetica','normal'); doc.setFontSize(6); text('#9ca3af');
+  doc.text(`${horizon}-PERIOD SCENARIO FORECAST`, ML, Y); Y += 3;
   const scenarios = [
-    { label: 'OPTIMISTIC',   tag: '(+1 SD)', vals: opt,  bg: '#f0fdf4', color: '#15803d', border: '#86efac' },
-    { label: 'BASE CASE',    tag: '(EMA)',   vals: base, bg: '#fffbeb', color: '#92400e', border: '#fcd34d' },
-    { label: 'PESSIMISTIC',  tag: '(-1 SD)', vals: pess, bg: '#fef2f2', color: '#b91c1c', border: '#fca5a5' },
+    {label:'OPTIMISTIC',  tag:'(+1 SD)', vals:opt,  bg:'#f0fdf4', color:'#15803d', border:'#86efac'},
+    {label:'BASE CASE',   tag:'(EMA)',   vals:base, bg:'#fffbeb', color:'#92400e', border:'#fcd34d'},
+    {label:'PESSIMISTIC', tag:'(-1 SD)', vals:pess, bg:'#fef2f2', color:'#b91c1c', border:'#fca5a5'},
   ];
+  const COLS=horizon+1, COL_W=CW/COLS, ROW_H=13, TBL_X=ML;
+  fill('#0d1117'); FR(TBL_X,Y,CW,ROW_H*0.85);
+  doc.setFont('helvetica','bold'); doc.setFontSize(6.5); text('#ffffff');
+  doc.text('SCENARIO', TBL_X+COL_W*0.5, Y+5.5, {align:'center'});
+  for (let i=0;i<horizon;i++) doc.text(`PERIOD +${i+1}`, TBL_X+COL_W*(i+1)+COL_W*0.5, Y+5.5, {align:'center'});
+  Y += ROW_H*0.85;
 
-  const COLS  = horizon + 1;
-  const COL_W = CW / COLS;
-  const ROW_H = 13;
-  const TBL_X = ML;
-
-  // Table header
-  fill('#0d1117'); FR(TBL_X, Y, CW, ROW_H * 0.85);
-  doc.setFont('times', 'bold'); doc.setFontSize(6.5); text('#ffffff');
-  doc.text('SCENARIO', TBL_X + COL_W * 0.5, Y + 5.5, { align: 'center' });
-  for (let i = 0; i < horizon; i++) {
-    doc.text(`PERIOD  +${i+1}`, TBL_X + COL_W * (i+1) + COL_W * 0.5, Y + 5.5, { align: 'center' });
-  }
-  Y += ROW_H * 0.85;
-
-  // Scenario rows
-  scenarios.forEach((row, ri) => {
-    // Background
-    fill(row.bg); FR(TBL_X, Y, CW, ROW_H);
-    // Left colour tab
-    fill(row.color); FR(TBL_X, Y, 2, ROW_H);
-    // Bottom border
-    draw(row.border); doc.setLineWidth(0.3); LN(TBL_X, Y + ROW_H, TBL_X + CW, Y + ROW_H);
-
-    // Scenario label
-    doc.setFont('times', 'bold'); doc.setFontSize(7.5); text(row.color);
-    doc.text(row.label, TBL_X + COL_W * 0.5, Y + 6.5, { align: 'center' });
-    doc.setFont('times', 'normal'); doc.setFontSize(5.5); text('#94a3b8');
-    doc.text(row.tag, TBL_X + COL_W * 0.5, Y + 10.5, { align: 'center' });
-
-    // Values + delta vs last actual
-    row.vals.forEach((v, i) => {
-      const cx = TBL_X + COL_W * (i + 1) + COL_W * 0.5;
-      doc.setFont('times', 'bold'); doc.setFontSize(9.5); text(row.color);
-      doc.text(fmtNum(v), cx, Y + 6.5, { align: 'center' });
-      const delta = lastActual !== 0 ? ((v - lastActual)/Math.abs(lastActual)*100).toFixed(1) : '—';
-      doc.setFont('times', 'normal'); doc.setFontSize(5.5); text('#94a3b8');
-      doc.text(`${parseFloat(delta)>=0?'+':''}${delta}% vs last`, cx, Y + 10.5, { align: 'center' });
+  scenarios.forEach(row => {
+    fill(row.bg); FR(TBL_X,Y,CW,ROW_H);
+    fill(row.color); FR(TBL_X,Y,2,ROW_H);
+    draw(row.border); doc.setLineWidth(0.3); LN(TBL_X,Y+ROW_H,TBL_X+CW,Y+ROW_H);
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); text(row.color);
+    doc.text(row.label, TBL_X+COL_W*0.5, Y+6.5, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(5.5); text('#94a3b8');
+    doc.text(row.tag, TBL_X+COL_W*0.5, Y+10.5, {align:'center'});
+    row.vals.forEach((v,i) => {
+      const cx=TBL_X+COL_W*(i+1)+COL_W*0.5;
+      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); text(row.color);
+      doc.text(fmtNum(v), cx, Y+6.5, {align:'center'});
+      const delta=lastActual!==0?((v-lastActual)/Math.abs(lastActual)*100).toFixed(1):'—';
+      doc.setFont('helvetica','normal'); doc.setFontSize(5.5); text('#94a3b8');
+      doc.text(`${parseFloat(delta)>=0?'+':''}${delta}% vs last`, cx, Y+10.5, {align:'center'});
     });
-
-    // Column dividers
     draw('#e2e8f0'); doc.setLineWidth(0.2);
-    for (let i = 1; i <= horizon; i++) {
-      LN(TBL_X + COL_W * i, Y, TBL_X + COL_W * i, Y + ROW_H);
-    }
-
+    for (let i=1;i<=horizon;i++) LN(TBL_X+COL_W*i,Y,TBL_X+COL_W*i,Y+ROW_H);
     Y += ROW_H;
   });
+  draw('#cbd5e1'); doc.setLineWidth(0.4); DR(TBL_X,Y-ROW_H*3,CW,ROW_H*3);
 
-  // Table outer border
-  draw('#cbd5e1'); doc.setLineWidth(0.4);
-  DR(TBL_X, Y - ROW_H * 3, CW, ROW_H * 3);
+  // Footer
+  fill('#0d1117'); FR(0,282,PW,15);
+  doc.setFont('helvetica','normal'); doc.setFontSize(6); text('#6b7280');
+  doc.text('Paragon Analytics  -  Executive Forecasting  -  For internal use only', ML, 288);
+  doc.text(`paragon.analytics  -  ${new Date().getFullYear()}`, PW-MR, 288, {align:'right'});
+  text('#c9a84c'); doc.text('CONFIDENTIAL', PW/2, 292, {align:'center'});
 
-  Y += 9;
-
-  // ════════════════════════════════════════════════════════
-  // STEP 7 — FOOTER
-  // ════════════════════════════════════════════════════════
-  // Fill remaining space to page bottom with a footer bar
-  const FOOTER_Y = 282;
-  fill('#0d1117'); FR(0, FOOTER_Y, PW, 15);
-  doc.setFont('times', 'normal'); doc.setFontSize(6); text('#6b7280');
-  doc.text('Paragon Analytics  -  Executive Forecasting  -  For internal use only', ML, FOOTER_Y + 6);
-  doc.text(`paragon.analytics  -  ${new Date().getFullYear()}`, PW - MR, FOOTER_Y + 6, { align: 'right' });
-  text('#c9a84c');
-  doc.text('CONFIDENTIAL', PW / 2, FOOTER_Y + 10, { align: 'center' });
-
-  // ════════════════════════════════════════════════════════
-  // SAVE
-  // ════════════════════════════════════════════════════════
-  const safeName = metric.replace(/\W+/g, '_').toLowerCase();
-  doc.save(`paragon_${safeName}_report.pdf`);
-
-  pdfBtn.disabled = false;
-  pdfBtn.textContent = 'Export PDF';
+  doc.save(`paragon_${metric.replace(/\W+/g,'_').toLowerCase()}_report.pdf`);
+  pdfBtn.disabled = false; pdfBtn.textContent = '⬇ Export PDF';
   toast('PDF downloaded successfully');
 }
 
@@ -1371,39 +1373,15 @@ async function exportPDF() {
 // TOAST
 // ══════════════════════════════════════════════════════════════════
 function toast(msg, err=false) {
-  const t = $('toast');
-  t.textContent = msg;
+  const t = $('toast'); t.textContent = msg;
   t.className = err ? 'show err' : 'show';
-  clearTimeout(t._tid);
-  t._tid = setTimeout(() => { t.className = ''; }, 3200);
+  clearTimeout(t._tid); t._tid = setTimeout(() => { t.className = ''; }, 3200);
 }
 
 // ══════════════════════════════════════════════════════════════════
-// MATH HELPERS
+// INIT
 // ══════════════════════════════════════════════════════════════════
-function mean(a) { return a.reduce((x,y) => x+y, 0) / a.length; }
-function std(a) {
-  const m = mean(a);
-  return Math.sqrt(a.reduce((acc, v) => acc + (v-m)**2, 0) / a.length);
-}
-// FIX: correct EMA — α*current + (1-α)*previous
-function ema(a, alpha) {
-  const o = [a[0]];
-  for (let i = 1; i < a.length; i++)
-    o.push(alpha * a[i] + (1 - alpha) * o[i-1]);
-  return o;
-}
-// FIX: additive linear projection from last EMA value + step * slope
-function forecast(last, slope, n) {
-  return Array.from({length: n}, (_, i) => +(last + slope * (i + 1)).toFixed(6));
-}
-// Smart number formatter
-function fmtNum(v) {
-  if (Math.abs(v) >= 1e6)  return (v/1e6).toFixed(2) + 'M';
-  if (Math.abs(v) >= 1e3)  return (v/1e3).toFixed(1) + 'K';
-  if (Math.abs(v) < 0.01 && v !== 0) return v.toExponential(2);
-  return v.toFixed(2);
-}
+loadSettings();
 </script>
 </body>
 </html>
