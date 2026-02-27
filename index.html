@@ -2,338 +2,182 @@
 <!--
   ╔═══════════════════════════════════════════════════════════════╗
   ║            PARAGON ANALYTICS — Executive Forecasting          ║
-  ║                   GitHub Pages Ready v3.1                     ║
+  ║                   GitHub Pages Ready v4.0                     ║
   ╠═══════════════════════════════════════════════════════════════╣
-  ║  CORRECTIONS FROM v3.0:                                       ║
-  ║  1. Holdout MAPE — true out-of-sample validation (25% split)  ║
-  ║     replaces misleading in-sample EMA vs actual comparison    ║
-  ║  2. Confidence Score — now derived from holdout MAPE +        ║
-  ║     directional accuracy + sample size; no longer uses        ║
-  ║     the invented R²×70 + sampleFactor×25 formula             ║
-  ║  3. Naive comparison — uses same holdout period for fair      ║
-  ║     apples-to-apples EMA vs naive benchmarking               ║
-  ║  4. Small-dataset fallback — graceful degradation when        ║
-  ║     series is too short for a meaningful holdout split        ║
+  ║  NEW IN v4.0 (selected from ChatGPT review):                 ║
+  ║  1. Trend Regime Detection — rolling window slope analysis    ║
+  ║     classifies: Sustained Growth / Decelerating / Recovery /  ║
+  ║     Decline / Stable. Structural breaks flagged explicitly.   ║
+  ║  2. Scenario Driver Sliders — named business multipliers:     ║
+  ║     Demand, Price/Value, Operational Shock. Apply to all      ║
+  ║     scenarios interactively without re-running analysis.      ║
+  ║  3. Executive Narrative — hedged plain-English summary.       ║
+  ║     Covers regime, holdout accuracy, anomaly flags,           ║
+  ║     and forward outlook. Clearly labelled as model-derived.   ║
+  ║                                                               ║
+  ║  DELIBERATELY SKIPPED:                                        ║
+  ║  - Anomaly "explanation" — would fabricate causes             ║
+  ║  - Rolling forecast / subscription — business model idea,     ║
+  ║    not an analytical improvement                              ║
   ╚═══════════════════════════════════════════════════════════════╝
 -->
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Paragon Analytics — Executive Forecasting</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
   <style>
-    :root {
-      --bg:      #08090d;
-      --surface: #0f1118;
-      --border:  #1e2230;
-      --accent:  #c9a84c;
-      --accent2: #4c8ec9;
-      --green:   #22c55e;
-      --amber:   #f59e0b;
-      --red:     #ef4444;
-      --text:    #e8e9ef;
-      --muted:   #6b7280;
-      --card-bg: #11131c;
+    :root{
+      --bg:#08090d;--surface:#0f1118;--border:#1e2230;
+      --accent:#c9a84c;--accent2:#4c8ec9;
+      --green:#22c55e;--amber:#f59e0b;--red:#ef4444;
+      --text:#e8e9ef;--muted:#6b7280;--card-bg:#11131c;
     }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-    body::before {
-      content: '';
-      position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-      opacity: 0.6;
-    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+    body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity:0.6;}
+    header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;
+      padding:1.2rem 2.5rem;border-bottom:1px solid var(--border);
+      background:rgba(8,9,13,0.92);backdrop-filter:blur(12px);}
+    .logo{display:flex;align-items:baseline;gap:0.5rem;}
+    .logo-name{font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:700;color:var(--text);letter-spacing:-0.02em;}
+    .logo-badge{font-family:'DM Mono',monospace;font-size:0.65rem;font-weight:500;color:var(--accent);
+      border:1px solid var(--accent);padding:1px 6px;border-radius:3px;letter-spacing:0.08em;text-transform:uppercase;}
+    .header-right{display:flex;align-items:center;gap:1rem;font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--muted);letter-spacing:0.05em;}
+    #clock{color:var(--accent);}
+    .btn-sample{display:inline-flex;align-items:center;gap:0.4rem;padding:0.35rem 0.9rem;
+      border:1px solid var(--accent2);border-radius:5px;background:rgba(76,142,201,0.08);color:var(--accent2);
+      font-family:'DM Mono',monospace;font-size:0.7rem;cursor:pointer;transition:all 0.18s;letter-spacing:0.05em;}
+    .btn-sample:hover{background:rgba(76,142,201,0.18);}
+    main{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:2rem 2rem 4rem;display:flex;flex-direction:column;gap:1.5rem;}
+    .card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:1.5rem;transition:border-color 0.2s;}
+    .card:hover{border-color:#2a2f45;}
+    .card-title{font-family:'DM Mono',monospace;font-size:0.68rem;font-weight:500;color:var(--muted);
+      letter-spacing:0.12em;text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;}
+    .card-title::before{content:'';display:inline-block;width:6px;height:6px;background:var(--accent);border-radius:50%;}
+    .controls-grid{display:grid;grid-template-columns:1fr auto auto;gap:0.75rem;align-items:center;}
+    .controls-row2{display:flex;gap:0.75rem;align-items:center;margin-top:0.75rem;flex-wrap:wrap;}
+    .upload-zone{border:1.5px dashed var(--border);border-radius:8px;padding:1.2rem 1.5rem;
+      display:flex;align-items:center;gap:1rem;cursor:pointer;transition:all 0.2s;background:rgba(201,168,76,0.03);}
+    .upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(201,168,76,0.07);}
+    .upload-icon{font-size:1.5rem;}
+    .upload-text{font-size:0.85rem;color:var(--muted);}
+    .upload-text strong{color:var(--text);display:block;font-size:0.9rem;}
+    #csvFile{display:none;}
+    .select-wrap{position:relative;}
+    select{appearance:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;
+      padding:0.6rem 2.5rem 0.6rem 1rem;color:var(--text);font-family:'DM Sans',sans-serif;
+      font-size:0.88rem;cursor:pointer;transition:border-color 0.2s;min-width:160px;}
+    select:focus{outline:none;border-color:var(--accent);}
+    .select-wrap::after{content:'▾';position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);
+      color:var(--muted);pointer-events:none;font-size:0.8rem;}
+    .label-sm{font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--muted);
+      letter-spacing:0.08em;text-transform:uppercase;display:block;margin-bottom:0.25rem;}
+    input[type="range"]{-webkit-appearance:none;height:4px;border-radius:2px;background:var(--border);cursor:pointer;vertical-align:middle;}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;}
+    .btn{display:inline-flex;align-items:center;gap:0.5rem;padding:0.6rem 1.4rem;border:none;border-radius:6px;
+      font-family:'DM Sans',sans-serif;font-size:0.88rem;font-weight:500;cursor:pointer;transition:all 0.18s;white-space:nowrap;}
+    .btn-primary{background:var(--accent);color:#08090d;}
+    .btn-primary:hover{background:#dab85a;transform:translateY(-1px);}
+    .btn-secondary{background:transparent;color:var(--muted);border:1px solid var(--border);}
+    .btn-secondary:hover{border-color:var(--accent2);color:var(--accent2);}
+    .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);font-size:0.82rem;padding:0.5rem 1rem;}
+    .btn-ghost:hover{border-color:var(--green);color:var(--green);}
+    .btn:disabled{opacity:0.4;cursor:not-allowed;transform:none!important;}
+    .preview-table-wrap{overflow-x:auto;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:0.75rem;}
+    .preview-table{width:100%;border-collapse:collapse;font-size:0.78rem;}
+    .preview-table th{background:var(--surface);position:sticky;top:0;font-family:'DM Mono',monospace;font-size:0.65rem;
+      color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;padding:0.5rem 0.75rem;
+      border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+    .preview-table td{padding:0.4rem 0.75rem;border-bottom:1px solid rgba(30,34,48,0.5);
+      color:var(--text);white-space:nowrap;font-family:'DM Mono',monospace;}
+    .preview-table tr:last-child td{border-bottom:none;}
+    .preview-table tr:hover td{background:rgba(201,168,76,0.04);}
+    .col-numeric{color:var(--accent)!important;}.col-date{color:var(--accent2)!important;}
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;}
+    .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.3rem;position:relative;overflow:hidden;}
+    .kpi-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;}
+    .kpi-card.green::after{background:var(--green);}.kpi-card.amber::after{background:var(--amber);}
+    .kpi-card.red::after{background:var(--red);}.kpi-card.blue::after{background:var(--accent2);}
+    .kpi-card.gold::after{background:var(--accent);}
+    .kpi-label{font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.4rem;}
+    .kpi-value{font-size:1.6rem;font-weight:300;font-family:'Playfair Display',serif;line-height:1;}
+    .kpi-sub{font-family:'DM Mono',monospace;font-size:0.7rem;margin-top:0.3rem;}
+    .kpi-sub.green{color:var(--green);}.kpi-sub.amber{color:var(--amber);}.kpi-sub.red{color:var(--red);}
+    .chart-wrap{position:relative;height:360px;}
+    #trendChart{width:100%!important;height:100%!important;}
 
-    header {
-      position: relative; z-index: 10;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 1.2rem 2.5rem;
-      border-bottom: 1px solid var(--border);
-      background: rgba(8,9,13,0.92);
-      backdrop-filter: blur(12px);
-    }
-    .logo { display: flex; align-items: baseline; gap: 0.5rem; }
-    .logo-name {
-      font-family: 'Playfair Display', serif;
-      font-size: 1.5rem; font-weight: 700;
-      color: var(--text); letter-spacing: -0.02em;
-    }
-    .logo-badge {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.65rem; font-weight: 500;
-      color: var(--accent); border: 1px solid var(--accent);
-      padding: 1px 6px; border-radius: 3px;
-      letter-spacing: 0.08em; text-transform: uppercase;
-    }
-    .header-right {
-      display: flex; align-items: center; gap: 1rem;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem; color: var(--muted); letter-spacing: 0.05em;
-    }
-    #clock { color: var(--accent); }
-    .btn-sample {
-      display: inline-flex; align-items: center; gap: 0.4rem;
-      padding: 0.35rem 0.9rem;
-      border: 1px solid var(--accent2); border-radius: 5px;
-      background: rgba(76,142,201,0.08);
-      color: var(--accent2);
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem; cursor: pointer;
-      transition: all 0.18s; letter-spacing: 0.05em;
-    }
-    .btn-sample:hover { background: rgba(76,142,201,0.18); }
+    /* REGIME */
+    .regime-banner{display:flex;align-items:center;gap:1rem;padding:0.9rem 1.2rem;border-radius:8px;
+      border:1px solid var(--border);margin-bottom:1rem;background:rgba(201,168,76,0.03);}
+    .regime-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+    .regime-label{font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;}
+    .regime-meta{font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--muted);}
+    .regime-break-flag{margin-left:auto;padding:0.2rem 0.65rem;border-radius:4px;
+      font-family:'DM Mono',monospace;font-size:0.62rem;letter-spacing:0.06em;text-transform:uppercase;
+      background:rgba(239,68,68,0.12);color:var(--red);border:1px solid rgba(239,68,68,0.25);}
 
-    main {
-      position: relative; z-index: 1;
-      max-width: 1200px; margin: 0 auto;
-      padding: 2rem 2rem 4rem;
-      display: flex; flex-direction: column; gap: 1.5rem;
-    }
+    /* NARRATIVE */
+    .narrative-text{font-size:0.92rem;line-height:1.8;color:var(--text);
+      border-left:2px solid var(--accent);padding-left:1rem;}
+    .narrative-text strong{color:var(--accent);}
+    .narrative-disclaimer{margin-top:0.75rem;font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--muted);}
 
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 10px; padding: 1.5rem;
-      transition: border-color 0.2s;
-    }
-    .card:hover { border-color: #2a2f45; }
-    .card-title {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.68rem; font-weight: 500;
-      color: var(--muted); letter-spacing: 0.12em;
-      text-transform: uppercase; margin-bottom: 1rem;
-      display: flex; align-items: center; gap: 0.5rem;
-    }
-    .card-title::before {
-      content: ''; display: inline-block;
-      width: 6px; height: 6px;
-      background: var(--accent); border-radius: 50%;
-    }
+    /* DRIVERS */
+    .drivers-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.25rem;}
+    .driver-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;}
+    .driver-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.6rem;}
+    .driver-name{font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;}
+    .driver-value{font-family:'DM Mono',monospace;font-size:0.9rem;font-weight:500;min-width:48px;text-align:right;}
+    .driver-value.pos{color:var(--green);}.driver-value.neg{color:var(--red);}.driver-value.zero{color:var(--muted);}
+    .driver-desc{font-size:0.75rem;color:var(--muted);margin-top:0.4rem;}
+    .driver-reset{font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--muted);cursor:pointer;
+      border:1px solid var(--border);border-radius:3px;padding:1px 5px;background:none;transition:all 0.15s;}
+    .driver-reset:hover{color:var(--accent);border-color:var(--accent);}
+    .drivers-note{font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);margin-bottom:0.75rem;}
+    .drivers-active-badge{display:inline-flex;align-items:center;gap:0.3rem;margin-left:0.75rem;
+      padding:0.15rem 0.5rem;border-radius:3px;font-family:'DM Mono',monospace;font-size:0.6rem;
+      letter-spacing:0.06em;text-transform:uppercase;
+      background:rgba(201,168,76,0.12);color:var(--accent);border:1px solid rgba(201,168,76,0.25);}
 
-    .controls-grid {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: 0.75rem; align-items: center;
-    }
-    .controls-row2 {
-      display: flex; gap: 0.75rem; align-items: center;
-      margin-top: 0.75rem; flex-wrap: wrap;
-    }
-    .upload-zone {
-      border: 1.5px dashed var(--border);
-      border-radius: 8px; padding: 1.2rem 1.5rem;
-      display: flex; align-items: center; gap: 1rem;
-      cursor: pointer; transition: all 0.2s;
-      background: rgba(201,168,76,0.03);
-    }
-    .upload-zone:hover, .upload-zone.dragover {
-      border-color: var(--accent); background: rgba(201,168,76,0.07);
-    }
-    .upload-icon { font-size: 1.5rem; }
-    .upload-text { font-size: 0.85rem; color: var(--muted); }
-    .upload-text strong { color: var(--text); display: block; font-size: 0.9rem; }
-    #csvFile { display: none; }
+    /* SCENARIO */
+    .scenario-header{display:grid;grid-template-columns:1.2fr repeat(3,1fr);gap:0.5rem;margin-bottom:0.4rem;padding:0 0.25rem;}
+    .scenario-header-cell{font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:0.08em;}
+    .scenario-rows{display:flex;flex-direction:column;gap:0.5rem;}
+    .scenario-row{display:grid;grid-template-columns:1.2fr repeat(3,1fr);gap:0.5rem;}
+    .scenario-label-cell{display:flex;align-items:center;font-family:'DM Mono',monospace;font-size:0.75rem;
+      color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem;background:var(--surface);}
+    .scenario-value-cell{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem;text-align:center;}
+    .scenario-value-cell .val{font-family:'Playfair Display',serif;font-size:1.05rem;line-height:1;}
+    .scenario-value-cell .delta{font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--muted);margin-top:0.25rem;}
+    .scenario-value-cell .adj{font-family:'DM Mono',monospace;font-size:0.55rem;color:var(--accent);}
+    .scenario-row.opt .val{color:var(--green);}.scenario-row.base .val{color:var(--accent);}.scenario-row.pess .val{color:var(--red);}
 
-    .select-wrap { position: relative; }
-    select {
-      appearance: none;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 6px; padding: 0.6rem 2.5rem 0.6rem 1rem;
-      color: var(--text); font-family: 'DM Sans', sans-serif;
-      font-size: 0.88rem; cursor: pointer;
-      transition: border-color 0.2s; min-width: 160px;
+    #logOutput{font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--muted);line-height:1.7;white-space:pre-wrap;}
+    #logOutput .log-ok{color:var(--green);}#logOutput .log-warn{color:var(--amber);}#logOutput .log-info{color:var(--accent2);}
+    .hidden{display:none!important;}
+    .section-divider{display:flex;align-items:center;gap:1rem;color:var(--muted);font-family:'DM Mono',monospace;font-size:0.68rem;letter-spacing:0.1em;}
+    .section-divider::before,.section-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+    #toast{position:fixed;bottom:2rem;right:2rem;z-index:999;background:var(--surface);border:1px solid var(--border);
+      border-radius:8px;padding:0.8rem 1.4rem;font-size:0.85rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);
+      transform:translateY(20px);opacity:0;transition:all 0.3s;pointer-events:none;}
+    #toast.show{transform:translateY(0);opacity:1;}#toast.err{border-color:var(--red);color:var(--red);}
+    @keyframes fadeSlide{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+    .animate-in{animation:fadeSlide 0.4s ease both;}
+    .delay-1{animation-delay:0.08s;}.delay-2{animation-delay:0.16s;}.delay-3{animation-delay:0.24s;}.delay-4{animation-delay:0.32s;}
+    @media(max-width:768px){
+      header{padding:1rem 1.2rem;flex-wrap:wrap;gap:0.5rem;}
+      main{padding:1rem 1rem 3rem;}
+      .controls-grid{grid-template-columns:1fr;}
+      .scenario-header,.scenario-row{grid-template-columns:1fr 1fr 1fr;}
+      .scenario-label-cell,.scenario-header-cell:first-child{display:none;}
     }
-    select:focus { outline: none; border-color: var(--accent); }
-    .select-wrap::after {
-      content: '▾'; position: absolute; right: 0.75rem;
-      top: 50%; transform: translateY(-50%);
-      color: var(--muted); pointer-events: none; font-size: 0.8rem;
-    }
-
-    .label-sm {
-      font-family: 'DM Mono', monospace; font-size: 0.68rem;
-      color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
-      display: block; margin-bottom: 0.25rem;
-    }
-
-    input[type="range"] {
-      -webkit-appearance: none;
-      height: 4px; border-radius: 2px;
-      background: var(--border); cursor: pointer; vertical-align: middle;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px; height: 14px; border-radius: 50%;
-      background: var(--accent); cursor: pointer;
-    }
-
-    .btn {
-      display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.6rem 1.4rem; border: none; border-radius: 6px;
-      font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
-      font-weight: 500; cursor: pointer; transition: all 0.18s; white-space: nowrap;
-    }
-    .btn-primary { background: var(--accent); color: #08090d; }
-    .btn-primary:hover { background: #dab85a; transform: translateY(-1px); }
-    .btn-secondary {
-      background: transparent; color: var(--muted); border: 1px solid var(--border);
-    }
-    .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
-    .btn-ghost {
-      background: transparent; color: var(--muted); border: 1px solid var(--border);
-      font-size: 0.82rem; padding: 0.5rem 1rem;
-    }
-    .btn-ghost:hover { border-color: var(--green); color: var(--green); }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
-
-    .preview-table-wrap {
-      overflow-x: auto; max-height: 180px; overflow-y: auto;
-      border: 1px solid var(--border); border-radius: 6px; margin-top: 0.75rem;
-    }
-    .preview-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-    .preview-table th {
-      background: var(--surface); position: sticky; top: 0;
-      font-family: 'DM Mono', monospace; font-size: 0.65rem;
-      color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
-      padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
-      text-align: left; white-space: nowrap;
-    }
-    .preview-table td {
-      padding: 0.4rem 0.75rem; border-bottom: 1px solid rgba(30,34,48,0.5);
-      color: var(--text); white-space: nowrap; font-family: 'DM Mono', monospace;
-    }
-    .preview-table tr:last-child td { border-bottom: none; }
-    .preview-table tr:hover td { background: rgba(201,168,76,0.04); }
-    .col-numeric { color: var(--accent) !important; }
-    .col-date   { color: var(--accent2) !important; }
-
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 1rem;
-    }
-    .kpi-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 1.1rem 1.3rem;
-      position: relative; overflow: hidden;
-    }
-    .kpi-card::after {
-      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
-    }
-    .kpi-card.green::after { background: var(--green); }
-    .kpi-card.amber::after { background: var(--amber); }
-    .kpi-card.red::after   { background: var(--red); }
-    .kpi-card.blue::after  { background: var(--accent2); }
-    .kpi-label {
-      font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.4rem;
-    }
-    .kpi-value {
-      font-size: 1.6rem; font-weight: 300;
-      font-family: 'Playfair Display', serif; line-height: 1;
-    }
-    .kpi-sub { font-family: 'DM Mono', monospace; font-size: 0.7rem; margin-top: 0.3rem; }
-    .kpi-sub.green { color: var(--green); }
-    .kpi-sub.amber { color: var(--amber); }
-    .kpi-sub.red   { color: var(--red); }
-
-    .chart-wrap { position: relative; height: 360px; }
-    #trendChart { width: 100% !important; height: 100% !important; }
-
-    .scenario-header {
-      display: grid; grid-template-columns: 1.2fr repeat(3, 1fr);
-      gap: 0.5rem; margin-bottom: 0.4rem; padding: 0 0.25rem;
-    }
-    .scenario-header-cell {
-      font-family: 'DM Mono', monospace; font-size: 0.62rem;
-      color: var(--muted); text-align: center;
-      text-transform: uppercase; letter-spacing: 0.08em;
-    }
-    .scenario-rows { display: flex; flex-direction: column; gap: 0.5rem; }
-    .scenario-row { display: grid; grid-template-columns: 1.2fr repeat(3, 1fr); gap: 0.5rem; }
-    .scenario-label-cell {
-      display: flex; align-items: center;
-      font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--muted);
-      border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.8rem;
-      background: var(--surface);
-    }
-    .scenario-value-cell {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 6px; padding: 0.6rem; text-align: center;
-    }
-    .scenario-value-cell .val {
-      font-family: 'Playfair Display', serif; font-size: 1.05rem; line-height: 1;
-    }
-    .scenario-value-cell .delta {
-      font-family: 'DM Mono', monospace; font-size: 0.6rem;
-      color: var(--muted); margin-top: 0.25rem;
-    }
-    .scenario-row.opt .val { color: var(--green); }
-    .scenario-row.base .val { color: var(--accent); }
-    .scenario-row.pess .val { color: var(--red); }
-
-    #logOutput {
-      font-family: 'DM Mono', monospace; font-size: 0.75rem;
-      color: var(--muted); line-height: 1.7; white-space: pre-wrap;
-    }
-    #logOutput .log-ok   { color: var(--green); }
-    #logOutput .log-warn { color: var(--amber); }
-    #logOutput .log-info { color: var(--accent2); }
-
-    .hidden { display: none !important; }
-    .section-divider {
-      display: flex; align-items: center; gap: 1rem;
-      color: var(--muted); font-family: 'DM Mono', monospace;
-      font-size: 0.68rem; letter-spacing: 0.1em;
-    }
-    .section-divider::before, .section-divider::after {
-      content: ''; flex: 1; height: 1px; background: var(--border);
-    }
-
-    #toast {
-      position: fixed; bottom: 2rem; right: 2rem; z-index: 999;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 0.8rem 1.4rem; font-size: 0.85rem;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      transform: translateY(20px); opacity: 0;
-      transition: all 0.3s; pointer-events: none;
-    }
-    #toast.show { transform: translateY(0); opacity: 1; }
-    #toast.err  { border-color: var(--red); color: var(--red); }
-
-    @keyframes fadeSlide {
-      from { opacity: 0; transform: translateY(12px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .animate-in { animation: fadeSlide 0.4s ease both; }
-    .delay-1 { animation-delay: 0.08s; }
-    .delay-2 { animation-delay: 0.16s; }
-    .delay-3 { animation-delay: 0.24s; }
-
-    @media (max-width: 768px) {
-      header { padding: 1rem 1.2rem; flex-wrap: wrap; gap: 0.5rem; }
-      main { padding: 1rem 1rem 3rem; }
-      .controls-grid { grid-template-columns: 1fr; }
-      .scenario-header, .scenario-row { grid-template-columns: 1fr 1fr 1fr; }
-      .scenario-label-cell { display: none; }
-      .scenario-header-cell:first-child { display: none; }
-    }
-
-    #pdfChartCanvas {
-      position: fixed;
-      top: -9999px; left: -9999px;
-      visibility: hidden;
-      pointer-events: none;
-    }
+    #pdfChartCanvas{position:fixed;top:-9999px;left:-9999px;visibility:hidden;pointer-events:none;}
   </style>
 </head>
 <body>
@@ -344,15 +188,14 @@
     <span class="logo-badge">Analytics</span>
   </div>
   <div class="header-right">
-    <button class="btn-sample" onclick="loadSampleData()" title="Load built-in demo dataset">
-      ⚡ Load Sample Data
-    </button>
+    <button class="btn-sample" onclick="loadSampleData()">⚡ Load Sample Data</button>
     Executive Forecasting &nbsp;|&nbsp; <span id="clock"></span>
   </div>
 </header>
 
 <main>
 
+  <!-- CONTROLS -->
   <div class="card animate-in">
     <div class="card-title">Data Input &amp; Configuration</div>
     <div class="controls-grid">
@@ -362,14 +205,10 @@
           <strong id="fileName">Upload CSV / TSV File</strong>
           Drag &amp; drop or click to browse
         </div>
-        <input type="file" id="csvFile" accept=".csv,.tsv,.txt" />
+        <input type="file" id="csvFile" accept=".csv,.tsv,.txt"/>
       </div>
-      <div class="select-wrap">
-        <select id="metricSelect">
-          <option value="">— Select Metric —</option>
-        </select>
-      </div>
-      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <div class="select-wrap"><select id="metricSelect"><option value="">— Select Metric —</option></select></div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
         <button class="btn btn-primary" id="analyzeBtn" disabled>▶ Analyze</button>
         <button class="btn btn-secondary" id="pdfBtn" disabled>⬇ Export PDF</button>
         <button class="btn btn-ghost" id="csvExportBtn" disabled>⬇ CSV</button>
@@ -378,60 +217,111 @@
     <div class="controls-row2">
       <div>
         <span class="label-sm">EMA Smoothing (α)</span>
-        <div style="display:flex; align-items:center; gap:0.5rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;">
           <input type="range" id="alphaRange" min="0.05" max="0.6" step="0.05" value="0.3" style="width:100px">
-          <span id="alphaVal" style="font-family:'DM Mono',monospace; font-size:0.75rem; color:var(--accent);">0.30</span>
+          <span id="alphaVal" style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent);">0.30</span>
         </div>
       </div>
       <div>
         <span class="label-sm">Forecast Periods</span>
-        <div style="display:flex; align-items:center; gap:0.5rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;">
           <input type="range" id="horizonRange" min="1" max="8" step="1" value="3" style="width:100px">
-          <span id="horizonVal" style="font-family:'DM Mono',monospace; font-size:0.75rem; color:var(--accent);">3</span>
+          <span id="horizonVal" style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent);">3</span>
         </div>
       </div>
       <div id="dateColWrap" class="hidden">
         <span class="label-sm">Date / Label Column</span>
-        <div class="select-wrap">
-          <select id="dateSelect" style="min-width:130px;">
-            <option value="">— None —</option>
-          </select>
-        </div>
+        <div class="select-wrap"><select id="dateSelect" style="min-width:130px;"><option value="">— None —</option></select></div>
       </div>
     </div>
     <div id="previewWrap" class="hidden">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; margin-bottom:0.3rem;">
-        <span style="font-family:'DM Mono',monospace; font-size:0.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em;">Data Preview — first 6 rows</span>
-        <span id="previewStats" style="font-family:'DM Mono',monospace; font-size:0.65rem; color:var(--muted);"></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;margin-bottom:0.3rem;">
+        <span style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;">Data Preview — first 6 rows</span>
+        <span id="previewStats" style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);"></span>
       </div>
-      <div class="preview-table-wrap">
-        <table class="preview-table" id="previewTable"></table>
-      </div>
+      <div class="preview-table-wrap"><table class="preview-table" id="previewTable"></table></div>
     </div>
   </div>
 
-  <div id="kpiSection" class="hidden animate-in delay-1">
+  <!-- EXECUTIVE NARRATIVE -->
+  <div id="narrativeSection" class="card hidden animate-in delay-1">
+    <div class="card-title">Executive Summary</div>
+    <div id="regimeBanner"></div>
+    <div class="narrative-text" id="narrativeText"></div>
+    <div class="narrative-disclaimer">⚠ Model-generated summary. Conclusions are derived from statistical patterns only and do not account for external business context. Validate with domain knowledge before presenting to stakeholders.</div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div id="kpiSection" class="hidden animate-in delay-2">
     <div class="card-title" style="margin-bottom:0.75rem;">Business Summary</div>
     <div class="kpi-grid" id="kpiGrid"></div>
   </div>
 
-  <div id="chartSection" class="card hidden animate-in delay-2">
+  <!-- CHART -->
+  <div id="chartSection" class="card hidden animate-in delay-3">
     <div class="card-title">Trend &amp; Forecast</div>
-    <div class="chart-wrap">
-      <canvas id="trendChart"></canvas>
-    </div>
+    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
   </div>
 
-  <div id="scenarioSection" class="hidden animate-in delay-3">
+  <!-- SCENARIO SECTION -->
+  <div id="scenarioSection" class="hidden animate-in delay-4">
     <div class="section-divider" id="scenarioDivider">Scenario Analysis</div>
     <div style="margin-top:0.75rem;">
-      <div class="scenario-header" id="scenarioHeader">
-        <div class="scenario-header-cell"></div>
+
+      <!-- DRIVER SLIDERS -->
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-title">
+          Scenario Drivers
+          <span id="driversActiveBadge" class="drivers-active-badge hidden">● Adjusted</span>
+        </div>
+        <div class="drivers-note">ⓘ Adjust business levers to stress-test forecasts. Multipliers apply to all three scenarios simultaneously.</div>
+        <div class="drivers-grid">
+          <div class="driver-card">
+            <div class="driver-header">
+              <span class="driver-name">Demand / Volume</span>
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <span class="driver-value zero" id="demandVal">0%</span>
+                <button class="driver-reset" onclick="resetDriver('demand')">reset</button>
+              </div>
+            </div>
+            <input type="range" id="demandRange" min="-30" max="30" step="1" value="0" style="width:100%">
+            <div class="driver-desc">Customer acquisition, volume loss, new market entry. ±30%</div>
+          </div>
+          <div class="driver-card">
+            <div class="driver-header">
+              <span class="driver-name">Price / Value</span>
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <span class="driver-value zero" id="priceVal">0%</span>
+                <button class="driver-reset" onclick="resetDriver('price')">reset</button>
+              </div>
+            </div>
+            <input type="range" id="priceRange" min="-20" max="20" step="1" value="0" style="width:100%">
+            <div class="driver-desc">Average order value, pricing strategy, margin change. ±20%</div>
+          </div>
+          <div class="driver-card">
+            <div class="driver-header">
+              <span class="driver-name">Operational Shock</span>
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <span class="driver-value zero" id="shockVal">0%</span>
+                <button class="driver-reset" onclick="resetDriver('shock')">reset</button>
+              </div>
+            </div>
+            <input type="range" id="shockRange" min="-25" max="25" step="1" value="0" style="width:100%">
+            <div class="driver-desc">Supply disruption, regulatory change, market shock. ±25%</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="resetAllDrivers()" style="font-size:0.75rem;">↺ Reset All Drivers</button>
+        </div>
       </div>
+
+      <!-- SCENARIO TABLE -->
+      <div class="scenario-header" id="scenarioHeader"><div class="scenario-header-cell"></div></div>
       <div class="scenario-rows" id="scenarioRows"></div>
     </div>
   </div>
 
+  <!-- LOG -->
   <div id="logSection" class="card hidden">
     <div class="card-title">Analysis Log</div>
     <pre id="logOutput"></pre>
@@ -443,118 +333,86 @@
 <canvas id="pdfChartCanvas"></canvas>
 
 <script>
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // CLOCK
-// ══════════════════════════════════════════════════════════════════
-function tick() {
-  document.getElementById('clock').textContent =
-    new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-}
-tick(); setInterval(tick, 1000);
+// ══════════════════════════════════════════════════════════════
+function tick(){document.getElementById('clock').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+tick();setInterval(tick,1000);
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // STATE
-// ══════════════════════════════════════════════════════════════════
-let rows = [], headers = [], numericCols = [], dateCols = [];
-let metric = null, dateCol = null;
-let chartObj = null, lastAnalysis = null;
-let alpha = 0.3, horizon = 3;
+// ══════════════════════════════════════════════════════════════
+let rows=[],headers=[],numericCols=[],dateCols=[];
+let metric=null,dateCol=null,chartObj=null,lastAnalysis=null;
+let alpha=0.3,horizon=3,demandAdj=0,priceAdj=0,shockAdj=0;
 
-const $ = id => document.getElementById(id);
-const csvFile      = $('csvFile');
-const analyzeBtn   = $('analyzeBtn');
-const pdfBtn       = $('pdfBtn');
-const csvExportBtn = $('csvExportBtn');
-const metricSelect = $('metricSelect');
-const dateSelect   = $('dateSelect');
-const uploadZone   = $('uploadZone');
-const fileName     = $('fileName');
-const alphaRange   = $('alphaRange');
-const horizonRange = $('horizonRange');
-const alphaVal     = $('alphaVal');
-const horizonVal   = $('horizonVal');
+const $=id=>document.getElementById(id);
+const debounce=(fn,ms)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};};
 
-// ══════════════════════════════════════════════════════════════════
-// DEBOUNCE
-// ══════════════════════════════════════════════════════════════════
-function debounce(fn, ms) {
-  let timer;
-  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
-}
-
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // CONTROLS
-// ══════════════════════════════════════════════════════════════════
-alphaRange.addEventListener('input', debounce(() => {
-  alpha = +alphaRange.value;
-  alphaVal.textContent = alpha.toFixed(2);
-  if (metric) analyze();
-}, 100));
+// ══════════════════════════════════════════════════════════════
+$('alphaRange').addEventListener('input',debounce(()=>{alpha=+$('alphaRange').value;$('alphaVal').textContent=alpha.toFixed(2);if(metric)analyze();},100));
+$('horizonRange').addEventListener('input',debounce(()=>{horizon=+$('horizonRange').value;$('horizonVal').textContent=horizon;if(metric)analyze();},100));
+$('metricSelect').addEventListener('change',()=>{metric=$('metricSelect').value;saveSettings();if(metric)analyze();});
+$('dateSelect').addEventListener('change',()=>{dateCol=$('dateSelect').value||null;if(metric)analyze();});
+$('analyzeBtn').addEventListener('click',()=>analyze());
+$('pdfBtn').addEventListener('click',()=>exportPDF());
+$('csvExportBtn').addEventListener('click',()=>exportForecastCSV());
 
-horizonRange.addEventListener('input', debounce(() => {
-  horizon = +horizonRange.value;
-  horizonVal.textContent = horizon;
-  if (metric) analyze();
-}, 100));
+// Drag & drop
+$('uploadZone').addEventListener('dragover',e=>{e.preventDefault();$('uploadZone').classList.add('dragover');});
+$('uploadZone').addEventListener('dragleave',()=>$('uploadZone').classList.remove('dragover'));
+$('uploadZone').addEventListener('drop',e=>{e.preventDefault();$('uploadZone').classList.remove('dragover');const f=e.dataTransfer.files[0];if(f)readFile(f);});
+$('csvFile').addEventListener('change',()=>{if($('csvFile').files[0])readFile($('csvFile').files[0]);});
 
-metricSelect.addEventListener('change', () => {
-  metric = metricSelect.value;
-  saveSettings();
-  if (metric) analyze();
-});
-
-dateSelect.addEventListener('change', () => {
-  dateCol = dateSelect.value || null;
-  if (metric) analyze();
-});
-
-analyzeBtn.addEventListener('click', () => analyze());
-pdfBtn.addEventListener('click', () => exportPDF());
-csvExportBtn.addEventListener('click', () => exportForecastCSV());
-
-// ══════════════════════════════════════════════════════════════════
-// SETTINGS PERSISTENCE
-// ══════════════════════════════════════════════════════════════════
-function saveSettings() {
-  try {
-    localStorage.setItem('paragon_settings', JSON.stringify({
-      alpha, horizon, lastMetric: metric, timestamp: Date.now()
-    }));
-  } catch(e) {}
+// Driver sliders
+function setupDriver(sliderId,valId,key,unit='%'){
+  $(sliderId).addEventListener('input',debounce(()=>{
+    const v=+$(sliderId).value;
+    if(key==='demand')demandAdj=v;else if(key==='price')priceAdj=v;else shockAdj=v;
+    $(valId).textContent=(v>=0?'+':'')+v+unit;
+    $(valId).className='driver-value '+(v>0?'pos':v<0?'neg':'zero');
+    if(lastAnalysis)renderScenarios(lastAnalysis);
+    updateDriverBadge();
+  },60));
 }
+setupDriver('demandRange','demandVal','demand');
+setupDriver('priceRange','priceVal','price');
+setupDriver('shockRange','shockVal','shock');
 
-function loadSettings() {
-  try {
-    const saved = localStorage.getItem('paragon_settings');
-    if (saved) {
-      const s = JSON.parse(saved);
-      if (Date.now() - s.timestamp < 30 * 24 * 60 * 60 * 1000) {
-        alpha = s.alpha || 0.3; horizon = s.horizon || 3;
-        alphaRange.value = alpha; horizonRange.value = horizon;
-        alphaVal.textContent = alpha.toFixed(2); horizonVal.textContent = horizon;
-        return s.lastMetric;
-      }
+function resetDriver(key){
+  const map={demand:['demandRange','demandVal'],price:['priceRange','priceVal'],shock:['shockRange','shockVal']};
+  const [sId,vId]=map[key];
+  if(key==='demand')demandAdj=0;else if(key==='price')priceAdj=0;else shockAdj=0;
+  $(sId).value=0;$(vId).textContent='0%';$(vId).className='driver-value zero';
+  if(lastAnalysis)renderScenarios(lastAnalysis);updateDriverBadge();
+}
+function resetAllDrivers(){['demand','price','shock'].forEach(resetDriver);}
+function updateDriverBadge(){$('driversActiveBadge').classList.toggle('hidden',demandAdj===0&&priceAdj===0&&shockAdj===0);}
+function driverMult(){return(1+demandAdj/100)*(1+priceAdj/100)*(1+shockAdj/100);}
+
+// ══════════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════════
+function saveSettings(){try{localStorage.setItem('paragon_settings',JSON.stringify({alpha,horizon,lastMetric:metric,timestamp:Date.now()}));}catch(e){}}
+function loadSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('paragon_settings')||'null');
+    if(s&&Date.now()-s.timestamp<30*24*60*60*1000){
+      alpha=s.alpha||0.3;horizon=s.horizon||3;
+      $('alphaRange').value=alpha;$('horizonRange').value=horizon;
+      $('alphaVal').textContent=alpha.toFixed(2);$('horizonVal').textContent=horizon;
+      return s.lastMetric;
     }
-  } catch(e) {}
-  return null;
+  }catch(e){}return null;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// DRAG & DROP
-// ══════════════════════════════════════════════════════════════════
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-uploadZone.addEventListener('drop', e => {
-  e.preventDefault(); uploadZone.classList.remove('dragover');
-  const f = e.dataTransfer.files[0]; if (f) readFile(f);
-});
-csvFile.addEventListener('change', () => { if (csvFile.files[0]) readFile(csvFile.files[0]); });
-
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // SAMPLE DATA
-// ══════════════════════════════════════════════════════════════════
-function loadSampleData() {
-  const csv = `date,revenue,units_sold,avg_order_value,customer_count
+// ══════════════════════════════════════════════════════════════
+function loadSampleData(){
+  parse(`date,revenue,units_sold,avg_order_value,customer_count
 2023-01,142500,1420,100.35,1050
 2023-02,138900,1380,100.65,1030
 2023-03,151200,1490,101.48,1120
@@ -578,809 +436,505 @@ function loadSampleData() {
 2024-09,258400,2350,109.96,1810
 2024-10,267900,2430,110.25,1870
 2024-11,291200,2640,110.30,2050
-2024-12,318500,2880,110.59,2240`;
-  fileName.textContent = 'sample_business_data.csv';
-  parse(csv);
+2024-12,318500,2880,110.59,2240`);
+  $('fileName').textContent='sample_business_data.csv';
   toast('✓ Sample dataset loaded — 24 months of business data');
 }
 
-// ══════════════════════════════════════════════════════════════════
-// FILE READ + PARSE
-// ══════════════════════════════════════════════════════════════════
-function readFile(file) {
-  fileName.textContent = file.name;
-  const r = new FileReader();
-  r.onload = e => parse(e.target.result);
-  r.readAsText(file);
+// ══════════════════════════════════════════════════════════════
+// PARSE
+// ══════════════════════════════════════════════════════════════
+function readFile(f){$('fileName').textContent=f.name;const r=new FileReader();r.onload=e=>parse(e.target.result);r.readAsText(f);}
+
+function parseCSVLine(line,d){
+  const f=[];let c='',q=false;
+  for(let i=0;i<line.length;i++){const ch=line[i];
+    if(ch==='"'){if(q&&line[i+1]==='"'){c+='"';i++;}else q=!q;}
+    else if(ch===d&&!q){f.push(c.trim());c='';}else c+=ch;}
+  f.push(c.trim());return f;
 }
-
-function parseCSVLine(line, delim) {
-  const fields = []; let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
-    else if (c === delim && !inQ) { fields.push(cur.trim()); cur = ''; }
-    else cur += c;
-  }
-  fields.push(cur.trim()); return fields;
+function isDateLike(v){
+  if(typeof v!=='string')return false;
+  return/^\d{4}[-/]\d{1,2}([-/]\d{1,2})?$/.test(v)||/^Q[1-4]\s*\d{4}$/i.test(v)||
+         /^\d{1,2}[-/]\d{4}$/.test(v)||/^\d{4}$/.test(v);
 }
-
-function isDateLike(val) {
-  if (typeof val !== 'string') return false;
-  return /^\d{4}[-/]\d{1,2}([-/]\d{1,2})?$/.test(val) ||
-         /^Q[1-4]\s*\d{4}$/i.test(val) || /^\d{1,2}[-/]\d{4}$/.test(val) ||
-         /^\d{4}$/.test(val);
-}
-
-function parse(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  const delim = [',', ';', '\t', '|'].find(x => parseCSVLine(lines[0], x).length > 1) || ',';
-  headers = parseCSVLine(lines[0], delim).map(h =>
-    h.replace(/^["']|["']$/g,'').toLowerCase().replace(/\W+/g,'_'));
-  rows = lines.slice(1).map(l => {
-    const p = parseCSVLine(l, delim); const o = {};
-    headers.forEach((h, i) => {
-      const raw = (p[i] || '').replace(/^["']|["']$/g,'').trim();
-      o[h] = (!isNaN(+raw) && raw !== '') ? +raw : raw;
-    }); return o;
-  }).filter(r => headers.some(h => typeof r[h] === 'number'));
-
-  numericCols = headers.filter(h => rows.some(r => typeof r[h] === 'number'));
-  dateCols = headers.filter(h =>
-    !numericCols.includes(h) || rows.slice(0,5).some(r => isDateLike(String(r[h]))));
-
-  metricSelect.innerHTML = '<option value="">— Select Metric —</option>' +
-    numericCols.map(c => `<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
-
-  const dcWrap = $('dateColWrap');
-  if (dateCols.length) {
+function parse(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  const delim=[',',';','\t','|'].find(x=>parseCSVLine(lines[0],x).length>1)||',';
+  headers=parseCSVLine(lines[0],delim).map(h=>h.replace(/^["']|["']$/g,'').toLowerCase().replace(/\W+/g,'_'));
+  rows=lines.slice(1).map(l=>{const p=parseCSVLine(l,delim),o={};
+    headers.forEach((h,i)=>{const raw=(p[i]||'').replace(/^["']|["']$/g,'').trim();o[h]=(!isNaN(+raw)&&raw!=='')?+raw:raw;});return o;
+  }).filter(r=>headers.some(h=>typeof r[h]==='number'));
+  numericCols=headers.filter(h=>rows.some(r=>typeof r[h]==='number'));
+  dateCols=headers.filter(h=>!numericCols.includes(h)||rows.slice(0,5).some(r=>isDateLike(String(r[h]))));
+  $('metricSelect').innerHTML='<option value="">— Select Metric —</option>'+numericCols.map(c=>`<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
+  const dcWrap=$('dateColWrap');
+  if(dateCols.length){
     dcWrap.classList.remove('hidden');
-    dateSelect.innerHTML = '<option value="">— None —</option>' +
-      dateCols.map(c => `<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
-    const auto = dateCols.find(c => /date|period|month|year|week|quarter/i.test(c));
-    if (auto) { dateSelect.value = auto; dateCol = auto; }
-  } else { dcWrap.classList.add('hidden'); dateCol = null; }
-
+    $('dateSelect').innerHTML='<option value="">— None —</option>'+dateCols.map(c=>`<option value="${c}">${c.replace(/_/g,' ')}</option>`).join('');
+    const auto=dateCols.find(c=>/date|period|month|year|week|quarter/i.test(c));
+    if(auto){$('dateSelect').value=auto;dateCol=auto;}
+  }else{dcWrap.classList.add('hidden');dateCol=null;}
   buildPreview();
-  const lastMetric = loadSettings();
-  metric = lastMetric && numericCols.includes(lastMetric) ? lastMetric : (numericCols[0] || null);
-  if (metric) { metricSelect.value = metric; analyze(); }
-  analyzeBtn.disabled = false;
-  $('previewStats').textContent = `${rows.length} rows · ${numericCols.length} numeric · ${dateCols.length} date`;
+  const lm=loadSettings();
+  metric=lm&&numericCols.includes(lm)?lm:(numericCols[0]||null);
+  if(metric){$('metricSelect').value=metric;analyze();}
+  $('analyzeBtn').disabled=false;
+  $('previewStats').textContent=`${rows.length} rows · ${numericCols.length} numeric · ${dateCols.length} date`;
   $('previewWrap').classList.remove('hidden');
 }
-
-function buildPreview() {
-  const t = $('previewTable'); const show = rows.slice(0, 6);
-  t.innerHTML = `<thead><tr>${headers.map(h => {
-    const cls = numericCols.includes(h) ? 'col-numeric' : dateCols.includes(h) ? 'col-date' : '';
-    return `<th class="${cls}">${h.replace(/_/g,' ')}</th>`;
-  }).join('')}</tr></thead>` +
-  `<tbody>${show.map(r => `<tr>${headers.map(h => {
-    const cls = numericCols.includes(h) ? 'col-numeric' : dateCols.includes(h) ? 'col-date' : '';
-    return `<td class="${cls}">${r[h] !== undefined ? r[h] : ''}</td>`;
-  }).join('')}</tr>`).join('')}</tbody>`;
+function buildPreview(){
+  const t=$('previewTable'),show=rows.slice(0,6);
+  t.innerHTML=`<thead><tr>${headers.map(h=>{const c=numericCols.includes(h)?'col-numeric':dateCols.includes(h)?'col-date':'';return`<th class="${c}">${h.replace(/_/g,' ')}</th>`;}).join('')}</tr></thead>`+
+  `<tbody>${show.map(r=>`<tr>${headers.map(h=>{const c=numericCols.includes(h)?'col-numeric':dateCols.includes(h)?'col-date':'';return`<td class="${c}">${r[h]!==undefined?r[h]:''}</td>`;}).join('')}</tr>`).join('')}</tbody>`;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// MATH HELPERS
-// ══════════════════════════════════════════════════════════════════
-function mean(a) { return a.reduce((x,y) => x+y, 0) / a.length; }
+// ══════════════════════════════════════════════════════════════
+// MATH
+// ══════════════════════════════════════════════════════════════
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const std=a=>{const m=mean(a);return Math.sqrt(a.reduce((acc,v)=>acc+(v-m)**2,0)/a.length);};
+const ema=(a,al)=>{const o=[a[0]];for(let i=1;i<a.length;i++)o.push(al*a[i]+(1-al)*o[i-1]);return o;};
+const fcst=(last,slope,n)=>Array.from({length:n},(_,i)=>+(last+slope*(i+1)).toFixed(6));
 
-function std(a) {
-  const m = mean(a);
-  return Math.sqrt(a.reduce((acc, v) => acc + (v-m)**2, 0) / a.length);
+function mape(actual,pred){
+  let s=0,c=0;
+  for(let i=0;i<Math.min(actual.length,pred.length);i++)if(actual[i]!==0){s+=Math.abs((actual[i]-pred[i])/actual[i]);c++;}
+  return c>0?(s/c*100):0;
+}
+function dirAcc(actual,pred){
+  if(actual.length<2||pred.length<2)return 0;
+  let c=0,t=0;
+  for(let i=1;i<Math.min(actual.length,pred.length);i++){if(Math.sign(actual[i]-actual[i-1])===Math.sign(pred[i]-pred[i-1]))c++;t++;}
+  return t>0?(c/t*100):0;
+}
+function maxDD(s){let p=-Infinity,m=0;for(const v of s){if(v>p)p=v;const d=(p-v)/p;if(d>m)m=d;}return m*100;}
+function detectSeasonality(s,max=12){
+  if(s.length<max*2)return null;
+  const corr=(x,y)=>{const n=Math.min(x.length,y.length),mx=mean(x.slice(0,n)),my=mean(y.slice(0,n));
+    let num=0,dx2=0,dy2=0;for(let i=0;i<n;i++){const a=x[i]-mx,b=y[i]-my;num+=a*b;dx2+=a*a;dy2+=b*b;}return num/Math.sqrt(dx2*dy2);};
+  let bl=null,bc=0;
+  for(let lag=2;lag<=max;lag++){const c=corr(s.slice(0,-lag),s.slice(lag));if(c>bc&&c>0.3){bc=c;bl=lag;}}
+  return bl?{period:bl,strength:bc}:null;
+}
+function detectOutliers(s){
+  const sorted=[...s].sort((a,b)=>a-b);
+  const q1=sorted[Math.floor(sorted.length*0.25)],q3=sorted[Math.floor(sorted.length*0.75)],iqr=q3-q1;
+  return s.map((v,i)=>({index:i,value:v,isOutlier:v<q1-1.5*iqr||v>q3+1.5*iqr})).filter(x=>x.isOutlier);
 }
 
-function ema(a, alpha) {
-  const o = [a[0]];
-  for (let i = 1; i < a.length; i++)
-    o.push(alpha * a[i] + (1 - alpha) * o[i-1]);
-  return o;
+// holdout validation (v3.1 corrected approach)
+function holdoutValidation(s,al){
+  if(s.length<8)return null;
+  const hs=Math.max(3,Math.round(s.length*0.25));
+  const train=s.slice(0,-hs),hold=s.slice(-hs);
+  if(train.length<5)return null;
+  const ts=ema(train,al),le=ts[ts.length-1];
+  const tl=Math.max(3,Math.round(ts.length*0.25)),tt=ts.slice(-tl);
+  const slope=(tt[tt.length-1]-tt[0])/(tt.length-1);
+  const ef=fcst(le,slope,hs),nf=Array(hs).fill(train[train.length-1]);
+  return{holdoutSize:hs,holdoutActual:hold,emaForecast:ef,naiveForecast:nf,
+    holdoutMape:mape(hold,ef),naiveMape:mape(hold,nf),holdoutDirAcc:dirAcc(hold,ef)};
 }
 
-function forecast(last, slope, n) {
-  return Array.from({length: n}, (_, i) => +(last + slope * (i + 1)).toFixed(6));
+// confidence (v3.1 grounded approach)
+function computeConf(ho,da,n){
+  const sf=Math.min(1,Math.log(n+1)/Math.log(30));
+  if(!ho){return{score:Math.round(Math.max(10,Math.min(60,da*0.4+sf*20))),estimated:true};}
+  const mf=Math.max(0,1-ho.holdoutMape/50),df=ho.holdoutDirAcc/100;
+  return{score:Math.round(Math.max(10,Math.min(95,mf*55+df*30+sf*15))),estimated:false};
 }
 
-/**
- * MAPE — Mean Absolute Percentage Error.
- * Only defined where actual !== 0.
- */
-function mape(actual, predicted) {
-  let sum = 0, count = 0;
-  for (let i = 0; i < Math.min(actual.length, predicted.length); i++) {
-    if (actual[i] !== 0) {
-      sum += Math.abs((actual[i] - predicted[i]) / actual[i]);
-      count++;
-    }
-  }
-  return count > 0 ? (sum / count * 100) : 0;
-}
-
-function directionalAccuracy(actual, predicted) {
-  if (actual.length < 2 || predicted.length < 2) return 0;
-  let correct = 0, total = 0;
-  for (let i = 1; i < Math.min(actual.length, predicted.length); i++) {
-    if (Math.sign(actual[i] - actual[i-1]) === Math.sign(predicted[i] - predicted[i-1])) correct++;
-    total++;
-  }
-  return total > 0 ? (correct / total * 100) : 0;
-}
-
-function maxDrawdown(series) {
-  let peak = -Infinity, maxDD = 0;
-  for (const v of series) {
-    if (v > peak) peak = v;
-    const dd = (peak - v) / peak;
-    if (dd > maxDD) maxDD = dd;
-  }
-  return maxDD * 100;
-}
-
-function detectSeasonality(series, maxPeriod = 12) {
-  if (series.length < maxPeriod * 2) return null;
-  const correlation = (x, y) => {
-    const n = Math.min(x.length, y.length);
-    const mx = mean(x.slice(0,n)), my = mean(y.slice(0,n));
-    let num = 0, denx = 0, deny = 0;
-    for (let i = 0; i < n; i++) {
-      const dx = x[i]-mx, dy = y[i]-my;
-      num += dx*dy; denx += dx*dx; deny += dy*dy;
-    }
-    return num / Math.sqrt(denx * deny);
+// ══════════════════════════════════════════════════════════════
+// REGIME DETECTION (v4.0 NEW)
+// Splits the smoothed series 60/40, computes slope direction for
+// each window. When directions diverge, flags a structural break.
+// ══════════════════════════════════════════════════════════════
+function detectRegime(s,smooth,avg){
+  if(s.length<8)return null;
+  const sp=Math.round(s.length*0.6);
+  const eSmooth=smooth.slice(0,sp),rSmooth=smooth.slice(sp);
+  if(rSmooth.length<2)return null;
+  const etl=Math.max(2,Math.round(eSmooth.length*0.35)),et=eSmooth.slice(-etl);
+  const eSlope=(et[et.length-1]-et[0])/(et.length-1);
+  const rSlope=(rSmooth[rSmooth.length-1]-rSmooth[0])/(rSmooth.length-1);
+  const thr=0.001*Math.abs(avg);
+  const eD=eSlope>thr?1:eSlope<-thr?-1:0;
+  const rD=rSlope>thr?1:rSlope<-thr?-1:0;
+  const REGIMES={
+    '1,1': {regime:'Sustained Growth',  color:'var(--green)', desc:'Consistent upward momentum throughout the observed period.'},
+    '-1,-1':{regime:'Sustained Decline', color:'var(--red)',   desc:'Consistent downward pressure throughout the observed period.'},
+    '0,0':  {regime:'Stable',           color:'var(--muted)', desc:'No significant directional momentum detected.'},
+    '1,0':  {regime:'Decelerating',     color:'var(--amber)', desc:'Growth momentum is flattening. Monitor for reversal.'},
+    '1,-1': {regime:'Peak / Reversal',  color:'var(--red)',   desc:'Prior growth has reversed. Strong structural break.'},
+    '-1,0': {regime:'Stabilising',      color:'var(--amber)', desc:'Decline momentum is easing. Watch for recovery signals.'},
+    '-1,1': {regime:'Recovery',         color:'var(--green)', desc:'Reversal from prior decline. Structural break detected.'},
+    '0,1':  {regime:'Emerging Growth',  color:'var(--green)', desc:'New upward momentum emerging from a stable base.'},
+    '0,-1': {regime:'Emerging Decline', color:'var(--amber)', desc:'New downward pressure emerging. Early warning signal.'},
   };
-  let bestLag = null, bestCorr = 0;
-  for (let lag = 2; lag <= maxPeriod; lag++) {
-    const c = correlation(series.slice(0,-lag), series.slice(lag));
-    if (c > bestCorr && c > 0.3) { bestCorr = c; bestLag = lag; }
-  }
-  return bestLag ? { period: bestLag, strength: bestCorr } : null;
+  const key=`${eD},${rD}`;
+  const {regime,color,desc}=REGIMES[key]||{regime:'Transitional',color:'var(--amber)',desc:'Mixed signals detected.'};
+  return{regime,color,desc,breakDetected:eD!==rD,eSlope,rSlope,splitAt:sp};
 }
 
-function detectOutliers(series) {
-  const sorted = [...series].sort((a,b) => a-b);
-  const q1 = sorted[Math.floor(sorted.length * 0.25)];
-  const q3 = sorted[Math.floor(sorted.length * 0.75)];
-  const iqr = q3 - q1;
-  const lower = q1 - 1.5 * iqr, upper = q3 + 1.5 * iqr;
-  return series.map((v,i) => ({index:i, value:v, isOutlier: v<lower||v>upper}))
-               .filter(x => x.isOutlier);
+// ══════════════════════════════════════════════════════════════
+// NARRATIVE GENERATOR (v4.0 NEW)
+// Hedged, plain English. Does NOT speculate on outlier causes.
+// ══════════════════════════════════════════════════════════════
+function generateNarrative(metric,s,avg,sigma,slope,regime,ho,outliers,base,lastActual){
+  const mn=metric.replace(/_/g,' ');
+  const pct1=lastActual!==0?((base[0]-lastActual)/Math.abs(lastActual)*100).toFixed(1):'0';
+  const ps=parseFloat(pct1)>=0?'+':'';
+  const tw=slope>0.001*avg?'upward':slope<-0.001*avg?'downward':'flat';
+
+  let s1=`<strong>${mn}</strong> is currently trending <strong>${tw}</strong>`;
+  if(regime){s1+=`, with the model classifying the current phase as <strong>${regime.regime}</strong>`;
+    if(regime.breakDetected)s1+=` — a structural shift from the prior trend phase`;}
+  s1+='.';
+
+  let s2='';
+  if(ho){
+    const q=ho.holdoutMape<10?'strong':ho.holdoutMape<20?'moderate':'limited';
+    const beat=ho.holdoutMape<ho.naiveMape;
+    s2=`Out-of-sample validation (${ho.holdoutSize}-period holdout) shows <strong>${q} predictive accuracy</strong> at ${ho.holdoutMape.toFixed(1)}% MAPE, `;
+    s2+=beat?`outperforming a naive baseline by ${(ho.naiveMape-ho.holdoutMape).toFixed(1)} percentage points.`
+            :`comparable to a naive baseline — treat forecasts with additional caution.`;
+  }else{
+    s2=`Holdout validation was not possible with this sample size; accuracy estimates are approximate.`;}
+
+  let s3='';
+  if(outliers.length>0){
+    const pos=outliers.slice(0,3).map(o=>`period ${o.index+1}`).join(', ');
+    const more=outliers.length>3?` and ${outliers.length-3} more`:'';
+    s3=`${outliers.length} statistical anomal${outliers.length>1?'ies':'y'} detected at ${pos}${more} — outside normal IQR bounds. External business context is required to determine the cause.`;}
+
+  let s4=`The base forecast projects <strong>${fmtN(base[0])}</strong> for the next period (<strong>${ps}${pct1}%</strong> vs last actual).`;
+  if(regime&&regime.breakDetected)s4+=` The detected regime shift adds uncertainty — widen scenario bands accordingly.`;
+  else s4+=` Scenario bounds reflect ±1 standard deviation (${fmtN(sigma)}) around the base.`;
+
+  return[s1,s2,s3,s4].filter(Boolean).join(' ');
 }
 
-// ══════════════════════════════════════════════════════════════════
-// FIX 1 — HOLDOUT VALIDATION
-// Holds out the last 25% of the series (minimum 3 points) as a
-// true out-of-sample test set. Trains EMA on the remaining data,
-// generates step-ahead forecasts into the holdout window, and
-// calculates MAPE on those unseen points. The same holdout is used
-// to benchmark against a naive (last-value) forecast, making the
-// EMA-vs-naive comparison a fair apples-to-apples test.
-//
-// Returns null when the series is too short for a meaningful split
-// (< 8 points), triggering a transparent fallback in the UI.
-// ══════════════════════════════════════════════════════════════════
-function holdoutValidation(series, alpha) {
-  const MIN_TRAIN = 5;
-  const MIN_HOLDOUT = 3;
-  if (series.length < MIN_TRAIN + MIN_HOLDOUT) return null; // too small
-
-  const holdoutSize = Math.max(MIN_HOLDOUT, Math.round(series.length * 0.25));
-  const train   = series.slice(0, -holdoutSize);
-  const holdout = series.slice(-holdoutSize);
-
-  if (train.length < MIN_TRAIN) return null;
-
-  // EMA on training data only
-  const trainSmooth = ema(train, alpha);
-  const lastEma     = trainSmooth[trainSmooth.length - 1];
-
-  // Slope from the tail of the training EMA (same logic as main analyze)
-  const tailLen    = Math.max(3, Math.round(trainSmooth.length * 0.25));
-  const tail       = trainSmooth.slice(-tailLen);
-  const trainSlope = (tail[tail.length - 1] - tail[0]) / (tail.length - 1);
-
-  // Generate one forecast per holdout step (iterated, not direct)
-  const emaForecast = forecast(lastEma, trainSlope, holdoutSize);
-
-  // Naive baseline: repeat last observed training value for each holdout step
-  const naiveForecast = Array(holdoutSize).fill(train[train.length - 1]);
-
-  return {
-    holdoutSize,
-    holdoutActual:   holdout,
-    emaForecast,
-    naiveForecast,
-    holdoutMape:     mape(holdout, emaForecast),
-    naiveMape:       mape(holdout, naiveForecast),
-    holdoutDirAcc:   directionalAccuracy(holdout, emaForecast),
-  };
-}
-
-// ══════════════════════════════════════════════════════════════════
-// FIX 2 — CONFIDENCE SCORE
-// Replaces the previous R²×70 + sampleFactor×25 formula, which
-// inflated confidence for any autocorrelated series regardless of
-// actual predictive accuracy.
-//
-// The new score has three grounded components:
-//   • MAPE factor  (55 pts max) — inverts holdout MAPE on a curve
-//     capped at 50%: a 0% MAPE gives full marks; 50%+ gives zero.
-//   • Directional accuracy (30 pts max) — proportion of correct
-//     up/down calls on holdout; 100% gives full marks.
-//   • Sample size factor  (15 pts max) — log-scaled, saturates
-//     around 30 data points to avoid over-rewarding large datasets.
-//
-// When no holdout is available (< 8 points), the score is capped
-// at 60 and flagged as estimated so users know it is less reliable.
-// ══════════════════════════════════════════════════════════════════
-function computeConfidence(holdoutResult, dirAcc, sampleSize) {
-  const sampleFactor = Math.min(1, Math.log(sampleSize + 1) / Math.log(30));
-
-  if (!holdoutResult) {
-    // Insufficient data for holdout — partial score, capped lower
-    const raw = dirAcc * 0.4 + sampleFactor * 20;
-    return { score: Math.round(Math.max(10, Math.min(60, raw))), estimated: true };
-  }
-
-  // Primary driver: out-of-sample MAPE (0% → 1.0, 50%+ → 0.0)
-  const mapeFactor = Math.max(0, 1 - holdoutResult.holdoutMape / 50);
-
-  // Directional accuracy on holdout (0–1)
-  const dirFactor = holdoutResult.holdoutDirAcc / 100;
-
-  const raw = mapeFactor * 55 + dirFactor * 30 + sampleFactor * 15;
-  return { score: Math.round(Math.max(10, Math.min(95, raw))), estimated: false };
-}
-
-function fmtNum(v) {
-  if (!isFinite(v) || isNaN(v)) return '—';
-  if (Math.abs(v) >= 1e6)  return (v/1e6).toFixed(2) + 'M';
-  if (Math.abs(v) >= 1e3)  return (v/1e3).toFixed(1) + 'K';
-  if (Math.abs(v) < 0.01 && v !== 0) return v.toExponential(2);
+function fmtN(v){
+  if(!isFinite(v)||isNaN(v))return'—';
+  if(Math.abs(v)>=1e6)return(v/1e6).toFixed(2)+'M';
+  if(Math.abs(v)>=1e3)return(v/1e3).toFixed(1)+'K';
+  if(Math.abs(v)<0.01&&v!==0)return v.toExponential(2);
   return v.toFixed(2);
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // ANALYZE
-// ══════════════════════════════════════════════════════════════════
-function analyze() {
-  if (!metric) return;
-  const s = rows.map(r => r[metric]).filter(v => typeof v === 'number');
-  if (s.length < 4) { toast('Need at least 4 numeric data points', true); return; }
+// ══════════════════════════════════════════════════════════════
+function analyze(){
+  if(!metric)return;
+  const s=rows.map(r=>r[metric]).filter(v=>typeof v==='number');
+  if(s.length<4){toast('Need at least 4 numeric data points',true);return;}
+  const labels=dateCol?rows.map(r=>String(r[dateCol])):s.map((_,i)=>`P${i+1}`);
+  const avg=mean(s),sigma=std(s),vol=sigma/Math.abs(avg);
+  const smooth=ema(s,alpha);
+  const tl=Math.max(3,Math.round(smooth.length*0.25)),tail=smooth.slice(-tl);
+  const slope=(tail[tail.length-1]-tail[0])/(tail.length-1);
+  const ssTot=s.reduce((a,v)=>a+(v-avg)**2,0),ssRes=s.reduce((a,v,i)=>a+(v-smooth[i])**2,0);
+  const r2=ssTot>0?Math.max(0,1-ssRes/ssTot):0;
+  const lastActual=s[s.length-1],lastEma=smooth[smooth.length-1];
+  const base=fcst(lastEma,slope,horizon);
+  const opt=base.map(v=>v+sigma),pess=base.map(v=>v-sigma);
+  const trendDir=slope>0.001*avg?'↑ Upward':slope<-0.001*avg?'↓ Downward':'→ Flat';
+  const trendColor=slope>0.001*avg?'var(--green)':slope<-0.001*avg?'var(--red)':'var(--amber)';
+  const pctChange=lastActual!==0?((base[0]-lastActual)/Math.abs(lastActual)*100).toFixed(1):'–';
+  const pctSign=parseFloat(pctChange)>=0?'+':'';
+  const seasonality=detectSeasonality(s),outliers=detectOutliers(s),maxDd=maxDD(s);
+  const inDA=dirAcc(s,smooth);
+  // v4.0 additions
+  const regime=detectRegime(s,smooth,avg);
+  const ho=holdoutValidation(s,alpha);
+  const{score:conf,estimated:confEst}=computeConf(ho,inDA,s.length);
+  const badge=conf>72?'green':conf>50?'amber':'red';
+  const dispMape=ho?ho.holdoutMape:mape(s.slice(1),smooth.slice(1));
+  const mapeIsHO=ho!==null,emaBeat=ho?ho.holdoutMape<ho.naiveMape:false,naiveM=ho?ho.naiveMape:null;
 
-  const labels = dateCol
-    ? rows.map(r => String(r[dateCol]))
-    : s.map((_, i) => `P${i + 1}`);
+  lastAnalysis={metric,s,smooth,labels,base,opt,pess,avg,sigma,vol,slope,conf,badge,r2,
+    trendDir,trendColor,pctChange,pctSign,lastActual,regime,
+    mq:{mape:dispMape,mapeIsHO,holdoutSize:ho?ho.holdoutSize:0,dirAcc:inDA,
+      holdoutDA:ho?ho.holdoutDirAcc:null,maxDD:maxDd,seasonality,outliers,emaBeat,naiveM,confEst}};
+  const mq=lastAnalysis.mq;
 
-  const avg   = mean(s);
-  const sigma = std(s);
-  const vol   = sigma / Math.abs(avg);
-  const smooth = ema(s, alpha);
+  // REGIME BANNER
+  if(regime){
+    $('regimeBanner').innerHTML=`<div class="regime-banner">
+      <div class="regime-dot" style="background:${regime.color};box-shadow:0 0 6px ${regime.color};"></div>
+      <div>
+        <div class="regime-label" style="color:${regime.color};">${regime.regime}</div>
+        <div class="regime-meta">${regime.desc}</div>
+      </div>
+      ${regime.breakDetected?'<div class="regime-break-flag">⚡ Structural Break</div>':''}
+    </div>`;
+  }else $('regimeBanner').innerHTML='';
 
-  const tailLen = Math.max(3, Math.round(smooth.length * 0.25));
-  const tail    = smooth.slice(-tailLen);
-  const slope   = (tail[tail.length - 1] - tail[0]) / (tail.length - 1);
+  // NARRATIVE
+  $('narrativeText').innerHTML=generateNarrative(metric,s,avg,sigma,slope,regime,ho,outliers,base,lastActual);
 
-  // R² (goodness of fit for EMA smoother — kept for log transparency)
-  const ssTot = s.reduce((acc, v) => acc + (v - avg) ** 2, 0);
-  const ssRes = s.reduce((acc, v, i) => acc + (v - smooth[i]) ** 2, 0);
-  const r2    = ssTot > 0 ? Math.max(0, 1 - ssRes / ssTot) : 0;
-
-  // Forecasts
-  const lastActual = s[s.length - 1];
-  const lastEma    = smooth[smooth.length - 1];
-  const base = forecast(lastEma, slope, horizon);
-  const opt  = base.map(v => v + sigma);
-  const pess = base.map(v => v - sigma);
-
-  const trendDir = slope >  0.001 * avg ? '↑ Upward'
-                 : slope < -0.001 * avg ? '↓ Downward' : '→ Flat';
-  const trendColor = slope > 0.001 * avg ? 'var(--green)'
-                   : slope < -0.001 * avg ? 'var(--red)' : 'var(--amber)';
-  const pctChange = lastActual !== 0
-    ? ((base[0] - lastActual) / Math.abs(lastActual) * 100).toFixed(1) : '–';
-  const pctSign = parseFloat(pctChange) >= 0 ? '+' : '';
-
-  // Seasonality / outliers (unchanged, data quality metrics)
-  const seasonality = detectSeasonality(s);
-  const outliers    = detectOutliers(s);
-
-  // In-sample directional accuracy (for display in KPI alongside holdout)
-  const inSampleDirAcc = directionalAccuracy(s, smooth);
-
-  // ── FIX: TRUE OUT-OF-SAMPLE HOLDOUT VALIDATION ──────────────────
-  const holdout = holdoutValidation(s, alpha);
-
-  // ── FIX: GROUNDED CONFIDENCE SCORE ──────────────────────────────
-  const { score: conf, estimated: confEstimated } = computeConfidence(holdout, inSampleDirAcc, s.length);
-  const badge = conf > 72 ? 'green' : conf > 50 ? 'amber' : 'red';
-
-  // Surface the holdout MAPE as the headline accuracy metric.
-  // Fall back to in-sample (with disclaimer) only when data is too short.
-  const displayMape     = holdout ? holdout.holdoutMape : mape(s.slice(1), smooth.slice(1));
-  const mapeIsHoldout   = holdout !== null;
-  const emaBeatsNaive   = holdout ? holdout.holdoutMape < holdout.naiveMape
-                                  : false; // can't claim win without holdout
-  const naiveMapeVal    = holdout ? holdout.naiveMape : null;
-
-  const maxDD = maxDrawdown(s);
-
-  lastAnalysis = {
-    metric, s, smooth, labels, base, opt, pess, avg, sigma, vol,
-    slope, conf, badge, r2, trendDir, pctChange, pctSign,
-    modelQuality: {
-      mape: displayMape,
-      mapeIsHoldout,
-      holdoutSize: holdout ? holdout.holdoutSize : 0,
-      directionalAccuracy: inSampleDirAcc,
-      holdoutDirAcc: holdout ? holdout.holdoutDirAcc : null,
-      maxDrawdown: maxDD,
-      seasonality,
-      outliers,
-      emaBeatsNaive,
-      naiveMape: naiveMapeVal,
-      confEstimated,
-    }
-  };
-
-  const mq = lastAnalysis.modelQuality;
-
-  // ── KPI GRID ─────────────────────────────────────────────────────
-  const seasonText  = mq.seasonality
-    ? `${mq.seasonality.period}-period cycle (${(mq.seasonality.strength*100).toFixed(0)}%)`
-    : 'None detected';
-  const outlierText = mq.outliers.length > 0
-    ? `${mq.outliers.length} outlier${mq.outliers.length > 1 ? 's' : ''} detected`
-    : 'No outliers';
-
-  // Accuracy card label changes depending on whether holdout was possible
-  const mapeLabel = mq.mapeIsHoldout
-    ? `Holdout MAPE (n=${mq.holdoutSize})`
-    : 'In-Sample MAPE ⚠';
-  const mapeQuality = mq.mape < 10 ? 'Excellent' : mq.mape < 20 ? 'Good' : 'Poor';
-  const mapeClass   = mq.mape < 10 ? 'green' : mq.mape < 20 ? 'amber' : 'red';
-
-  const confLabel = mq.confEstimated ? 'Confidence (est.)' : 'Confidence Score';
-
-  $('kpiGrid').innerHTML = `
-    <div class="kpi-card blue">
-      <div class="kpi-label">Metric</div>
-      <div class="kpi-value" style="font-size:1.05rem; padding-top:0.3rem;">${metric.replace(/_/g,' ')}</div>
-      <div class="kpi-sub" style="color:var(--muted)">${s.length} data points</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Average</div>
-      <div class="kpi-value">${fmtNum(avg)}</div>
-      <div class="kpi-sub" style="color:var(--muted)">σ = ${fmtNum(sigma)}</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Trend Direction</div>
-      <div class="kpi-value" style="font-size:1.15rem; padding-top:0.2rem; color:${trendColor}">${trendDir}</div>
-      <div class="kpi-sub" style="color:var(--muted)">Next period: ${pctSign}${pctChange}%</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">${mapeLabel}</div>
+  // KPI GRID
+  const mapeClass=mq.mape<10?'green':mq.mape<20?'amber':'red';
+  $('kpiGrid').innerHTML=`
+    <div class="kpi-card blue"><div class="kpi-label">Metric</div>
+      <div class="kpi-value" style="font-size:1.05rem;padding-top:0.3rem;">${metric.replace(/_/g,' ')}</div>
+      <div class="kpi-sub" style="color:var(--muted)">${s.length} data points</div></div>
+    <div class="kpi-card"><div class="kpi-label">Average</div>
+      <div class="kpi-value">${fmtN(avg)}</div>
+      <div class="kpi-sub" style="color:var(--muted)">σ = ${fmtN(sigma)}</div></div>
+    <div class="kpi-card gold"><div class="kpi-label">Current Regime</div>
+      <div class="kpi-value" style="font-size:1rem;padding-top:0.2rem;color:${regime?regime.color:'var(--muted)'}">
+        ${regime?regime.regime:'N/A (small sample)'}</div>
+      <div class="kpi-sub" style="color:var(--muted)">${regime&&regime.breakDetected?'⚡ Break detected':'Stable phase'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Trend Direction</div>
+      <div class="kpi-value" style="font-size:1.15rem;padding-top:0.2rem;color:${trendColor}">${trendDir}</div>
+      <div class="kpi-sub" style="color:var(--muted)">Next: ${pctSign}${pctChange}%</div></div>
+    <div class="kpi-card"><div class="kpi-label">${mq.mapeIsHO?`Holdout MAPE (n=${mq.holdoutSize})`:'MAPE (in-sample ⚠)'}</div>
       <div class="kpi-value">${mq.mape.toFixed(1)}%</div>
-      <div class="kpi-sub ${mapeClass}">
-        ● ${mapeQuality}${mq.mapeIsHoldout ? ' · out-of-sample' : ' · no holdout'}
-      </div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Directional Accuracy</div>
-      <div class="kpi-value">${mq.directionalAccuracy.toFixed(0)}%</div>
-      <div class="kpi-sub" style="color:var(--muted)">
-        ${mq.holdoutDirAcc !== null ? `Holdout: ${mq.holdoutDirAcc.toFixed(0)}%` : 'In-sample (full series)'}
-      </div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Max Drawdown</div>
-      <div class="kpi-value">${mq.maxDrawdown.toFixed(1)}%</div>
-      <div class="kpi-sub ${mq.maxDrawdown < 10 ? 'green' : mq.maxDrawdown < 25 ? 'amber' : 'red'}">
-        Peak-to-trough risk
-      </div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Seasonality</div>
-      <div class="kpi-value" style="font-size:1.05rem; padding-top:0.3rem; color:${mq.seasonality ? 'var(--accent)' : 'var(--muted)'}">
-        ${mq.seasonality ? mq.seasonality.period + '-period' : 'None'}
-      </div>
-      <div class="kpi-sub" style="color:var(--muted)">${seasonText}</div>
-    </div>
-    <div class="kpi-card ${mq.outliers.length > 0 ? 'amber' : ''}">
-      <div class="kpi-label">Data Quality</div>
-      <div class="kpi-value" style="font-size:1.05rem; padding-top:0.3rem;">
-        ${mq.outliers.length > 0 ? mq.outliers.length + ' issues' : 'Clean'}
-      </div>
-      <div class="kpi-sub ${mq.outliers.length > 0 ? 'amber' : 'green'}">${outlierText}</div>
-    </div>
-    <div class="kpi-card ${mq.emaBeatsNaive ? 'green' : 'amber'}">
-      <div class="kpi-label">Model vs Naive</div>
-      <div class="kpi-value" style="font-size:1.05rem; padding-top:0.3rem;">
-        ${mq.emaBeatsNaive ? 'EMA ✓' : mq.naiveMape !== null ? 'Caution' : 'N/A'}
-      </div>
-      <div class="kpi-sub ${mq.emaBeatsNaive ? 'green' : 'amber'}">
-        ${mq.emaBeatsNaive
-          ? `Beats naive by ${(mq.naiveMape - mq.mape).toFixed(1)}% MAPE`
-          : mq.naiveMape !== null
-            ? `Naive MAPE: ${mq.naiveMape.toFixed(1)}%`
-            : 'Insufficient data for holdout'}
-      </div>
-    </div>
-    <div class="kpi-card ${badge}">
-      <div class="kpi-label">${confLabel}</div>
+      <div class="kpi-sub ${mapeClass}">● ${mq.mape<10?'Excellent':mq.mape<20?'Good':'Poor'}${mq.mapeIsHO?' · out-of-sample':' · no holdout'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Directional Accuracy</div>
+      <div class="kpi-value">${mq.dirAcc.toFixed(0)}%</div>
+      <div class="kpi-sub" style="color:var(--muted)">${mq.holdoutDA!==null?`Holdout: ${mq.holdoutDA.toFixed(0)}%`:'In-sample'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Max Drawdown</div>
+      <div class="kpi-value">${mq.maxDD.toFixed(1)}%</div>
+      <div class="kpi-sub ${mq.maxDD<10?'green':mq.maxDD<25?'amber':'red'}">Peak-to-trough risk</div></div>
+    <div class="kpi-card ${mq.outliers.length>0?'amber':''}"><div class="kpi-label">Data Quality</div>
+      <div class="kpi-value" style="font-size:1.05rem;padding-top:0.3rem;">${mq.outliers.length>0?mq.outliers.length+' anomalies':'Clean'}</div>
+      <div class="kpi-sub ${mq.outliers.length>0?'amber':'green'}">${mq.outliers.length>0?mq.outliers.length+' point(s) outside IQR':'No outliers'}</div></div>
+    <div class="kpi-card ${mq.emaBeat?'green':'amber'}"><div class="kpi-label">Model vs Naive</div>
+      <div class="kpi-value" style="font-size:1.05rem;padding-top:0.3rem;">${mq.emaBeat?'EMA ✓':mq.naiveM!==null?'Caution':'N/A'}</div>
+      <div class="kpi-sub ${mq.emaBeat?'green':'amber'}">${mq.emaBeat?`Beats naive by ${(mq.naiveM-mq.mape).toFixed(1)}%`:mq.naiveM!==null?`Naive: ${mq.naiveM.toFixed(1)}% MAPE`:'No holdout'}</div></div>
+    <div class="kpi-card ${badge}"><div class="kpi-label">${confEst?'Confidence (est.)':'Confidence Score'}</div>
       <div class="kpi-value">${conf}%</div>
-      <div class="kpi-sub ${badge}">
-        ${badge==='green'?'● High':badge==='amber'?'● Moderate':'● Low'}
-        ${mq.confEstimated ? ' (estimated)' : ''}
-      </div>
-    </div>
-  `;
+      <div class="kpi-sub ${badge}">${badge==='green'?'● High':badge==='amber'?'● Moderate':'● Low'}${confEst?' (estimated)':''}</div></div>`;
 
-  // ── SCENARIO TABLE ───────────────────────────────────────────────
-  const fcstPeriodLabels = Array.from({length: horizon}, (_, i) => `F${i+1}`);
-  $('scenarioDivider').textContent = `Scenario Analysis — ${horizon}-Period Outlook`;
-  $('scenarioHeader').innerHTML =
-    `<div class="scenario-header-cell"></div>` +
-    fcstPeriodLabels.map(l => `<div class="scenario-header-cell">${l}</div>`).join('');
+  // SCENARIOS
+  $('scenarioDivider').textContent=`Scenario Analysis — ${horizon}-Period Outlook`;
+  renderScenarios(lastAnalysis);
 
-  const makeDelta = (v, ref) => {
-    const d = ((v - ref) / Math.abs(ref) * 100).toFixed(1);
-    return `${d >= 0 ? '+' : ''}${d}%`;
-  };
-
-  $('scenarioRows').innerHTML = [
-    { cls:'opt',  label:'▲ Optimistic',  vals: opt  },
-    { cls:'base', label:'◆ Base',        vals: base },
-    { cls:'pess', label:'▼ Pessimistic', vals: pess },
-  ].map(row =>
-    `<div class="scenario-row ${row.cls}">
-      <div class="scenario-label-cell">${row.label}</div>
-      ${row.vals.map(v =>
-        `<div class="scenario-value-cell">
-          <div class="val">${fmtNum(v)}</div>
-          <div class="delta">${makeDelta(v, lastActual)}</div>
-        </div>`).join('')}
-    </div>`
-  ).join('');
-
-  // ── ENHANCED LOG ─────────────────────────────────────────────────
-  const ts = new Date().toLocaleTimeString();
-  $('logOutput').innerHTML =
-    `<span class="log-ok">[${ts}] ✓ Analysis complete · EMA α=${alpha} · horizon=${horizon}</span>\n` +
-    `<span class="log-info">[INFO] Metric         : ${metric}</span>\n` +
-    `<span class="log-info">[INFO] Data points    : ${s.length} (tail for slope: last ${tailLen})</span>\n` +
-    `<span class="log-info">[INFO] Average        : ${avg.toFixed(4)}</span>\n` +
-    `<span class="log-info">[INFO] Std Dev        : ${sigma.toFixed(4)}</span>\n` +
-    `<span class="log-info">[INFO] Volatility     : ${(vol*100).toFixed(2)}%</span>\n` +
-    `<span class="log-info">[INFO] EMA Slope      : ${slope.toFixed(6)}</span>\n` +
-    `<span class="log-info">[INFO] R² (smoother)  : ${r2.toFixed(4)} — fit only, not predictive</span>\n` +
-    (holdout
-      ? `<span class="log-info">[HOLD] Split          : train=${s.length - holdout.holdoutSize}, test=${holdout.holdoutSize} (25% holdout)</span>\n` +
-        `<span class="log-info">[HOLD] EMA MAPE       : ${holdout.holdoutMape.toFixed(2)}% (out-of-sample)</span>\n` +
-        `<span class="log-info">[HOLD] Naive MAPE     : ${holdout.naiveMape.toFixed(2)}% (last-value baseline)</span>\n` +
-        `<span class="log-${holdout.holdoutMape < holdout.naiveMape ? 'ok' : 'warn'}">[HOLD] vs Naive       : EMA ${holdout.holdoutMape < holdout.naiveMape ? 'wins' : 'loses/ties'} (ΔMAPE=${(holdout.naiveMape - holdout.holdoutMape).toFixed(2)}%)</span>\n` +
-        `<span class="log-info">[HOLD] Directional    : ${holdout.holdoutDirAcc.toFixed(1)}% (holdout)</span>\n`
-      : `<span class="log-warn">[HOLD] Skipped        : < 8 points — no holdout split possible</span>\n` +
-        `<span class="log-warn">[HOLD] MAPE shown     : in-sample approximation — interpret cautiously</span>\n`
-    ) +
-    `<span class="log-info">[INFO] Directional    : ${inSampleDirAcc.toFixed(1)}% (full series)</span>\n` +
-    `<span class="log-info">[INFO] Max Drawdown   : ${maxDD.toFixed(2)}%</span>\n` +
-    (mq.seasonality ? `<span class="log-warn">[SEAS] Detected       : ${mq.seasonality.period}-period cycle (r=${mq.seasonality.strength.toFixed(2)})</span>\n` : '') +
-    (mq.outliers.length > 0 ? `<span class="log-warn">[DATA] Outliers       : ${mq.outliers.map(o => `#${o.index}=${o.value.toFixed(1)}`).join(', ')}</span>\n` : '') +
-    `<span class="log-info">[INFO] Δ Next period  : ${pctSign}${pctChange}%</span>\n` +
-    `<span class="log-${badge}">[CONF] Score          : ${conf}%${confEstimated ? ' (estimated — small sample)' : ' (holdout-grounded)'} → ${badge.toUpperCase()}</span>\n` +
-    base.map((v, i) => `<span class="log-info">[FCST] Base[+${i+1}]    : ${v.toFixed(4)}</span>`).join('\n') + '\n' +
-    `<span class="log-ok">[FCST] Opt [+1]    : ${opt[0].toFixed(4)}</span>\n` +
+  // LOG
+  const ts=new Date().toLocaleTimeString();
+  $('logOutput').innerHTML=
+    `<span class="log-ok">[${ts}] ✓ v4.0 analysis · EMA α=${alpha} · horizon=${horizon}</span>\n`+
+    `<span class="log-info">[INFO] Metric        : ${metric} · n=${s.length}</span>\n`+
+    `<span class="log-info">[INFO] Mean / σ      : ${avg.toFixed(4)} / ${sigma.toFixed(4)}</span>\n`+
+    `<span class="log-info">[INFO] Slope (tail)  : ${slope.toFixed(6)}</span>\n`+
+    `<span class="log-info">[INFO] R² (smoother) : ${r2.toFixed(4)} — fit quality only, not predictive</span>\n`+
+    (regime?`<span class="log-${regime.breakDetected?'warn':'info'}">[REGM] Phase         : ${regime.regime}${regime.breakDetected?' ⚡ BREAK':''}</span>\n`:'')+
+    (ho?`<span class="log-info">[HOLD] Split         : train=${s.length-ho.holdoutSize} / test=${ho.holdoutSize}</span>\n`+
+        `<span class="log-info">[HOLD] EMA MAPE      : ${ho.holdoutMape.toFixed(2)}% (out-of-sample)</span>\n`+
+        `<span class="log-info">[HOLD] Naive MAPE    : ${ho.naiveMape.toFixed(2)}%</span>\n`+
+        `<span class="log-${emaBeat?'ok':'warn'}">[HOLD] EMA vs Naive  : ${emaBeat?'wins':'loses/ties'} (Δ=${(ho.naiveMape-ho.holdoutMape).toFixed(2)}%)</span>\n`
+      :`<span class="log-warn">[HOLD] Skipped       : < 8 points</span>\n`)+
+    (mq.outliers.length>0?`<span class="log-warn">[DATA] Outliers      : ${mq.outliers.map(o=>`#${o.index}=${o.value.toFixed(1)}`).join(', ')}</span>\n`:'')+
+    (seasonality?`<span class="log-warn">[SEAS] Detected      : ${seasonality.period}-period (r=${seasonality.strength.toFixed(2)})</span>\n`:'')+
+    `<span class="log-${badge}">[CONF] Score         : ${conf}%${confEst?' (est.)':''} → ${badge.toUpperCase()}</span>\n`+
+    base.map((v,i)=>`<span class="log-info">[FCST] Base[+${i+1}]   : ${v.toFixed(4)}</span>`).join('\n')+'\n'+
+    `<span class="log-ok">[FCST] Opt [+1]   : ${opt[0].toFixed(4)}</span>\n`+
     `<span class="log-warn">[FCST] Pess[+1]   : ${pess[0].toFixed(4)}</span>`;
 
-  [$('kpiSection'), $('chartSection'), $('scenarioSection'), $('logSection')]
-    .forEach(el => el.classList.remove('hidden'));
-  pdfBtn.disabled = false; csvExportBtn.disabled = false;
-
-  renderChart(s, smooth, base, opt, pess, labels);
+  [$('narrativeSection'),$('kpiSection'),$('chartSection'),$('scenarioSection'),$('logSection')]
+    .forEach(el=>el.classList.remove('hidden'));
+  $('pdfBtn').disabled=false;$('csvExportBtn').disabled=false;
+  renderChart(s,smooth,base,opt,pess,labels);
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// RENDER SCENARIOS (separated — called by driver sliders too)
+// ══════════════════════════════════════════════════════════════
+function renderScenarios(analysis){
+  const{base,opt,pess,lastActual}=analysis;
+  const m=driverMult(),active=m!==1;
+  const aB=base.map(v=>v*m),aO=opt.map(v=>v*m),aP=pess.map(v=>v*m);
+  const labels=Array.from({length:horizon},(_,i)=>`F${i+1}`);
+  $('scenarioHeader').innerHTML=`<div class="scenario-header-cell"></div>`+labels.map(l=>`<div class="scenario-header-cell">${l}</div>`).join('');
+  const delta=(v,ref)=>{const d=((v-ref)/Math.abs(ref)*100).toFixed(1);return`${d>=0?'+':''}${d}%`;};
+  $('scenarioRows').innerHTML=[
+    {cls:'opt', label:'▲ Optimistic', vals:aO},
+    {cls:'base',label:'◆ Base',       vals:aB},
+    {cls:'pess',label:'▼ Pessimistic',vals:aP},
+  ].map(row=>`<div class="scenario-row ${row.cls}">
+    <div class="scenario-label-cell">${row.label}</div>
+    ${row.vals.map(v=>`<div class="scenario-value-cell">
+      <div class="val">${fmtN(v)}${active?'<span class="adj"> ⊕</span>':''}</div>
+      <div class="delta">${delta(v,lastActual)}</div>
+    </div>`).join('')}
+  </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
 // CHART
-// ══════════════════════════════════════════════════════════════════
-function buildChartConfig(s, t, b, o, p, labels, theme='dark', fontScale=1) {
-  const isDark = theme === 'dark', isPDF = fontScale > 1;
-  const gridColor = isDark ? 'rgba(30,34,48,0.8)' : 'rgba(190,200,215,0.7)';
-  const tickColor = isDark ? '#6b7280' : '#334155';
-  const ttBg = isDark ? '#11131c' : '#ffffff';
-  const ttBorder = isDark ? '#1e2230' : '#cbd5e1';
-  const ttTitle = isDark ? '#e8e9ef' : '#0f172a';
-  const ttBody  = isDark ? '#6b7280' : '#475569';
-  const lineWidth = isPDF ? 5 : 2, emaWidth = isPDF ? 3.5 : 1.5;
-  const pointR = isPDF ? 7 : 3, fcstPtR = isPDF ? 9 : 4;
-  const tickSz = Math.round(9 * fontScale), legendSz = Math.round(10 * fontScale);
-  const fullLabels = [...labels.slice(0, s.length), ...b.map((_,i) => `F${i+1}`)];
-  const yTickCb = val => {
-    if (Math.abs(val) >= 1e6) return (val/1e6).toFixed(1)+'M';
-    if (Math.abs(val) >= 1e3) return (val/1e3).toFixed(1)+'K';
-    if (Math.abs(val) < 0.01 && val !== 0) return val.toExponential(1);
-    return val.toFixed(val % 1 === 0 ? 0 : 2);
-  };
-  return {
-    type: 'line',
-    data: {
-      labels: fullLabels,
-      datasets: [
-        { label:'Actual', data:s, borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,0.10)',
-          borderWidth:lineWidth, tension:0.3, pointRadius:pointR,
-          pointBackgroundColor:'#c9a84c', pointBorderColor:'#ffffff',
-          pointBorderWidth:isPDF?2:1, fill:true },
-        { label:'EMA Trend', data:t, borderColor:'#4c8ec9', borderWidth:emaWidth,
-          borderDash:isPDF?[12,8]:[4,4], tension:0.4, pointRadius:0, fill:false },
-        { label:'Base Forecast', data:[...Array(s.length).fill(null), ...b],
-          borderColor:'#c9a84c', borderWidth:lineWidth, borderDash:isPDF?[16,8]:[6,6],
-          pointRadius:fcstPtR, pointBackgroundColor:'#c9a84c', pointBorderColor:'#ffffff',
-          pointBorderWidth:isPDF?2:1, fill:false },
-        { label:'Upper (Opt.)', data:[...Array(s.length).fill(null), ...o],
-          borderColor:'#22c55e', borderWidth:isPDF?3:0,
-          backgroundColor:'rgba(34,197,94,0.13)', fill:'+1', pointRadius:0 },
-        { label:'Lower (Pess.)', data:[...Array(s.length).fill(null), ...p],
-          borderColor:'#ef4444', borderWidth:isPDF?3:0, fill:false, pointRadius:0 },
-      ]
-    },
-    options: {
-      responsive:!isPDF, maintainAspectRatio:false,
-      animation:{duration:0}, interaction:{mode:'index', intersect:false},
-      layout:{ padding:{ top:isPDF?30:10, right:isPDF?50:10, bottom:isPDF?10:5, left:isPDF?10:5 } },
-      plugins: {
-        legend:{ display:true, labels:{ color:isDark?'#9ca3af':'#334155',
-          font:{family:'monospace', size:legendSz}, boxWidth:isPDF?50:20, padding:isPDF?30:10 } },
-        tooltip:{ enabled:!isPDF, backgroundColor:ttBg, borderColor:ttBorder, borderWidth:1,
-          titleColor:ttTitle, bodyColor:ttBody,
-          titleFont:{family:'monospace',size:11}, bodyFont:{family:'monospace',size:10} }
-      },
-      scales: {
-        x:{ grid:{color:gridColor, lineWidth:isPDF?1.5:1},
-            border:{color:isDark?'#374151':'#64748b', width:isPDF?2:1},
-            ticks:{color:tickColor, font:{family:'monospace',size:tickSz, weight:isPDF?'700':'400'},
-              maxTicksLimit:isPDF?10:14, maxRotation:isPDF?45:0, minRotation:isPDF?30:0} },
-        y:{ grid:{color:gridColor, lineWidth:isPDF?1.5:1},
-            border:{color:isDark?'#374151':'#64748b', width:isPDF?2:1},
-            ticks:{color:tickColor, font:{family:'monospace',size:tickSz, weight:isPDF?'700':'400'},
-              callback:yTickCb, maxTicksLimit:8} }
-      }
-    }
-  };
+// ══════════════════════════════════════════════════════════════
+function buildChartConfig(s,t,b,o,p,labels,theme='dark',fs=1){
+  const dk=theme==='dark',pdf=fs>1;
+  const gc=dk?'rgba(30,34,48,0.8)':'rgba(190,200,215,0.7)',tc=dk?'#6b7280':'#334155';
+  const tb=dk?'#11131c':'#ffffff',tbo=dk?'#1e2230':'#cbd5e1',tt=dk?'#e8e9ef':'#0f172a',tbdy=dk?'#6b7280':'#475569';
+  const lw=pdf?5:2,ew=pdf?3.5:1.5,pr=pdf?7:3,fp=pdf?9:4,ts=Math.round(9*fs),ls=Math.round(10*fs);
+  const fl=[...labels.slice(0,s.length),...b.map((_,i)=>`F${i+1}`)];
+  const ytc=v=>{if(Math.abs(v)>=1e6)return(v/1e6).toFixed(1)+'M';if(Math.abs(v)>=1e3)return(v/1e3).toFixed(1)+'K';if(Math.abs(v)<0.01&&v!==0)return v.toExponential(1);return v.toFixed(v%1===0?0:2);};
+  return{type:'line',data:{labels:fl,datasets:[
+    {label:'Actual',data:s,borderColor:'#c9a84c',backgroundColor:'rgba(201,168,76,0.10)',borderWidth:lw,tension:0.3,pointRadius:pr,pointBackgroundColor:'#c9a84c',pointBorderColor:'#ffffff',pointBorderWidth:pdf?2:1,fill:true},
+    {label:'EMA Trend',data:t,borderColor:'#4c8ec9',borderWidth:ew,borderDash:pdf?[12,8]:[4,4],tension:0.4,pointRadius:0,fill:false},
+    {label:'Base Forecast',data:[...Array(s.length).fill(null),...b],borderColor:'#c9a84c',borderWidth:lw,borderDash:pdf?[16,8]:[6,6],pointRadius:fp,pointBackgroundColor:'#c9a84c',pointBorderColor:'#ffffff',pointBorderWidth:pdf?2:1,fill:false},
+    {label:'Upper (Opt.)',data:[...Array(s.length).fill(null),...o],borderColor:'#22c55e',borderWidth:pdf?3:0,backgroundColor:'rgba(34,197,94,0.13)',fill:'+1',pointRadius:0},
+    {label:'Lower (Pess.)',data:[...Array(s.length).fill(null),...p],borderColor:'#ef4444',borderWidth:pdf?3:0,fill:false,pointRadius:0},
+  ]},options:{responsive:!pdf,maintainAspectRatio:false,animation:{duration:0},interaction:{mode:'index',intersect:false},
+    layout:{padding:{top:pdf?30:10,right:pdf?50:10,bottom:pdf?10:5,left:pdf?10:5}},
+    plugins:{
+      legend:{display:true,labels:{color:dk?'#9ca3af':'#334155',font:{family:'monospace',size:ls},boxWidth:pdf?50:20,padding:pdf?30:10}},
+      tooltip:{enabled:!pdf,backgroundColor:tb,borderColor:tbo,borderWidth:1,titleColor:tt,bodyColor:tbdy,titleFont:{family:'monospace',size:11},bodyFont:{family:'monospace',size:10}}},
+    scales:{
+      x:{grid:{color:gc,lineWidth:pdf?1.5:1},border:{color:dk?'#374151':'#64748b',width:pdf?2:1},ticks:{color:tc,font:{family:'monospace',size:ts,weight:pdf?'700':'400'},maxTicksLimit:pdf?10:14,maxRotation:pdf?45:0,minRotation:pdf?30:0}},
+      y:{grid:{color:gc,lineWidth:pdf?1.5:1},border:{color:dk?'#374151':'#64748b',width:pdf?2:1},ticks:{color:tc,font:{family:'monospace',size:ts,weight:pdf?'700':'400'},callback:ytc,maxTicksLimit:8}}}}};
+}
+function renderChart(s,t,b,o,p,labels){
+  if(chartObj){chartObj.destroy();chartObj=null;}
+  chartObj=new Chart($('trendChart').getContext('2d'),buildChartConfig(s,t,b,o,p,labels,'dark'));
 }
 
-function renderChart(s, t, b, o, p, labels) {
-  if (chartObj) { chartObj.destroy(); chartObj = null; }
-  chartObj = new Chart($('trendChart').getContext('2d'),
-    buildChartConfig(s, t, b, o, p, labels, 'dark'));
-}
-
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // EXPORT CSV
-// ══════════════════════════════════════════════════════════════════
-function exportForecastCSV() {
-  if (!lastAnalysis) return;
-  const { metric, base, opt, pess } = lastAnalysis;
-  const lines = ['period,scenario,value'];
-  base.forEach((v, i) => {
-    lines.push(`+${i+1},optimistic,${opt[i].toFixed(4)}`);
-    lines.push(`+${i+1},base,${v.toFixed(4)}`);
-    lines.push(`+${i+1},pessimistic,${pess[i].toFixed(4)}`);
+// ══════════════════════════════════════════════════════════════
+function exportForecastCSV(){
+  if(!lastAnalysis)return;
+  const{metric,base,opt,pess}=lastAnalysis,m=driverMult();
+  const lines=['period,scenario,value,driver_multiplier'];
+  base.forEach((v,i)=>{
+    lines.push(`+${i+1},optimistic,${(opt[i]*m).toFixed(4)},${m.toFixed(4)}`);
+    lines.push(`+${i+1},base,${(v*m).toFixed(4)},${m.toFixed(4)}`);
+    lines.push(`+${i+1},pessimistic,${(pess[i]*m).toFixed(4)},${m.toFixed(4)}`);
   });
-  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = `${metric}_forecast.csv`;
-  a.click(); URL.revokeObjectURL(a.href);
-  toast('✓ Forecast CSV downloaded');
+  const blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${metric}_forecast.csv`;
+  a.click();URL.revokeObjectURL(a.href);toast('✓ Forecast CSV downloaded');
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // EXPORT PDF
-// ══════════════════════════════════════════════════════════════════
-async function exportPDF() {
-  if (!lastAnalysis) return;
-  if (!window.jspdf) { toast('PDF library not loaded — try again', true); return; }
-  pdfBtn.disabled = true; pdfBtn.textContent = 'Building PDF...';
+// ══════════════════════════════════════════════════════════════
+async function exportPDF(){
+  if(!lastAnalysis)return;
+  if(!window.jspdf){toast('PDF library not loaded',true);return;}
+  $('pdfBtn').disabled=true;$('pdfBtn').textContent='Building PDF...';
+  const{metric,s,smooth,labels,base,opt,pess,avg,sigma,slope,conf,r2,lastActual,regime,mq}=lastAnalysis;
+  const m=driverMult(),aB=base.map(v=>v*m),aO=opt.map(v=>v*m),aP=pess.map(v=>v*m);
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const PW=210,ML=12,MR=12,CW=PW-ML-MR;let Y=0;
+  const rgb=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const fill=h=>{const[r,g,b]=rgb(h);doc.setFillColor(r,g,b);};
+  const draw=h=>{const[r,g,b]=rgb(h);doc.setDrawColor(r,g,b);};
+  const text=h=>{const[r,g,b]=rgb(h);doc.setTextColor(r,g,b);};
+  const FR=(x,y,w,h)=>doc.rect(x,y,w,h,'F');
+  const DR=(x,y,w,h)=>doc.rect(x,y,w,h,'S');
+  const LN=(x1,y1,x2,y2)=>doc.line(x1,y1,x2,y2);
+  const isH=conf>72,isM=conf>50;
+  const bHex=isH?'#15803d':isM?'#b45309':'#b91c1c';
+  const bBg=isH?'#f0fdf4':isM?'#fffbeb':'#fef2f2';
+  const bLbl=isH?'HIGH CONFIDENCE':isM?'MODERATE CONFIDENCE':'LOW CONFIDENCE';
 
-  const { metric, s, smooth, labels, base, opt, pess, avg, sigma,
-          slope, conf, r2, trendDir, pctChange, pctSign, modelQuality: mq } = lastAnalysis;
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
-  const PW = 210, ML = 12, MR = 12, CW = PW - ML - MR;
-  let Y = 0;
-
-  const rgb  = hex => [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
-  const fill = hex => { const [r,g,b] = rgb(hex); doc.setFillColor(r,g,b); };
-  const draw = hex => { const [r,g,b] = rgb(hex); doc.setDrawColor(r,g,b); };
-  const text = hex => { const [r,g,b] = rgb(hex); doc.setTextColor(r,g,b); };
-  const FR   = (x,y,w,h) => doc.rect(x,y,w,h,'F');
-  const DR   = (x,y,w,h) => doc.rect(x,y,w,h,'S');
-  const LN   = (x1,y1,x2,y2) => doc.line(x1,y1,x2,y2);
-
-  const isHigh = conf > 72, isMid = conf > 50;
-  const badgeHex   = isHigh ? '#15803d' : isMid ? '#b45309' : '#b91c1c';
-  const badgeBg    = isHigh ? '#f0fdf4' : isMid ? '#fffbeb' : '#fef2f2';
-  const badgeLabel = isHigh ? 'HIGH CONFIDENCE' : isMid ? 'MODERATE CONFIDENCE' : 'LOW CONFIDENCE';
-  const lastActual = s[s.length - 1];
-
-  let chartImg = null;
-  try {
-    const pdfCanvas = $('pdfChartCanvas');
-    pdfCanvas.width = 1600; pdfCanvas.height = 560;
-    if (window._pdfChartObj) { try { window._pdfChartObj.destroy(); } catch(e){} window._pdfChartObj = null; }
-    window._pdfChartObj = new Chart(pdfCanvas.getContext('2d'),
-      buildChartConfig(s, smooth, base, opt, pess, labels, 'light', 3.5));
-    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 220)));
-    const tmp = document.createElement('canvas');
-    tmp.width = pdfCanvas.width; tmp.height = pdfCanvas.height;
-    const ctx2 = tmp.getContext('2d');
-    ctx2.fillStyle = '#ffffff'; ctx2.fillRect(0,0,tmp.width,tmp.height);
-    ctx2.drawImage(pdfCanvas, 0, 0);
-    chartImg = tmp.toDataURL('image/png', 0.95);
-    window._pdfChartObj.destroy(); window._pdfChartObj = null;
-  } catch(e) { console.warn('Chart capture failed:', e); }
+  let chartImg=null;
+  try{
+    const pc=$('pdfChartCanvas');pc.width=1600;pc.height=560;
+    if(window._pco){try{window._pco.destroy();}catch(e){}window._pco=null;}
+    window._pco=new Chart(pc.getContext('2d'),buildChartConfig(s,smooth,base,opt,pess,labels,'light',3.5));
+    await new Promise(res=>requestAnimationFrame(()=>setTimeout(res,220)));
+    const tmp=document.createElement('canvas');tmp.width=pc.width;tmp.height=pc.height;
+    const cx=tmp.getContext('2d');cx.fillStyle='#ffffff';cx.fillRect(0,0,tmp.width,tmp.height);cx.drawImage(pc,0,0);
+    chartImg=tmp.toDataURL('image/png',0.95);
+    window._pco.destroy();window._pco=null;
+  }catch(e){console.warn('Chart capture:',e);}
 
   // Header
-  fill('#0d1117'); FR(0,0,PW,30);
-  fill('#c9a84c'); FR(0,30,PW*0.5,2.5);
-  fill('#4c8ec9'); FR(PW*0.5,30,PW*0.5,2.5);
-  doc.setFont('helvetica','bold'); doc.setFontSize(20); text('#ffffff');
-  doc.text('PARAGON', ML, 18);
-  doc.setFont('helvetica','normal'); doc.setFontSize(6.5); text('#c9a84c');
-  doc.text('ANALYTICS  -  EXECUTIVE FORECASTING REPORT', ML, 25);
-  text('#9ca3af');
-  doc.text('CONFIDENTIAL', PW-MR, 17, {align:'right'});
-  text('#e5e7eb');
-  doc.text(new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}), PW-MR, 24, {align:'right'});
+  fill('#0d1117');FR(0,0,PW,30);fill('#c9a84c');FR(0,30,PW*0.5,2.5);fill('#4c8ec9');FR(PW*0.5,30,PW*0.5,2.5);
+  doc.setFont('helvetica','bold');doc.setFontSize(20);text('#ffffff');doc.text('PARAGON',ML,18);
+  doc.setFont('helvetica','normal');doc.setFontSize(6.5);text('#c9a84c');doc.text('ANALYTICS  -  EXECUTIVE FORECASTING REPORT',ML,25);
+  text('#9ca3af');doc.text('CONFIDENTIAL',PW-MR,17,{align:'right'});
+  text('#e5e7eb');doc.text(new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}),PW-MR,24,{align:'right'});
+  Y=39;
+  doc.setFont('helvetica','normal');doc.setFontSize(6.5);text('#9ca3af');doc.text('ANALYSIS SUBJECT',ML,Y);Y+=5;
+  const title=metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  doc.setFont('helvetica','bold');doc.setFontSize(17);text('#111111');doc.text(title,ML,Y);
+  const pt=`${conf}%  ${bLbl}`;doc.setFont('helvetica','bold');doc.setFontSize(6.5);
+  const pw=doc.getTextWidth(pt)+6;fill(bBg);FR(PW-MR-pw,Y-6,pw,8);draw(bHex);doc.setLineWidth(0.25);DR(PW-MR-pw,Y-6,pw,8);text(bHex);doc.text(pt,PW-MR-pw+3,Y-0.5);
+  Y+=5;doc.setFont('helvetica','normal');doc.setFontSize(7.5);text('#6b7280');
+  const regStr=regime?`Regime: ${regime.regime}${regime.breakDetected?' (break)':''}  |  `:'';
+  doc.text(`${regStr}${s.length} data pts  |  EMA α=${alpha.toFixed(2)}  |  Horizon=${horizon}${m!==1?`  |  Drivers ×${m.toFixed(3)}`:''}`,ML,Y);
+  Y+=3;draw('#cccccc');doc.setLineWidth(0.4);LN(ML,Y,PW-MR,Y);Y+=6;
 
-  Y = 39;
-  doc.setFont('helvetica','normal'); doc.setFontSize(6.5); text('#9ca3af');
-  doc.text('ANALYSIS SUBJECT', ML, Y); Y += 5;
-  const title = metric.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-  doc.setFont('helvetica','bold'); doc.setFontSize(17); text('#111111');
-  doc.text(title, ML, Y);
-  const pillTxt = `${conf}%  ${badgeLabel}${mq.confEstimated?' (est.)':''}`;
-  doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
-  const pillW = doc.getTextWidth(pillTxt) + 6;
-  fill(badgeBg); FR(PW-MR-pillW, Y-6, pillW, 8);
-  draw(badgeHex); doc.setLineWidth(0.25); DR(PW-MR-pillW, Y-6, pillW, 8);
-  text(badgeHex); doc.text(pillTxt, PW-MR-pillW+3, Y-0.5);
-  Y += 5;
-  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); text('#6b7280');
-  const mapeDesc = mq.mapeIsHoldout ? `Holdout MAPE: ${mq.mape.toFixed(1)}%  (n=${mq.holdoutSize} held out)` : `MAPE: ${mq.mape.toFixed(1)}% (in-sample approx.)`;
-  doc.text(`${s.length} data points   EMA α = ${alpha.toFixed(2)}   Horizon = ${horizon}   ${mapeDesc}`, ML, Y);
-  Y += 3;
-  draw('#cccccc'); doc.setLineWidth(0.4); LN(ML, Y, PW-MR, Y); Y += 6;
-
-  // KPI boxes
-  const kpis = [
-    { label:'AVERAGE',    value:fmtNum(avg),    sub:'Historical mean',   color:'#2563eb' },
-    { label:mq.mapeIsHoldout?'HOLDOUT MAPE':'MAPE (est.)',
-                          value:mq.mape.toFixed(1)+'%',
-                                                sub:mq.mapeIsHoldout?'Out-of-sample':'In-sample only',
-                                                color:mq.mape<10?'#16a34a':mq.mape<20?'#ca8a04':'#dc2626' },
-    { label:'DIRECTIONAL',value:mq.directionalAccuracy.toFixed(0)+'%',
-                                                sub:'Trend accuracy',    color:'#0891b2' },
-    { label:'MAX DRAWDOWN',value:mq.maxDrawdown.toFixed(1)+'%',
-                                                sub:'Peak-to-trough',   color:mq.maxDrawdown<10?'#16a34a':mq.maxDrawdown<25?'#ca8a04':'#dc2626' },
-    { label:'R² SMOOTH',  value:r2.toFixed(3),  sub:'Fit only, not pred.',color:'#7c3aed' },
-    { label:'CONFIDENCE', value:conf+'%',        sub:badgeLabel,         color:badgeHex  },
+  const rColor=regime?regime.color.replace('var(--green)','#16a34a').replace('var(--red)','#dc2626').replace('var(--amber)','#ca8a04').replace('var(--muted)','#64748b'):'#64748b';
+  const kpis=[
+    {l:'AVERAGE',    v:fmtN(avg),              s2:'Historical mean',   c:'#2563eb'},
+    {l:mq.mapeIsHO?'HOLDOUT MAPE':'MAPE',      v:mq.mape.toFixed(1)+'%', s2:mq.mapeIsHO?'Out-of-sample':'In-sample only', c:mq.mape<10?'#16a34a':mq.mape<20?'#ca8a04':'#dc2626'},
+    {l:'REGIME',     v:regime?(regime.regime.length>12?regime.regime.split(' ')[0]:regime.regime):'N/A', s2:regime?(regime.breakDetected?'Break detected':'Stable'):'Insufficient data', c:rColor},
+    {l:'MAX DRAWDOWN',v:mq.maxDD.toFixed(1)+'%',s2:'Peak-to-trough', c:mq.maxDD<10?'#16a34a':mq.maxDD<25?'#ca8a04':'#dc2626'},
+    {l:'R² SMOOTH',  v:r2.toFixed(3),           s2:'Fit only',        c:'#7c3aed'},
+    {l:'CONFIDENCE', v:conf+'%',                 s2:bLbl,              c:bHex},
   ];
-  const GAP=2.5, BOX_W=(CW-GAP*5)/6, BOX_H=20;
-  kpis.forEach((k,i) => {
-    const bx=ML+i*(BOX_W+GAP), by=Y;
-    fill('#f8fafc'); FR(bx,by,BOX_W,BOX_H);
-    draw('#e2e8f0'); doc.setLineWidth(0.25); DR(bx,by,BOX_W,BOX_H);
-    fill(k.color); FR(bx,by,BOX_W,1.8);
-    doc.setFont('helvetica','normal'); doc.setFontSize(5); text('#94a3b8');
-    doc.text(k.label, bx+BOX_W/2, by+6.5, {align:'center'});
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(k.value.length>10?8.5:11); text(k.color);
-    doc.text(k.value, bx+BOX_W/2, by+13, {align:'center'});
-    doc.setFont('helvetica','normal'); doc.setFontSize(4.8); text('#94a3b8');
-    doc.text(doc.splitTextToSize(k.sub,BOX_W-2)[0], bx+BOX_W/2, by+17.5, {align:'center'});
+  const GAP=2.5,BW=(CW-GAP*5)/6,BH=20;
+  kpis.forEach((k,i)=>{
+    const bx=ML+i*(BW+GAP),by=Y;
+    fill('#f8fafc');FR(bx,by,BW,BH);draw('#e2e8f0');doc.setLineWidth(0.25);DR(bx,by,BW,BH);
+    fill(k.c);FR(bx,by,BW,1.8);
+    doc.setFont('helvetica','normal');doc.setFontSize(5);text('#94a3b8');doc.text(k.l,bx+BW/2,by+6.5,{align:'center'});
+    doc.setFont('helvetica','bold');doc.setFontSize(k.v.length>10?8.5:11);text(k.c);doc.text(k.v,bx+BW/2,by+13,{align:'center'});
+    doc.setFont('helvetica','normal');doc.setFontSize(4.8);text('#94a3b8');doc.text(doc.splitTextToSize(k.s2,BW-2)[0],bx+BW/2,by+17.5,{align:'center'});
   });
-  Y += BOX_H+7;
+  Y+=BH+7;
 
-  // Chart
-  doc.setFont('helvetica','normal'); doc.setFontSize(6); text('#9ca3af');
-  doc.text('TREND & FORECAST CHART', ML, Y); Y += 3;
-  const CHART_H = 75;
-  if (chartImg) {
-    fill('#ffffff'); FR(ML,Y,CW,CHART_H);
-    draw('#e2e8f0'); doc.setLineWidth(0.3); DR(ML,Y,CW,CHART_H);
-    doc.addImage(chartImg,'PNG',ML+1.5,Y+1.5,CW-3,CHART_H-3);
-  } else {
-    fill('#f8fafc'); FR(ML,Y,CW,CHART_H);
-    draw('#e2e8f0'); doc.setLineWidth(0.3); DR(ML,Y,CW,CHART_H);
-    doc.setFont('helvetica','normal'); doc.setFontSize(8); text('#9ca3af');
-    doc.text('Chart not available', ML+CW/2, Y+CHART_H/2, {align:'center'});
-  }
-  Y += CHART_H+5;
+  doc.setFont('helvetica','normal');doc.setFontSize(6);text('#9ca3af');doc.text('TREND & FORECAST CHART',ML,Y);Y+=3;
+  const CH=75;
+  if(chartImg){fill('#ffffff');FR(ML,Y,CW,CH);draw('#e2e8f0');doc.setLineWidth(0.3);DR(ML,Y,CW,CH);doc.addImage(chartImg,'PNG',ML+1.5,Y+1.5,CW-3,CH-3);}
+  else{fill('#f8fafc');FR(ML,Y,CW,CH);draw('#e2e8f0');doc.setLineWidth(0.3);DR(ML,Y,CW,CH);doc.setFont('helvetica','normal');doc.setFontSize(8);text('#9ca3af');doc.text('Chart not available',ML+CW/2,Y+CH/2,{align:'center'});}
+  Y+=CH+5;
 
-  // Stats strip
-  const stats = [
-    {label:'DATA POINTS', val:String(s.length)},
-    {label:'MINIMUM',     val:fmtNum(Math.min(...s))},
-    {label:'MAXIMUM',     val:fmtNum(Math.max(...s))},
-    {label:'LAST ACTUAL', val:fmtNum(lastActual)},
-    {label:'EMA (LAST)',  val:fmtNum(smooth[smooth.length-1])},
-    {label:'SLOPE',       val:slope.toFixed(4)},
-  ];
-  const STAT_W=CW/stats.length, STAT_H=10;
-  stats.forEach((st,i) => {
-    const sx=ML+i*STAT_W;
-    fill(i%2===0?'#f8fafc':'#f1f5f9'); FR(sx,Y,STAT_W,STAT_H);
-    draw('#e2e8f0'); doc.setLineWidth(0.2); DR(sx,Y,STAT_W,STAT_H);
-    doc.setFont('helvetica','normal'); doc.setFontSize(4.8); text('#94a3b8');
-    doc.text(st.label, sx+STAT_W/2, Y+3.8, {align:'center'});
-    doc.setFont('helvetica','bold'); doc.setFontSize(7); text('#1e293b');
-    doc.text(st.val, sx+STAT_W/2, Y+8, {align:'center'});
+  const stats=[{l:'DATA POINTS',v:String(s.length)},{l:'MINIMUM',v:fmtN(Math.min(...s))},{l:'MAXIMUM',v:fmtN(Math.max(...s))},{l:'LAST ACTUAL',v:fmtN(lastActual)},{l:'EMA (LAST)',v:fmtN(smooth[smooth.length-1])},{l:'SLOPE',v:slope.toFixed(4)}];
+  const SW=CW/stats.length,SH=10;
+  stats.forEach((st,i)=>{const sx=ML+i*SW;fill(i%2===0?'#f8fafc':'#f1f5f9');FR(sx,Y,SW,SH);draw('#e2e8f0');doc.setLineWidth(0.2);DR(sx,Y,SW,SH);
+    doc.setFont('helvetica','normal');doc.setFontSize(4.8);text('#94a3b8');doc.text(st.l,sx+SW/2,Y+3.8,{align:'center'});
+    doc.setFont('helvetica','bold');doc.setFontSize(7);text('#1e293b');doc.text(st.v,sx+SW/2,Y+8,{align:'center'});});
+  Y+=SH+7;
+
+  doc.setFont('helvetica','normal');doc.setFontSize(6);text('#9ca3af');
+  doc.text(`${horizon}-PERIOD SCENARIO FORECAST${m!==1?` [Drivers ×${m.toFixed(3)}]`:''}`,ML,Y);Y+=3;
+  const scns=[{l:'OPTIMISTIC',t:'(+1 SD)',vs:aO,bg:'#f0fdf4',c:'#15803d',b:'#86efac'},{l:'BASE CASE',t:'(EMA)',vs:aB,bg:'#fffbeb',c:'#92400e',b:'#fcd34d'},{l:'PESSIMISTIC',t:'(-1 SD)',vs:aP,bg:'#fef2f2',c:'#b91c1c',b:'#fca5a5'}];
+  const COLS=horizon+1,CW2=CW/COLS,RH=13,TX=ML;
+  fill('#0d1117');FR(TX,Y,CW,RH*0.85);doc.setFont('helvetica','bold');doc.setFontSize(6.5);text('#ffffff');
+  doc.text('SCENARIO',TX+CW2*0.5,Y+5.5,{align:'center'});
+  for(let i=0;i<horizon;i++)doc.text(`PERIOD +${i+1}`,TX+CW2*(i+1)+CW2*0.5,Y+5.5,{align:'center'});
+  Y+=RH*0.85;
+  scns.forEach(row=>{
+    fill(row.bg);FR(TX,Y,CW,RH);fill(row.c);FR(TX,Y,2,RH);draw(row.b);doc.setLineWidth(0.3);LN(TX,Y+RH,TX+CW,Y+RH);
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);text(row.c);doc.text(row.l,TX+CW2*0.5,Y+6.5,{align:'center'});
+    doc.setFont('helvetica','normal');doc.setFontSize(5.5);text('#94a3b8');doc.text(row.t,TX+CW2*0.5,Y+10.5,{align:'center'});
+    row.vs.forEach((v,i)=>{const cx=TX+CW2*(i+1)+CW2*0.5;
+      doc.setFont('helvetica','bold');doc.setFontSize(9.5);text(row.c);doc.text(fmtN(v),cx,Y+6.5,{align:'center'});
+      const d=lastActual!==0?((v-lastActual)/Math.abs(lastActual)*100).toFixed(1):'—';
+      doc.setFont('helvetica','normal');doc.setFontSize(5.5);text('#94a3b8');doc.text(`${parseFloat(d)>=0?'+':''}${d}% vs last`,cx,Y+10.5,{align:'center'});});
+    draw('#e2e8f0');doc.setLineWidth(0.2);for(let i=1;i<=horizon;i++)LN(TX+CW2*i,Y,TX+CW2*i,Y+RH);
+    Y+=RH;
   });
-  Y += STAT_H+7;
-
-  // Scenario table
-  doc.setFont('helvetica','normal'); doc.setFontSize(6); text('#9ca3af');
-  doc.text(`${horizon}-PERIOD SCENARIO FORECAST`, ML, Y); Y += 3;
-  const scenarios = [
-    {label:'OPTIMISTIC',  tag:'(+1 SD)', vals:opt,  bg:'#f0fdf4', color:'#15803d', border:'#86efac'},
-    {label:'BASE CASE',   tag:'(EMA)',   vals:base, bg:'#fffbeb', color:'#92400e', border:'#fcd34d'},
-    {label:'PESSIMISTIC', tag:'(-1 SD)', vals:pess, bg:'#fef2f2', color:'#b91c1c', border:'#fca5a5'},
-  ];
-  const COLS=horizon+1, COL_W=CW/COLS, ROW_H=13, TBL_X=ML;
-  fill('#0d1117'); FR(TBL_X,Y,CW,ROW_H*0.85);
-  doc.setFont('helvetica','bold'); doc.setFontSize(6.5); text('#ffffff');
-  doc.text('SCENARIO', TBL_X+COL_W*0.5, Y+5.5, {align:'center'});
-  for (let i=0;i<horizon;i++) doc.text(`PERIOD +${i+1}`, TBL_X+COL_W*(i+1)+COL_W*0.5, Y+5.5, {align:'center'});
-  Y += ROW_H*0.85;
-
-  scenarios.forEach(row => {
-    fill(row.bg); FR(TBL_X,Y,CW,ROW_H);
-    fill(row.color); FR(TBL_X,Y,2,ROW_H);
-    draw(row.border); doc.setLineWidth(0.3); LN(TBL_X,Y+ROW_H,TBL_X+CW,Y+ROW_H);
-    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); text(row.color);
-    doc.text(row.label, TBL_X+COL_W*0.5, Y+6.5, {align:'center'});
-    doc.setFont('helvetica','normal'); doc.setFontSize(5.5); text('#94a3b8');
-    doc.text(row.tag, TBL_X+COL_W*0.5, Y+10.5, {align:'center'});
-    row.vals.forEach((v,i) => {
-      const cx=TBL_X+COL_W*(i+1)+COL_W*0.5;
-      doc.setFont('helvetica','bold'); doc.setFontSize(9.5); text(row.color);
-      doc.text(fmtNum(v), cx, Y+6.5, {align:'center'});
-      const delta=lastActual!==0?((v-lastActual)/Math.abs(lastActual)*100).toFixed(1):'—';
-      doc.setFont('helvetica','normal'); doc.setFontSize(5.5); text('#94a3b8');
-      doc.text(`${parseFloat(delta)>=0?'+':''}${delta}% vs last`, cx, Y+10.5, {align:'center'});
-    });
-    draw('#e2e8f0'); doc.setLineWidth(0.2);
-    for (let i=1;i<=horizon;i++) LN(TBL_X+COL_W*i,Y,TBL_X+COL_W*i,Y+ROW_H);
-    Y += ROW_H;
-  });
-  draw('#cbd5e1'); doc.setLineWidth(0.4); DR(TBL_X,Y-ROW_H*3,CW,ROW_H*3);
-
-  // Footer
-  fill('#0d1117'); FR(0,282,PW,15);
-  doc.setFont('helvetica','normal'); doc.setFontSize(6); text('#6b7280');
-  doc.text('Paragon Analytics  -  Executive Forecasting  -  For internal use only', ML, 288);
-  doc.text(`paragon.analytics  -  ${new Date().getFullYear()}`, PW-MR, 288, {align:'right'});
-  text('#c9a84c'); doc.text('CONFIDENTIAL', PW/2, 292, {align:'center'});
-
+  draw('#cbd5e1');doc.setLineWidth(0.4);DR(TX,Y-RH*3,CW,RH*3);
+  fill('#0d1117');FR(0,282,PW,15);doc.setFont('helvetica','normal');doc.setFontSize(6);text('#6b7280');
+  doc.text('Paragon Analytics  -  Executive Forecasting  -  For internal use only',ML,288);
+  doc.text(`paragon.analytics  -  ${new Date().getFullYear()}`,PW-MR,288,{align:'right'});
+  text('#c9a84c');doc.text('CONFIDENTIAL',PW/2,292,{align:'center'});
   doc.save(`paragon_${metric.replace(/\W+/g,'_').toLowerCase()}_report.pdf`);
-  pdfBtn.disabled = false; pdfBtn.textContent = '⬇ Export PDF';
+  $('pdfBtn').disabled=false;$('pdfBtn').textContent='⬇ Export PDF';
   toast('PDF downloaded successfully');
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // TOAST
-// ══════════════════════════════════════════════════════════════════
-function toast(msg, err=false) {
-  const t = $('toast'); t.textContent = msg;
-  t.className = err ? 'show err' : 'show';
-  clearTimeout(t._tid); t._tid = setTimeout(() => { t.className = ''; }, 3200);
+// ══════════════════════════════════════════════════════════════
+function toast(msg,err=false){
+  const t=$('toast');t.textContent=msg;t.className=err?'show err':'show';
+  clearTimeout(t._tid);t._tid=setTimeout(()=>{t.className='';},3200);
 }
 
-// ══════════════════════════════════════════════════════════════════
 // INIT
-// ══════════════════════════════════════════════════════════════════
 loadSettings();
 </script>
 </body>
