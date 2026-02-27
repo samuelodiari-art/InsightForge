@@ -1127,17 +1127,17 @@ async function exportPDF() {
   fill('#c9a84c'); FR(0, HDR_H, PW * 0.5, 2.5);
   fill('#4c8ec9'); FR(PW * 0.5, HDR_H, PW * 0.5, 2.5);
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('times', 'bold');
   doc.setFontSize(20);
   text('#ffffff');
   doc.text('PARAGON', ML, 18);
 
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('times', 'normal');
   doc.setFontSize(6.5);
   text('#c9a84c');
   doc.text('ANALYTICS  -  EXECUTIVE FORECASTING REPORT', ML, 25);
 
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('times', 'normal');
   doc.setFontSize(6.5);
   text('#9ca3af');
   const dateStr = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
@@ -1150,21 +1150,21 @@ async function exportPDF() {
   // ════════════════════════════════════════════════════════
   // STEP 3 — SUBJECT BLOCK
   // ════════════════════════════════════════════════════════
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('times', 'normal');
   doc.setFontSize(6.5);
   text('#9ca3af');
   doc.text('ANALYSIS SUBJECT', ML, Y);
   Y += 5;
 
   const title = metric.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('times', 'bold');
   doc.setFontSize(17);
   text('#111111');
   doc.text(title, ML, Y);
 
   // Confidence pill — top-right aligned with title
   const pillTxt = `${conf}%  ${badgeLabel}`;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('times', 'bold');
   doc.setFontSize(6.5);
   const pillW = doc.getTextWidth(pillTxt) + 6;
   fill(badgeBg); FR(PW - MR - pillW, Y - 6, pillW, 8);
@@ -1173,7 +1173,7 @@ async function exportPDF() {
   doc.text(pillTxt, PW - MR - pillW + 3, Y - 0.5);
 
   Y += 5;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('times', 'normal');
   doc.setFontSize(7.5);
   text('#6b7280');
   doc.text(`${s.length} historical data points   EMA alpha = ${alpha.toFixed(2)}   Horizon = ${horizon} periods`, ML, Y);
@@ -1207,20 +1207,20 @@ async function exportPDF() {
     fill(k.color); FR(bx, by, BOX_W, 1.8);  // top colour accent
 
     // Label
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('times', 'normal');
     doc.setFontSize(5);
     text('#94a3b8');
     doc.text(k.label, bx + BOX_W / 2, by + 6.5, { align: 'center' });
 
     // Value — shrink font if too wide
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     let vSize = k.value.length > 10 ? 8.5 : 11;
     doc.setFontSize(vSize);
     text(k.color);
     doc.text(k.value, bx + BOX_W / 2, by + 13, { align: 'center' });
 
     // Sub-label (may wrap)
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('times', 'normal');
     doc.setFontSize(4.8);
     text('#94a3b8');
     const subLines = doc.splitTextToSize(k.sub, BOX_W - 2);
@@ -1232,7 +1232,7 @@ async function exportPDF() {
   // ════════════════════════════════════════════════════════
   // STEP 5 — CHART
   // ════════════════════════════════════════════════════════
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('times', 'normal');
   doc.setFontSize(6);
   text('#9ca3af');
   doc.text('TREND & FORECAST CHART', ML, Y);
@@ -1247,7 +1247,7 @@ async function exportPDF() {
     // Fallback placeholder if capture failed
     fill('#f8fafc'); FR(ML, Y, CW, CHART_H);
     draw('#e2e8f0'); doc.setLineWidth(0.3); DR(ML, Y, CW, CHART_H);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); text('#9ca3af');
+    doc.setFont('times', 'normal'); doc.setFontSize(8); text('#9ca3af');
     doc.text('Chart not available', ML + CW/2, Y + CHART_H/2, { align: 'center' });
   }
   Y += CHART_H + 5;
@@ -1267,9 +1267,9 @@ async function exportPDF() {
     const sx = ML + i * STAT_W;
     fill(i % 2 === 0 ? '#f8fafc' : '#f1f5f9'); FR(sx, Y, STAT_W, STAT_H);
     draw('#e2e8f0'); doc.setLineWidth(0.2); DR(sx, Y, STAT_W, STAT_H);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(4.8); text('#94a3b8');
+    doc.setFont('times', 'normal'); doc.setFontSize(4.8); text('#94a3b8');
     doc.text(st.label, sx + STAT_W/2, Y + 3.8, { align: 'center' });
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); text('#1e293b');
+    doc.setFont('times', 'bold'); doc.setFontSize(7); text('#1e293b');
     doc.text(st.val, sx + STAT_W/2, Y + 8, { align: 'center' });
   });
   Y += STAT_H + 7;
@@ -1277,7 +1277,7 @@ async function exportPDF() {
   // ════════════════════════════════════════════════════════
   // STEP 6 — SCENARIO TABLE (ASCII labels — no Unicode arrows)
   // ════════════════════════════════════════════════════════
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('times', 'normal');
   doc.setFontSize(6);
   text('#9ca3af');
   doc.text(`${horizon}-PERIOD SCENARIO FORECAST`, ML, Y);
@@ -1297,7 +1297,7 @@ async function exportPDF() {
 
   // Table header
   fill('#0d1117'); FR(TBL_X, Y, CW, ROW_H * 0.85);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); text('#ffffff');
+  doc.setFont('times', 'bold'); doc.setFontSize(6.5); text('#ffffff');
   doc.text('SCENARIO', TBL_X + COL_W * 0.5, Y + 5.5, { align: 'center' });
   for (let i = 0; i < horizon; i++) {
     doc.text(`PERIOD  +${i+1}`, TBL_X + COL_W * (i+1) + COL_W * 0.5, Y + 5.5, { align: 'center' });
@@ -1314,18 +1314,18 @@ async function exportPDF() {
     draw(row.border); doc.setLineWidth(0.3); LN(TBL_X, Y + ROW_H, TBL_X + CW, Y + ROW_H);
 
     // Scenario label
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); text(row.color);
+    doc.setFont('times', 'bold'); doc.setFontSize(7.5); text(row.color);
     doc.text(row.label, TBL_X + COL_W * 0.5, Y + 6.5, { align: 'center' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); text('#94a3b8');
+    doc.setFont('times', 'normal'); doc.setFontSize(5.5); text('#94a3b8');
     doc.text(row.tag, TBL_X + COL_W * 0.5, Y + 10.5, { align: 'center' });
 
     // Values + delta vs last actual
     row.vals.forEach((v, i) => {
       const cx = TBL_X + COL_W * (i + 1) + COL_W * 0.5;
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); text(row.color);
+      doc.setFont('times', 'bold'); doc.setFontSize(9.5); text(row.color);
       doc.text(fmtNum(v), cx, Y + 6.5, { align: 'center' });
       const delta = lastActual !== 0 ? ((v - lastActual)/Math.abs(lastActual)*100).toFixed(1) : '—';
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); text('#94a3b8');
+      doc.setFont('times', 'normal'); doc.setFontSize(5.5); text('#94a3b8');
       doc.text(`${parseFloat(delta)>=0?'+':''}${delta}% vs last`, cx, Y + 10.5, { align: 'center' });
     });
 
@@ -1350,7 +1350,7 @@ async function exportPDF() {
   // Fill remaining space to page bottom with a footer bar
   const FOOTER_Y = 282;
   fill('#0d1117'); FR(0, FOOTER_Y, PW, 15);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(6); text('#6b7280');
+  doc.setFont('times', 'normal'); doc.setFontSize(6); text('#6b7280');
   doc.text('Paragon Analytics  -  Executive Forecasting  -  For internal use only', ML, FOOTER_Y + 6);
   doc.text(`paragon.analytics  -  ${new Date().getFullYear()}`, PW - MR, FOOTER_Y + 6, { align: 'right' });
   text('#c9a84c');
