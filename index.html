@@ -460,6 +460,59 @@ header {
 #nova-send:active { background: var(--gold); }
 #nova-send svg { fill: #fff; width: 15px; height: 15px; }
 
+/* ── KEY MODAL ───────────────────────────────── */
+#key-modal {
+  position: fixed; inset: 0; z-index: 999;
+  background: rgba(13,35,24,0.7);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+
+#key-modal.hidden { display: none; }
+
+.key-box {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 32px 26px;
+  max-width: 420px; width: 100%;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+  text-align: center;
+}
+
+.key-box .kb-icon  { font-size: 36px; margin-bottom: 14px; }
+.key-box h2        { color: var(--green); font-size: 19px; font-weight: 700; margin-bottom: 6px; }
+.key-box p         { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 22px; }
+
+.key-box input {
+  width: 100%; border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 11px 14px;
+  font-size: 14px; font-family: monospace;
+  outline: none; margin-bottom: 12px;
+  background: #f9fafb;
+}
+
+.key-box input:focus { border-color: var(--gold); background: #fff; }
+
+.key-box .kb-err {
+  color: var(--danger); font-size: 12.5px;
+  margin-bottom: 10px; display: none;
+}
+
+.key-box .btn-save {
+  width: 100%; background: var(--green); color: #fff;
+  border: none; border-radius: 8px; padding: 12px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  font-family: inherit; transition: opacity 0.15s;
+}
+
+.key-box .btn-save:hover  { opacity: 0.87; }
+.key-box .btn-save:active { opacity: 0.7; }
+
+.key-box .kb-note {
+  font-size: 11px; color: var(--muted);
+  margin-top: 12px; line-height: 1.5;
+}
+
 /* ── PRINT ───────────────────────────────────── */
 @media print {
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -495,6 +548,19 @@ header {
 </head>
 <body>
 
+<!-- ═══ KEY MODAL ════════════════════════════════════════════ -->
+<div id="key-modal" class="hidden">
+  <div class="key-box">
+    <div class="kb-icon">🔑</div>
+    <h2>Enter Your Groq API Key</h2>
+    <p>Your key is stored only in your browser session — it is never saved to the file or sent anywhere except Groq's servers.</p>
+    <input type="password" id="key-input" placeholder="gsk_...">
+    <div class="kb-err" id="kb-err">Key must start with gsk_ and be at least 20 characters.</div>
+    <button class="btn-save" onclick="saveKey()">Save & Continue</button>
+    <div class="kb-note">Get a free key at <strong>console.groq.com</strong><br>Stored in sessionStorage — cleared when you close the tab.</div>
+  </div>
+</div>
+
 <!-- ═══ HEADER ══════════════════════════════════════════════ -->
 <header>
   <div class="hdr-brand">
@@ -505,6 +571,7 @@ header {
     </div>
   </div>
   <div class="hdr-actions">
+    <button class="btn-sm btn-ghost" onclick="document.getElementById('key-modal').classList.remove('hidden')" title="Change API Key">🔑</button>
     <button class="btn-sm btn-ghost" id="btn-new"   onclick="resetApp()">↩ New</button>
     <button class="btn-sm btn-gold"  id="btn-print" onclick="window.print()">⬇ Save PDF</button>
   </div>
@@ -684,7 +751,34 @@ header {
 /* ─────────────────────────────────────────────────────────────
    CONFIG
 ───────────────────────────────────────────────────────────── */
-const GROQ_KEY   = "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";   // ← paste Groq API key here
+let GROQ_KEY = sessionStorage.getItem("coc_groq_key") || "";
+
+/* ── KEY MODAL ─── */
+function checkKey() {
+  if (!GROQ_KEY) {
+    document.getElementById("key-modal").classList.remove("hidden");
+  }
+}
+
+function saveKey() {
+  const val = document.getElementById("key-input").value.trim();
+  const err = document.getElementById("kb-err");
+  if (!val.startsWith("gsk_") || val.length < 20) {
+    err.style.display = "block";
+    return;
+  }
+  err.style.display = "none";
+  GROQ_KEY = val;
+  sessionStorage.setItem("coc_groq_key", val);
+  document.getElementById("key-modal").classList.add("hidden");
+}
+
+document.getElementById("key-input").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") saveKey();
+});
+
+// Show modal on load if no key stored
+window.addEventListener("DOMContentLoaded", checkKey);
 const GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
