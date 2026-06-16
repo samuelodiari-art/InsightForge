@@ -5,32 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>COC Intelligence — Business Analytics</title>
 
-<!-- Dependencies -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 
 <style>
-/* ── RESET ───────────────────────────────────── */
+/* ── RESET ─────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── TOKENS ──────────────────────────────────── */
+/* ── TOKENS ────────────────────────── */
 :root {
-  --green:    #0D2318;
-  --gold:     #C6923A;
-  --bg:       #F5F0E8;
-  --card:     #ffffff;
-  --text:     #1a1a1a;
-  --muted:    #6b7280;
-  --border:   #e5e7eb;
-  --ok:       #10b981;
-  --warn:     #f59e0b;
-  --danger:   #ef4444;
-  --radius:   12px;
-  --shadow:   0 1px 3px rgba(0,0,0,0.07), 0 4px 14px rgba(0,0,0,0.05);
+  --green:  #0D2318;
+  --gold:   #C6923A;
+  --bg:     #F5F0E8;
+  --card:   #ffffff;
+  --text:   #1a1a1a;
+  --muted:  #6b7280;
+  --border: #e5e7eb;
+  --ok:     #10b981;
+  --danger: #ef4444;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 14px rgba(0,0,0,0.05);
 }
 
-/* ── BASE ────────────────────────────────────── */
+/* ── BASE ──────────────────────────── */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
@@ -40,418 +38,345 @@ body {
   line-height: 1.5;
 }
 
-/* ── HEADER ──────────────────────────────────── */
+/* ── HEADER ────────────────────────── */
 header {
   background: var(--green);
-  height: 58px;
-  padding: 0 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 300;
+  height: 58px; padding: 0 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 300;
   box-shadow: 0 2px 10px rgba(0,0,0,0.35);
 }
-
-.hdr-brand { display: flex; align-items: center; gap: 11px; }
-
+.hdr-brand { display: flex; align-items: center; gap: 10px; }
 .hdr-logo {
-  width: 34px; height: 34px;
-  background: var(--gold);
-  border-radius: 7px;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 12px; color: var(--green);
-  letter-spacing: -0.3px; flex-shrink: 0;
+  width: 34px; height: 34px; background: var(--gold);
+  border-radius: 7px; display: flex; align-items: center;
+  justify-content: center; font-weight: 800; font-size: 12px;
+  color: var(--green); flex-shrink: 0;
 }
-
-.hdr-name  { color: #fff; font-size: 15px; font-weight: 700; }
-.hdr-sub   { color: var(--gold); font-size: 10px; opacity: 0.9; }
-
-.hdr-actions { display: flex; gap: 8px; }
-
+.hdr-name { color: #fff; font-size: 15px; font-weight: 700; }
+.hdr-sub  { color: var(--gold); font-size: 10px; opacity: 0.9; }
+.hdr-actions { display: flex; gap: 6px; }
 .btn-sm {
-  border: none; cursor: pointer;
-  padding: 7px 13px; border-radius: 7px;
-  font-size: 12px; font-weight: 600; font-family: inherit;
-  transition: opacity 0.15s;
+  border: none; cursor: pointer; padding: 7px 12px;
+  border-radius: 7px; font-size: 12px; font-weight: 600;
+  font-family: inherit; transition: opacity 0.15s;
 }
-.btn-sm:hover { opacity: 0.85; }
-.btn-sm:active { opacity: 0.7; }
+.btn-sm:hover  { opacity: 0.85; }
+.btn-sm:active { opacity: 0.70; }
+.btn-gold  { background: var(--gold);              color: var(--green); }
+.btn-ghost { background: rgba(255,255,255,0.12);   color: #fff; }
+#btn-print, #btn-new, #btn-reconfig { display: none; }
 
-.btn-gold { background: var(--gold); color: var(--green); }
-.btn-ghost { background: rgba(255,255,255,0.1); color: #fff; }
+/* ── CONTAINER ─────────────────────── */
+.wrap { max-width: 1080px; margin: 0 auto; padding: 22px 14px 160px; }
 
-#btn-print, #btn-new { display: none; }
-
-/* ── CONTAINER ───────────────────────────────── */
-.wrap {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 24px 14px 160px;
-}
-
-/* ── UPLOAD ──────────────────────────────────── */
-#upload-section {
-  min-height: calc(100vh - 58px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 0;
-}
-
-.upload-box {
-  background: var(--card);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 44px 36px;
-  max-width: 440px;
-  width: 100%;
-  text-align: center;
-}
-
-.upload-icon { font-size: 44px; margin-bottom: 16px; }
-
-.upload-box h2 {
-  color: var(--green); font-size: 21px;
-  font-weight: 700; margin-bottom: 6px;
-}
-
-.upload-box p {
-  color: var(--muted); font-size: 13.5px;
-  margin-bottom: 28px; line-height: 1.6;
-}
-
-.drop-zone {
-  border: 2px dashed var(--border);
-  border-radius: 10px;
-  padding: 28px 16px;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-  margin-bottom: 12px;
-}
-
-.drop-zone.over, .drop-zone:hover {
-  border-color: var(--gold);
-  background: rgba(198,146,58,0.04);
-}
-
-.drop-zone p { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
-
-.btn-file {
-  display: inline-block;
-  background: var(--green); color: #fff;
-  padding: 10px 26px; border-radius: 8px;
-  font-size: 13.5px; font-weight: 600; cursor: pointer;
-  transition: opacity 0.15s;
-}
-.btn-file:hover { opacity: 0.85; }
-
-#file-input { display: none; }
-
-.fmt-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
-
-/* ── ERROR ───────────────────────────────────── */
+/* ── ERROR ─────────────────────────── */
 #error-box {
-  display: none;
-  background: #fef2f2; border: 1px solid #fecaca;
-  border-radius: 8px; padding: 11px 15px;
-  color: var(--danger); font-size: 13.5px;
-  margin-bottom: 18px;
+  display: none; background: #fef2f2;
+  border: 1px solid #fecaca; border-radius: 8px;
+  padding: 11px 15px; color: var(--danger);
+  font-size: 13.5px; margin-bottom: 16px;
 }
 
-/* ── ANALYSIS ────────────────────────────────── */
+/* ── UPLOAD ────────────────────────── */
+#upload-section {
+  min-height: calc(100vh - 58px); display: flex;
+  align-items: center; justify-content: center; padding: 32px 0;
+}
+.upload-box {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 44px 32px;
+  max-width: 440px; width: 100%; text-align: center;
+}
+.upload-icon { font-size: 44px; margin-bottom: 14px; }
+.upload-box h2 { color: var(--green); font-size: 21px; font-weight: 700; margin-bottom: 6px; }
+.upload-box p  { color: var(--muted); font-size: 13.5px; margin-bottom: 26px; line-height: 1.6; }
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: 10px;
+  padding: 28px 16px; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s; margin-bottom: 10px;
+}
+.drop-zone.over, .drop-zone:hover { border-color: var(--gold); background: rgba(198,146,58,0.04); }
+.drop-zone p { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.btn-file {
+  display: inline-block; background: var(--green); color: #fff;
+  padding: 10px 26px; border-radius: 8px; font-size: 13.5px;
+  font-weight: 600; cursor: pointer;
+}
+.btn-file:hover { opacity: 0.87; }
+#file-input { display: none; }
+.fmt-note { font-size: 11.5px; color: var(--muted); margin-top: 7px; }
+
+/* ── MODAL BASE ────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(13,35,24,0.72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.modal-overlay.hidden { display: none; }
+.modal-box {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+  max-width: 480px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+}
+
+/* ── KEY MODAL ─────────────────────── */
+.key-inner { padding: 30px 26px; text-align: center; }
+.key-inner .k-icon { font-size: 36px; margin-bottom: 12px; }
+.key-inner h2 { color: var(--green); font-size: 19px; font-weight: 700; margin-bottom: 6px; }
+.key-inner > p { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+.k-label {
+  display: block; text-align: left; font-size: 12px;
+  font-weight: 600; color: var(--text); margin-bottom: 5px;
+}
+.k-label span { font-size: 11px; color: var(--muted); font-weight: 400; }
+.k-input {
+  width: 100%; border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 10px 13px; font-size: 13.5px;
+  font-family: monospace; outline: none; background: #f9fafb;
+  margin-bottom: 14px;
+}
+.k-input:focus { border-color: var(--gold); background: #fff; }
+.k-err { color: var(--danger); font-size: 12px; margin-bottom: 10px; display: none; text-align: left; }
+.k-save {
+  width: 100%; background: var(--green); color: #fff; border: none;
+  border-radius: 8px; padding: 12px; font-size: 14px;
+  font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.k-save:hover { opacity: 0.87; }
+.k-note {
+  font-size: 11px; color: var(--muted); margin-top: 12px;
+  line-height: 1.6; text-align: left;
+}
+
+/* ── COLUMN PICKER MODAL ───────────── */
+.cp-inner { padding: 26px 24px; }
+.cp-inner h2 { color: var(--green); font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.cp-info { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+.cp-label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text); margin-bottom: 5px;
+}
+.cp-label span { font-size: 11px; color: var(--muted); font-weight: 400; }
+.cp-select {
+  width: 100%; border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; font-size: 13.5px;
+  font-family: inherit; outline: none; background: #f9fafb;
+  margin-bottom: 14px; color: var(--text); cursor: pointer;
+  appearance: auto;
+}
+.cp-select:focus { border-color: var(--gold); background: #fff; }
+.cp-divider {
+  border: none; border-top: 1px solid var(--border);
+  margin: 6px 0 16px;
+}
+.cp-extra-label {
+  font-size: 13px; font-weight: 700; color: var(--green);
+  margin-bottom: 4px; display: block;
+}
+.cp-extra-note { font-size: 11.5px; color: var(--muted); margin-bottom: 12px; }
+.cp-extra-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.cp-check-item {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 13px; cursor: pointer; padding: 8px 10px;
+  border-radius: 7px; border: 1px solid var(--border);
+  background: #fafafa; transition: background 0.15s;
+}
+.cp-check-item:hover { background: rgba(198,146,58,0.06); border-color: rgba(198,146,58,0.4); }
+.cp-check-item input[type=checkbox] {
+  width: 15px; height: 15px;
+  accent-color: var(--green); flex-shrink: 0;
+}
+.cp-none { font-size: 13px; color: var(--muted); font-style: italic; padding: 8px 0; }
+.cp-run {
+  width: 100%; background: var(--green); color: #fff; border: none;
+  border-radius: 8px; padding: 13px; font-size: 14.5px;
+  font-weight: 700; cursor: pointer; font-family: inherit;
+  margin-top: 4px;
+}
+.cp-run:hover  { opacity: 0.87; }
+.cp-run:active { opacity: 0.72; }
+
+/* ── ANALYSIS ──────────────────────── */
 #analysis-section { display: none; }
-
 .sec-label {
-  font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 1px;
-  color: var(--muted); margin: 26px 0 12px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted); margin: 26px 0 12px;
 }
 
-/* ── SECTOR TAG ──────────────────────────────── */
+/* ── SECTOR TAG ────────────────────── */
 .sector-tag {
   display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(198,146,58,0.1);
-  border: 1px solid rgba(198,146,58,0.28);
+  background: rgba(198,146,58,0.1); border: 1px solid rgba(198,146,58,0.28);
   color: #a3711a; font-size: 12.5px; font-weight: 600;
-  padding: 5px 12px; border-radius: 20px;
-  margin-bottom: 18px;
+  padding: 5px 12px; border-radius: 20px; margin-bottom: 18px;
 }
 
-/* ── HEALTH CARD ─────────────────────────────── */
+/* ── HEALTH CARD ───────────────────── */
 .health-card {
-  background: var(--green);
-  border-radius: var(--radius);
-  padding: 22px 22px;
-  display: flex; align-items: center; gap: 22px;
-  margin-bottom: 12px;
-  box-shadow: var(--shadow);
+  background: var(--green); border-radius: var(--radius);
+  padding: 22px; display: flex; align-items: center;
+  gap: 20px; margin-bottom: 12px; box-shadow: var(--shadow);
 }
-
 .ring-wrap {
-  position: relative; flex-shrink: 0;
-  width: 88px; height: 88px;
+  position: relative; flex-shrink: 0; width: 88px; height: 88px;
 }
-
-.ring-wrap svg {
-  width: 88px; height: 88px;
-  transform: rotate(-90deg);
-}
-
-.ring-track {
-  fill: none; stroke: rgba(255,255,255,0.13); stroke-width: 8;
-}
-
-.ring-fill {
-  fill: none; stroke: var(--gold); stroke-width: 8;
-  stroke-linecap: round;
-  stroke-dasharray: 238.76;
-  stroke-dashoffset: 238.76;
+.ring-wrap svg { width: 88px; height: 88px; transform: rotate(-90deg); }
+.ring-track { fill: none; stroke: rgba(255,255,255,0.13); stroke-width: 8; }
+.ring-fill  {
+  fill: none; stroke: var(--gold); stroke-width: 8; stroke-linecap: round;
+  stroke-dasharray: 238.76; stroke-dashoffset: 238.76;
   transition: stroke-dashoffset 1.3s cubic-bezier(0.4,0,0.2,1);
 }
-
 .ring-center {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
+  position: absolute; inset: 0; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
 }
-
-.ring-num  { color: #fff; font-size: 22px; font-weight: 800; line-height: 1; }
+.ring-num   { color: #fff; font-size: 22px; font-weight: 800; line-height: 1; }
 .ring-denom { color: rgba(255,255,255,0.45); font-size: 10px; }
-
 .health-info { flex: 1; min-width: 0; }
-
 .grade-pill {
-  display: inline-block;
-  background: var(--gold); color: var(--green);
-  font-size: 12px; font-weight: 800;
-  padding: 2px 10px; border-radius: 20px;
-  margin-bottom: 6px;
+  display: inline-block; background: var(--gold); color: var(--green);
+  font-size: 12px; font-weight: 800; padding: 2px 10px;
+  border-radius: 20px; margin-bottom: 6px;
 }
-
-.health-info h3 { color: #fff; font-size: 18px; font-weight: 700; margin-bottom: 5px; }
+.health-info h3 { color: #fff; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
 .health-info p  { color: rgba(255,255,255,0.72); font-size: 12.5px; line-height: 1.5; }
 
-/* ── SUMMARY GRID ────────────────────────────── */
+/* ── SUMMARY GRID ──────────────────── */
 .sum-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: grid; grid-template-columns: repeat(2,1fr);
   gap: 10px; margin-bottom: 4px;
 }
-
-@media (min-width: 600px) { .sum-grid { grid-template-columns: repeat(4, 1fr); } }
-
+@media (min-width: 600px) { .sum-grid { grid-template-columns: repeat(4,1fr); } }
 .sum-card {
   background: var(--card); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 14px 15px;
 }
-
 .sum-card .s-lbl {
-  font-size: 10.5px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.7px;
-  color: var(--muted); margin-bottom: 5px;
+  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--muted); margin-bottom: 5px;
 }
-
-.sum-card .s-val {
-  font-size: 20px; font-weight: 800;
-  color: var(--green); line-height: 1.1;
-}
-
+.sum-card .s-val { font-size: 20px; font-weight: 800; color: var(--green); line-height: 1.1; }
 .sum-card .s-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
 
-/* ── GENERIC CARD ────────────────────────────── */
+/* ── CARD ──────────────────────────── */
 .card {
-  background: var(--card);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 18px;
-  margin-bottom: 10px;
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 18px; margin-bottom: 10px;
 }
-
 .card-hdr {
   display: flex; align-items: center;
   justify-content: space-between; margin-bottom: 14px;
 }
-
 .card-title { font-size: 14.5px; font-weight: 700; color: var(--green); }
-
-.card-pill {
+.card-pill  {
   font-size: 11px; font-weight: 600;
   background: rgba(13,35,24,0.07); color: var(--green);
   padding: 2px 9px; border-radius: 20px;
 }
 
-/* ── TWO-COL ─────────────────────────────────── */
+/* ── TWO-COL ───────────────────────── */
 .two-col { display: grid; grid-template-columns: 1fr; gap: 10px; }
 @media (min-width: 720px) { .two-col { grid-template-columns: 1fr 1fr; } }
 
-/* ── CHART WRAP ──────────────────────────────── */
+/* ── CHART ─────────────────────────── */
 .chart-box { position: relative; height: 210px; }
 .chart-box canvas { max-height: 210px; }
 
-/* ── TABLE ───────────────────────────────────── */
+/* ── TABLE ─────────────────────────── */
 .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .tbl th {
-  text-align: left; padding: 7px 9px;
-  font-size: 10.5px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.5px;
+  text-align: left; padding: 7px 9px; font-size: 10.5px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
   color: var(--muted); border-bottom: 1px solid var(--border);
 }
 .tbl td { padding: 8px 9px; border-bottom: 1px solid var(--border); }
 .tbl tr:last-child td { border-bottom: none; }
-.tbl tr:hover td { background: rgba(13,35,24,0.02); }
-
+.tbl tr:hover td     { background: rgba(13,35,24,0.02); }
 .up   { color: #059669; font-weight: 600; }
 .down { color: #dc2626; font-weight: 600; }
 .neu  { color: var(--muted); }
 
-/* ── BAR INLINE ──────────────────────────────── */
-.bar-inline {
-  display: flex; align-items: center; gap: 7px;
-}
-.bar-track {
-  height: 5px; border-radius: 3px;
-  background: var(--green); flex-shrink: 0;
-}
+/* ── BAR INLINE ────────────────────── */
+.bar-inline { display: flex; align-items: center; gap: 6px; }
+.bar-track  { height: 5px; border-radius: 3px; background: var(--green); flex-shrink: 0; }
 
-/* ── SEGMENT CHIPS ───────────────────────────── */
-.seg-grid {
-  display: grid; gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  margin-bottom: 12px;
-}
-
-.seg-chip {
-  background: rgba(13,35,24,0.05);
-  border-radius: 8px; padding: 11px 10px; text-align: center;
-}
-
-.seg-chip .sc-lbl {
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.6px;
-  color: var(--muted); margin-bottom: 4px;
-}
-
-.seg-chip .sc-val {
-  font-size: 20px; font-weight: 800; color: var(--green);
-}
-
+/* ── SEGMENT CHIPS ─────────────────── */
+.seg-grid  { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit,minmax(110px,1fr)); margin-bottom: 10px; }
+.seg-chip  { background: rgba(13,35,24,0.05); border-radius: 8px; padding: 11px 10px; text-align: center; }
+.seg-chip .sc-lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 4px; }
+.seg-chip .sc-val { font-size: 20px; font-weight: 800; color: var(--green); }
 .seg-chip .sc-sub { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
 
-/* ── ANOMALY LIST ────────────────────────────── */
+/* ── ANOMALY LIST ──────────────────── */
 .anom-list { display: flex; flex-direction: column; gap: 7px; }
-
-.anom-item {
-  display: flex; align-items: flex-start; gap: 9px;
-  padding: 9px 11px; border-radius: 8px; font-size: 12.5px;
-}
-
-.anom-item.spike {
-  background: rgba(16,185,129,0.07);
-  border-left: 3px solid var(--ok);
-}
-
-.anom-item.drop {
-  background: rgba(239,68,68,0.07);
-  border-left: 3px solid var(--danger);
-}
-
+.anom-item { display: flex; align-items: flex-start; gap: 9px; padding: 9px 11px; border-radius: 8px; font-size: 12.5px; }
+.anom-item.spike { background: rgba(16,185,129,0.07); border-left: 3px solid var(--ok); }
+.anom-item.drop  { background: rgba(239,68,68,0.07);  border-left: 3px solid var(--danger); }
 .anom-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
 .anom-main { color: var(--text); }
 .anom-meta { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
 
-/* ── NOVA PANEL ──────────────────────────────── */
+/* ── NOVA PANEL ────────────────────── */
 #nova-panel {
   position: fixed; bottom: 0; left: 0; right: 0;
-  background: var(--card);
-  border-top: 1px solid var(--border);
-  z-index: 400; display: none;
-  flex-direction: column;
-  box-shadow: 0 -3px 18px rgba(0,0,0,0.09);
-  max-height: 65vh;
+  background: var(--card); border-top: 1px solid var(--border);
+  z-index: 400; display: none; flex-direction: column;
+  box-shadow: 0 -3px 18px rgba(0,0,0,0.09); max-height: 65vh;
 }
-
-#nova-panel.open  { height: 420px; }
-#nova-panel.shut  { height: auto; }
-
+#nova-panel.open { height: 420px; }
+#nova-panel.shut { height: auto; }
 .nova-hdr {
-  background: var(--green);
-  padding: 10px 15px;
-  display: flex; align-items: center;
-  justify-content: space-between;
-  cursor: pointer; flex-shrink: 0;
-  user-select: none;
+  background: var(--green); padding: 10px 15px;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; flex-shrink: 0; user-select: none;
 }
-
-.nova-hdr-l { display: flex; align-items: center; gap: 10px; }
-
-.nova-av {
-  width: 30px; height: 30px;
-  background: var(--gold); border-radius: 50%;
+.nova-hdr-l   { display: flex; align-items: center; gap: 10px; }
+.nova-av      {
+  width: 30px; height: 30px; background: var(--gold); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 800; color: var(--green);
 }
-
-.nova-hdr h4   { color: #fff; font-size: 13.5px; font-weight: 700; }
+.nova-hdr h4  { color: #fff; font-size: 13.5px; font-weight: 700; }
 .nova-hdr span { color: var(--gold); font-size: 10.5px; }
-.nova-arrow    { color: rgba(255,255,255,0.65); font-size: 16px; }
-
+.nova-arrow   { color: rgba(255,255,255,0.65); font-size: 16px; }
 #nova-msgs {
   flex: 1; overflow-y: auto; padding: 12px 13px;
   display: none; flex-direction: column; gap: 9px;
   -webkit-overflow-scrolling: touch;
 }
-
 .n-msg { display: flex; flex-direction: column; max-width: 87%; }
 .n-msg.user { align-self: flex-end; align-items: flex-end; }
 .n-msg.nova { align-self: flex-start; }
-
-.n-msg .nm { font-size: 10px; font-weight: 600; color: var(--muted); margin-bottom: 3px; padding: 0 3px; }
-
-.n-msg .bbl {
-  padding: 9px 12px; border-radius: 14px;
-  font-size: 13px; line-height: 1.5;
-  word-break: break-word;
-}
-
-.n-msg.user .bbl { background: var(--green); color: #fff; border-bottom-right-radius: 3px; }
-.n-msg.nova .bbl { background: #f3f4f6; color: var(--text); border-bottom-left-radius: 3px; }
-
+.n-msg .nm  { font-size: 10px; font-weight: 600; color: var(--muted); margin-bottom: 3px; padding: 0 3px; }
+.n-msg .bbl { padding: 9px 12px; border-radius: 14px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+.n-msg.user .bbl { background: var(--green); color: #fff;      border-bottom-right-radius: 3px; }
+.n-msg.nova .bbl { background: #f3f4f6;      color: var(--text); border-bottom-left-radius: 3px; }
 .thinking-bbl {
-  display: flex; gap: 5px; align-items: center;
-  padding: 10px 12px; background: #f3f4f6;
-  border-radius: 14px; border-bottom-left-radius: 3px;
+  display: flex; gap: 5px; align-items: center; padding: 10px 12px;
+  background: #f3f4f6; border-radius: 14px; border-bottom-left-radius: 3px;
 }
-
-.thinking-bbl .d {
-  width: 6px; height: 6px;
-  background: var(--gold); border-radius: 50%;
-  animation: blink 1.2s infinite;
-}
+.thinking-bbl .d { width: 6px; height: 6px; background: var(--gold); border-radius: 50%; animation: blink 1.2s infinite; }
 .thinking-bbl .d:nth-child(2) { animation-delay: 0.2s; }
 .thinking-bbl .d:nth-child(3) { animation-delay: 0.4s; }
-
 @keyframes blink {
   0%,80%,100% { opacity: 0.3; transform: scale(0.75); }
   40%          { opacity: 1;   transform: scale(1); }
 }
-
+.search-note { font-size: 11px; color: var(--gold); padding: 2px 4px; font-style: italic; align-self: flex-start; }
 #nova-bar {
   display: none; align-items: center; gap: 8px;
-  padding: 8px 12px; border-top: 1px solid var(--border);
-  flex-shrink: 0;
+  padding: 8px 12px; border-top: 1px solid var(--border); flex-shrink: 0;
 }
-
 #nova-input {
-  flex: 1; border: 1.5px solid var(--border);
-  border-radius: 20px; padding: 8px 14px;
-  font-size: 14px; outline: none; font-family: inherit;
-  background: #f9fafb;
+  flex: 1; border: 1.5px solid var(--border); border-radius: 20px;
+  padding: 8px 14px; font-size: 14px; outline: none;
+  font-family: inherit; background: #f9fafb;
 }
-
 #nova-input:focus { border-color: var(--gold); background: #fff; }
-
 #nova-send {
   width: 36px; height: 36px; flex-shrink: 0;
   background: var(--green); border: none; border-radius: 50%;
@@ -460,87 +385,21 @@ header {
 #nova-send:active { background: var(--gold); }
 #nova-send svg { fill: #fff; width: 15px; height: 15px; }
 
-/* ── KEY MODAL ───────────────────────────────── */
-#key-modal {
-  position: fixed; inset: 0; z-index: 999;
-  background: rgba(13,35,24,0.7);
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px;
-}
-
-#key-modal.hidden { display: none; }
-
-.key-box {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 32px 26px;
-  max-width: 420px; width: 100%;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.3);
-  text-align: center;
-}
-
-.key-box .kb-icon  { font-size: 36px; margin-bottom: 14px; }
-.key-box h2        { color: var(--green); font-size: 19px; font-weight: 700; margin-bottom: 6px; }
-.key-box p         { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 22px; }
-
-.key-box input {
-  width: 100%; border: 1.5px solid var(--border);
-  border-radius: 8px; padding: 11px 14px;
-  font-size: 14px; font-family: monospace;
-  outline: none; margin-bottom: 12px;
-  background: #f9fafb;
-}
-
-.key-box input:focus { border-color: var(--gold); background: #fff; }
-
-.key-box .kb-err {
-  color: var(--danger); font-size: 12.5px;
-  margin-bottom: 10px; display: none;
-}
-
-.key-box .btn-save {
-  width: 100%; background: var(--green); color: #fff;
-  border: none; border-radius: 8px; padding: 12px;
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  font-family: inherit; transition: opacity 0.15s;
-}
-
-.key-box .btn-save:hover  { opacity: 0.87; }
-.key-box .btn-save:active { opacity: 0.7; }
-
-.key-box .kb-note {
-  font-size: 11px; color: var(--muted);
-  margin-top: 12px; line-height: 1.5;
-}
-
-/* ── PRINT ───────────────────────────────────── */
+/* ── PRINT ─────────────────────────── */
 @media print {
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-
   body { background: #fff; font-size: 12px; }
-
   header { position: static !important; background: #0D2318 !important; }
-
-  #btn-print, #btn-new,
+  #btn-print, #btn-new, #btn-reconfig,
   #upload-section, #nova-panel,
-  #error-box { display: none !important; }
-
+  #error-box, .modal-overlay { display: none !important; }
   .wrap { padding: 12px; max-width: 100%; }
-
   .card, .sum-card {
-    box-shadow: none !important;
-    border: 1px solid #ddd !important;
-    break-inside: avoid;
+    box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid;
   }
-
-  .health-card {
-    background: #0D2318 !important;
-    break-inside: avoid;
-  }
-
-  .two-col { grid-template-columns: 1fr 1fr !important; }
+  .health-card { background: #0D2318 !important; break-inside: avoid; }
+  .two-col  { grid-template-columns: 1fr 1fr !important; }
   .sum-grid { grid-template-columns: repeat(4,1fr) !important; }
-
   .chart-box { height: 170px !important; break-inside: avoid; }
   .sec-label { margin-top: 14px; }
 }
@@ -548,20 +407,70 @@ header {
 </head>
 <body>
 
-<!-- ═══ KEY MODAL ════════════════════════════════════════════ -->
-<div id="key-modal" class="hidden">
-  <div class="key-box">
-    <div class="kb-icon">🔑</div>
-    <h2>Enter Your Groq API Key</h2>
-    <p>Your key is stored only in your browser session — it is never saved to the file or sent anywhere except Groq's servers.</p>
-    <input type="password" id="key-input" placeholder="gsk_...">
-    <div class="kb-err" id="kb-err">Key must start with gsk_ and be at least 20 characters.</div>
-    <button class="btn-save" onclick="saveKey()">Save & Continue</button>
-    <div class="kb-note">Get a free key at <strong>console.groq.com</strong><br>Stored in sessionStorage — cleared when you close the tab.</div>
+<!-- ═══ KEY MODAL ═════════════════════════════════════════ -->
+<div id="key-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="key-inner">
+      <div class="k-icon">🔑</div>
+      <h2>API Keys Setup</h2>
+      <p>Your keys are stored only in your browser session — never saved to the file or shared with anyone except the respective APIs.</p>
+
+      <label class="k-label" for="key-groq">
+        Groq API Key <span>* required</span>
+      </label>
+      <input class="k-input" type="password" id="key-groq" placeholder="gsk_..." autocomplete="off">
+
+      <label class="k-label" for="key-tavily">
+        Tavily API Key <span>(optional — enables NOVA live web search)</span>
+      </label>
+      <input class="k-input" type="password" id="key-tavily" placeholder="tvly-..." autocomplete="off">
+
+      <div class="k-err" id="kb-err">Groq key must start with gsk_ and be at least 20 characters.</div>
+
+      <button class="k-save" onclick="saveKey()">Save & Continue</button>
+      <div class="k-note">
+        🔸 Groq key: <strong>console.groq.com</strong> (free)<br>
+        🔸 Tavily key: <strong>tavily.com</strong> (free · 1,000 searches/month)<br>
+        Keys are cleared when you close this browser tab.
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- ═══ HEADER ══════════════════════════════════════════════ -->
+<!-- ═══ COLUMN PICKER MODAL ═══════════════════════════════ -->
+<div id="col-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="cp-inner">
+      <h2>⚙ Configure Analysis</h2>
+      <p class="cp-info" id="cp-info">Loading…</p>
+
+      <label class="cp-label" for="cp-date">Date Column <span>* required</span></label>
+      <select class="cp-select" id="cp-date"></select>
+
+      <label class="cp-label" for="cp-rev">Revenue / Amount Column <span>* required</span></label>
+      <select class="cp-select" id="cp-rev"></select>
+
+      <label class="cp-label" for="cp-prod">Product / Category Column <span>(optional)</span></label>
+      <select class="cp-select" id="cp-prod"></select>
+
+      <label class="cp-label" for="cp-cust">Customer Column <span>(optional)</span></label>
+      <select class="cp-select" id="cp-cust"></select>
+
+      <label class="cp-label" for="cp-qty">Quantity Column <span>(optional)</span></label>
+      <select class="cp-select" id="cp-qty"></select>
+
+      <hr class="cp-divider">
+
+      <span class="cp-extra-label">Additional Columns to Analyse</span>
+      <p class="cp-extra-note">Select any other columns you want broken down by revenue — e.g. Region, Payment Method, Salesperson.</p>
+      <div class="cp-extra-list" id="cp-extra-list"></div>
+
+      <button class="cp-run" onclick="runWithConfig()">Run Analysis →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ HEADER ════════════════════════════════════════════ -->
 <header>
   <div class="hdr-brand">
     <div class="hdr-logo">COC</div>
@@ -571,25 +480,24 @@ header {
     </div>
   </div>
   <div class="hdr-actions">
-    <button class="btn-sm btn-ghost" onclick="document.getElementById('key-modal').classList.remove('hidden')" title="Change API Key">🔑</button>
-    <button class="btn-sm btn-ghost" id="btn-new"   onclick="resetApp()">↩ New</button>
-    <button class="btn-sm btn-gold"  id="btn-print" onclick="window.print()">⬇ Save PDF</button>
+    <button class="btn-sm btn-ghost" title="API Keys"    onclick="openKeyModal()">🔑</button>
+    <button class="btn-sm btn-ghost" id="btn-reconfig"  onclick="openColPicker()">⚙ Reconfig</button>
+    <button class="btn-sm btn-ghost" id="btn-new"       onclick="resetApp()">↩ New</button>
+    <button class="btn-sm btn-gold"  id="btn-print"     onclick="window.print()">⬇ PDF</button>
   </div>
 </header>
 
-<!-- ═══ MAIN ═════════════════════════════════════════════════ -->
+<!-- ═══ MAIN ══════════════════════════════════════════════ -->
 <div class="wrap">
 
-  <!-- Error -->
   <div id="error-box"></div>
 
-  <!-- ── UPLOAD ────────────────────────────────── -->
+  <!-- UPLOAD -->
   <div id="upload-section">
     <div class="upload-box">
       <div class="upload-icon">📊</div>
       <h2>Upload Business Data</h2>
-      <p>Upload your sales or transaction records to run a full COC business analytics report.</p>
-
+      <p>Upload your sales or transaction records to generate a full COC business analytics report.</p>
       <div class="drop-zone" id="drop-zone">
         <p>Drag and drop your file here</p>
         <label for="file-input" class="btn-file">Choose File</label>
@@ -599,13 +507,12 @@ header {
     </div>
   </div>
 
-  <!-- ── ANALYSIS ──────────────────────────────── -->
+  <!-- ANALYSIS -->
   <div id="analysis-section">
 
-    <!-- Sector Tag -->
     <div class="sector-tag">📍 <span id="sector-text">–</span></div>
 
-    <!-- Health Score -->
+    <!-- Health -->
     <div class="health-card">
       <div class="ring-wrap">
         <svg viewBox="0 0 88 88">
@@ -685,7 +592,7 @@ header {
           <span class="card-title">Period Performance</span>
           <span class="card-pill" id="period-mode-pill">–</span>
         </div>
-        <div style="overflow-x:auto;max-height:280px;overflow-y:auto;">
+        <div style="overflow-x:auto; max-height:280px; overflow-y:auto;">
           <table class="tbl" id="period-tbl">
             <thead><tr><th>Period</th><th>Revenue</th><th>Change</th><th>Txns</th></tr></thead>
             <tbody></tbody>
@@ -712,6 +619,9 @@ header {
       </div>
     </div>
 
+    <!-- Secondary Analysis (extra columns) -->
+    <div id="secondary-section"></div>
+
     <!-- Anomalies -->
     <p class="sec-label">Anomalies & Red Flags</p>
     <div class="card">
@@ -725,14 +635,14 @@ header {
   </div><!-- /analysis-section -->
 </div><!-- /wrap -->
 
-<!-- ═══ NOVA ══════════════════════════════════════════════════ -->
+<!-- ═══ NOVA ══════════════════════════════════════════════ -->
 <div id="nova-panel">
   <div class="nova-hdr" id="nova-hdr">
     <div class="nova-hdr-l">
       <div class="nova-av">N</div>
       <div>
         <h4>NOVA</h4>
-        <span>Ask me about this analysis</span>
+        <span id="nova-subtitle">Ask me about this analysis</span>
       </div>
     </div>
     <div class="nova-arrow" id="nova-arrow">▲</div>
@@ -746,86 +656,59 @@ header {
   </div>
 </div>
 
-<!-- ═══ SCRIPT ════════════════════════════════════════════════ -->
+<!-- ═══ SCRIPT ════════════════════════════════════════════ -->
 <script>
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    CONFIG
-───────────────────────────────────────────────────────────── */
-let GROQ_KEY = sessionStorage.getItem("coc_groq_key") || "";
-
-/* ── KEY MODAL ─── */
-function checkKey() {
-  if (!GROQ_KEY) {
-    document.getElementById("key-modal").classList.remove("hidden");
-  }
-}
-
-function saveKey() {
-  const val = document.getElementById("key-input").value.trim();
-  const err = document.getElementById("kb-err");
-  if (!val.startsWith("gsk_") || val.length < 20) {
-    err.style.display = "block";
-    return;
-  }
-  err.style.display = "none";
-  GROQ_KEY = val;
-  sessionStorage.setItem("coc_groq_key", val);
-  document.getElementById("key-modal").classList.add("hidden");
-}
-
-document.getElementById("key-input").addEventListener("keydown", function(e) {
-  if (e.key === "Enter") saveKey();
-});
-
-// Show modal on load if no key stored
-window.addEventListener("DOMContentLoaded", checkKey);
+───────────────────────────────────────────────────────── */
+let GROQ_KEY   = sessionStorage.getItem("coc_groq_key")   || "";
+let TAVILY_KEY = sessionStorage.getItem("coc_tavily_key") || "";
 const GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    STATE
-───────────────────────────────────────────────────────────── */
-let records  = [];
-let st       = {};            // analysis state
-let novaHist = [];
-let charts   = {};
-let novaOpen = false;
+───────────────────────────────────────────────────────── */
+let rawHeaders = [];
+let rawRows    = [];
+let colConfig  = {};      // dateCol, revCol, prodCol, custCol, qtyCol, extraCols[]
+let records    = [];
+let st         = {};
+let novaHist   = [];
+let charts     = {};
+let novaOpen   = false;
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    UTILITIES
-───────────────────────────────────────────────────────────── */
-// Short currency format
+───────────────────────────────────────────────────────── */
 function fmt(n) {
   if (n == null || isNaN(n)) return "–";
-  if (n >= 1000000) return "₦" + (n / 1000000).toFixed(1) + "M";
-  if (n >= 1000)    return "₦" + (n / 1000).toFixed(1)    + "K";
+  if (n >= 1000000) return "₦" + (n/1000000).toFixed(1) + "M";
+  if (n >= 1000)    return "₦" + (n/1000).toFixed(1)    + "K";
   return "₦" + n.toFixed(0);
 }
 
-// Full currency with commas
 function fmtFull(n) {
   return "₦" + Math.round(n).toLocaleString("en-NG");
 }
 
-// Parse a value as number, stripping ₦ , spaces
 function parseNum(v) {
   if (v == null) return NaN;
-  const s = String(v).replace(/[₦,\s]/g, "").trim();
+  const s = String(v).replace(/[₦,\s]/g,"").trim();
   const n = parseFloat(s);
   return isNaN(n) ? NaN : n;
 }
 
-// Parse date — handles YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, Excel serial
 function parseDate(v) {
   if (v == null) return null;
-  // Excel date serial (number)
+  // Excel numeric serial
   if (typeof v === "number" && v > 25000 && v < 60000) {
     const d = new Date((v - 25569) * 86400000);
     if (!isNaN(d)) return d;
   }
   const s = String(v).trim();
   if (!s) return null;
-  // ISO: YYYY-MM-DD or YYYY/MM/DD
+  // YYYY-MM-DD or YYYY/MM/DD
   const iso = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if (iso) {
     const d = new Date(+iso[1], +iso[2]-1, +iso[3]);
@@ -838,36 +721,30 @@ function parseDate(v) {
     const d = new Date(yr, +dmy[2]-1, +dmy[1]);
     if (!isNaN(d)) return d;
   }
-  // Native parse (catches "Jan 5 2024" etc.)
-  const native = new Date(s);
-  if (!isNaN(native)) return native;
+  // Native
+  const nat = new Date(s);
+  if (!isNaN(nat)) return nat;
   return null;
 }
 
-// Format date as "5 Jan 2024"
 function fmtDate(d) {
   if (!d) return "–";
   return d.toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" });
 }
 
-// Format period label
 function fmtPeriod(d, mode) {
   if (!d) return "–";
-  if (mode === "month") {
+  if (mode === "month")
     return d.toLocaleDateString("en-GB", { month:"short", year:"numeric" });
-  }
-  // weekly — show date of Sunday of that week
   const sun = new Date(d);
   sun.setDate(sun.getDate() - sun.getDay());
   return sun.toLocaleDateString("en-GB", { day:"numeric", month:"short" });
 }
 
-// Destroy a named chart
 function killChart(k) {
   if (charts[k]) { charts[k].destroy(); delete charts[k]; }
 }
 
-// Show error
 function showErr(msg) {
   const el = document.getElementById("error-box");
   el.textContent = "⚠ " + msg;
@@ -876,59 +753,53 @@ function showErr(msg) {
   el._t = setTimeout(() => { el.style.display = "none"; }, 7000);
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    COLUMN DETECTION
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 function detectCols(headers, rows) {
   const h = headers.map(x => String(x||"").toLowerCase().trim());
 
-  // Date column — by name first
+  // Date
   let dateCol = h.findIndex(x => /\b(date|day|time|period|when|week|month)\b/.test(x));
   if (dateCol === -1) {
-    // By value: find column where ≥40% of first 30 rows parse as dates
     for (let i = 0; i < h.length; i++) {
-      const samp = rows.slice(0, 30).map(r => r[i]);
-      const hits = samp.filter(v => parseDate(v) !== null).length;
-      if (hits >= Math.max(3, samp.length * 0.4)) { dateCol = i; break; }
+      const hits = rows.slice(0,30).filter(r => parseDate(r[i]) !== null).length;
+      if (hits >= Math.max(3, rows.slice(0,30).length * 0.4)) { dateCol = i; break; }
     }
   }
 
-  // Revenue column — by name first
+  // Revenue
   let revCol = h.findIndex(x =>
     /\b(amount|revenue|sales|price|total|value|income|payment|receipt|turnover|gross|net|cost|spend)\b/.test(x)
   );
   if (revCol === -1) {
-    // By value: first numeric column that isn't dateCol
     for (let i = 0; i < h.length; i++) {
       if (i === dateCol) continue;
-      const samp = rows.slice(0, 30).map(r => parseNum(r[i]));
-      const hits = samp.filter(v => !isNaN(v) && v >= 0).length;
-      if (hits >= Math.max(3, samp.length * 0.4)) { revCol = i; break; }
+      const hits = rows.slice(0,30).filter(r => { const n = parseNum(r[i]); return !isNaN(n) && n >= 0; }).length;
+      if (hits >= Math.max(3, rows.slice(0,30).length * 0.4)) { revCol = i; break; }
     }
   }
 
-  // Product/Category column
+  // Product
   let prodCol = h.findIndex(x =>
     /\b(product|item|category|cat|goods|service|type|desc|description|name|sku|brand|particulars)\b/.test(x)
   );
   if (prodCol === revCol || prodCol === dateCol) prodCol = -1;
   if (prodCol === -1) {
-    // First text column that isn't dateCol or revCol
     for (let i = 0; i < h.length; i++) {
       if (i === dateCol || i === revCol) continue;
-      const samp = rows.slice(0, 30).map(r => String(r[i]||"").trim());
-      const textHits = samp.filter(v => v.length > 0 && isNaN(parseFloat(v))).length;
-      if (textHits >= 6) { prodCol = i; break; }
+      const hits = rows.slice(0,30).filter(r => { const s = String(r[i]||"").trim(); return s.length > 0 && isNaN(parseFloat(s)); }).length;
+      if (hits >= 6) { prodCol = i; break; }
     }
   }
 
-  // Customer column
+  // Customer
   let custCol = h.findIndex(x =>
     /\b(customer|client|buyer|member|account|cust|patron)\b/.test(x)
   );
   if (custCol === revCol || custCol === dateCol || custCol === prodCol) custCol = -1;
 
-  // Quantity column
+  // Quantity
   let qtyCol = h.findIndex(x =>
     /\b(qty|quantity|units|count|pieces|pcs|vol|bags|kg)\b/.test(x)
   );
@@ -936,13 +807,13 @@ function detectCols(headers, rows) {
   return { dateCol, revCol, prodCol, custCol, qtyCol };
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    SECTOR DETECTION
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 const SECTORS = {
   "Fashion & Textiles":  /fabric|cloth|fashion|textile|wear|dress|shirt|trouser|suit|lace|ankara|aso.?ebi|wig|hair|bead|jewel/i,
   "Food & Beverage":     /food|drink|beverage|restaurant|caf[eé]|meal|rice|beans|bread|water|juice|snack|confect|bakery|provision/i,
-  "FMCG / Retail":       /fmcg|supermarket|store|detergent|soap|toiletries|cosmetic|household|consumer goods/i,
+  "FMCG \/ Retail":      /fmcg|supermarket|store|detergent|soap|toiletries|cosmetic|household|consumer goods/i,
   "Electronics":         /phone|laptop|computer|gadget|electronic|tv|television|cable|charger|accessory|device/i,
   "Building & Hardware": /tile|door|cement|iron|rod|plumbing|hardware|paint|roofing|wood|timber|lumber|glass/i,
   "Printing & Media":    /print|banner|flex|design|media|photocopy|paper|ink|stationery/i,
@@ -952,20 +823,19 @@ const SECTORS = {
   "Services":            /service|consult|repair|maintenance|support|advisory|training|coaching/i,
 };
 
-function detectSector(recs, prodCol, custCol) {
-  const text = recs.slice(0, 100).flatMap(r =>
-    [prodCol >= 0 ? String(r.prod||"") : "", custCol >= 0 ? String(r.cust||"") : ""]
+function detectSector(recs) {
+  const text = recs.slice(0,100).flatMap(r =>
+    [String(r.prod||""), String(r.cust||"")]
   ).join(" ");
-
   for (const [name, re] of Object.entries(SECTORS)) {
     if (re.test(text)) return name;
   }
   return "General Business";
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    FILE HANDLING
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 document.getElementById("file-input").addEventListener("change", function(e) {
   if (e.target.files[0]) handleFile(e.target.files[0]);
 });
@@ -974,8 +844,7 @@ const dz = document.getElementById("drop-zone");
 dz.addEventListener("dragover",  e => { e.preventDefault(); dz.classList.add("over"); });
 dz.addEventListener("dragleave", ()  => dz.classList.remove("over"));
 dz.addEventListener("drop",      e  => {
-  e.preventDefault();
-  dz.classList.remove("over");
+  e.preventDefault(); dz.classList.remove("over");
   if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
 });
 
@@ -983,8 +852,7 @@ function handleFile(file) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".csv")) {
     Papa.parse(file, {
-      header: false,
-      skipEmptyLines: true,
+      header: false, skipEmptyLines: true,
       complete: r => processRaw(r.data),
       error:    e => showErr("CSV parse error: " + e.message)
     });
@@ -992,25 +860,22 @@ function handleFile(file) {
     const fr = new FileReader();
     fr.onload = e => {
       try {
-        const wb   = XLSX.read(e.target.result, { type: "array", cellDates: false });
+        const wb   = XLSX.read(e.target.result, { type:"array", cellDates:false });
         const ws   = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
-        const clean = data.filter(r => r.some(c => c !== "" && c !== null));
-        processRaw(clean);
-      } catch(err) {
-        showErr("Excel parse error: " + err.message);
-      }
+        const data = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:"" });
+        processRaw(data.filter(r => r.some(c => c !== "" && c !== null)));
+      } catch(err) { showErr("Excel parse error: " + err.message); }
     };
     fr.onerror = () => showErr("Could not read file.");
     fr.readAsArrayBuffer(file);
   } else {
-    showErr("Unsupported file type. Upload a CSV or Excel file.");
+    showErr("Unsupported file. Upload a CSV or Excel file.");
   }
 }
 
-/* ─────────────────────────────────────────────────────────────
-   PROCESS RAW DATA
-───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   PROCESS RAW → SHOW COLUMN PICKER
+───────────────────────────────────────────────────────── */
 function processRaw(data) {
   if (!data || data.length < 3) {
     showErr("File is empty or has too few rows (need at least a header + 2 data rows).");
@@ -1025,82 +890,186 @@ function processRaw(data) {
     return;
   }
 
-  const cols = detectCols(headers, rows);
+  rawHeaders = headers;
+  rawRows    = rows;
 
-  if (cols.dateCol === -1) {
-    showErr("Could not find a date column. Name it 'Date', 'Day', or 'Period'.");
-    return;
-  }
-  if (cols.revCol === -1) {
-    showErr("Could not find a revenue column. Name it 'Amount', 'Revenue', 'Sales', or 'Total'.");
-    return;
+  showColPicker(headers, rows);
+}
+
+/* ─────────────────────────────────────────────────────────
+   COLUMN PICKER
+───────────────────────────────────────────────────────── */
+function showColPicker(headers, rows) {
+  const detected = detectCols(headers, rows);
+
+  // Build option HTML for a dropdown
+  // includeNone: adds "— None —" at top with value "-1"
+  function makeOpts(selectedIdx, includeNone) {
+    let html = includeNone ? '<option value="-1">— None —</option>' : "";
+    headers.forEach((h, i) => {
+      const sel = i === selectedIdx ? "selected" : "";
+      const label = h || "Column " + (i + 1);
+      html += `<option value="${i}" ${sel}>${label}</option>`;
+    });
+    return html;
   }
 
-  // Build clean record objects
+  document.getElementById("cp-date").innerHTML  = makeOpts(detected.dateCol,  false);
+  document.getElementById("cp-rev").innerHTML   = makeOpts(detected.revCol,   false);
+  document.getElementById("cp-prod").innerHTML  = makeOpts(detected.prodCol,  true);
+  document.getElementById("cp-cust").innerHTML  = makeOpts(detected.custCol,  true);
+  document.getElementById("cp-qty").innerHTML   = makeOpts(detected.qtyCol,   true);
+
+  // Extra columns checkboxes — show all columns NOT assigned above
+  const assigned = new Set(
+    [detected.dateCol, detected.revCol, detected.prodCol, detected.custCol, detected.qtyCol]
+    .filter(c => c >= 0)
+  );
+
+  const extraList = document.getElementById("cp-extra-list");
+  extraList.innerHTML = "";
+
+  const extras = headers
+    .map((h, i) => ({ h, i }))
+    .filter(({ i }) => !assigned.has(i));
+
+  if (extras.length === 0) {
+    extraList.innerHTML = '<p class="cp-none">No additional columns available.</p>';
+  } else {
+    for (const { h, i } of extras) {
+      const div = document.createElement("label");
+      div.className = "cp-check-item";
+      div.innerHTML = `
+        <input type="checkbox" class="cp-extra-cb" value="${i}">
+        <span>${h || "Column " + (i+1)}</span>`;
+      extraList.appendChild(div);
+    }
+  }
+
+  document.getElementById("cp-info").textContent =
+    rows.length.toLocaleString() + " rows · " + headers.length + " columns detected";
+
+  document.getElementById("col-modal").classList.remove("hidden");
+}
+
+function openColPicker() {
+  if (rawHeaders.length > 0) showColPicker(rawHeaders, rawRows);
+}
+
+function runWithConfig() {
+  const dateCol = parseInt(document.getElementById("cp-date").value);
+  const revCol  = parseInt(document.getElementById("cp-rev").value);
+  const prodCol = parseInt(document.getElementById("cp-prod").value);
+  const custCol = parseInt(document.getElementById("cp-cust").value);
+  const qtyCol  = parseInt(document.getElementById("cp-qty").value);
+
+  // Validate required fields
+  if (isNaN(dateCol) || dateCol < 0) { showErr("Please select a Date column."); return; }
+  if (isNaN(revCol)  || revCol  < 0) { showErr("Please select a Revenue column."); return; }
+  if (dateCol === revCol)             { showErr("Date and Revenue cannot be the same column."); return; }
+
+  // Collect checked extra columns
+  const extraCols = [];
+  const mainSet   = new Set([dateCol, revCol, prodCol, custCol, qtyCol].filter(c => c >= 0));
+
+  document.querySelectorAll(".cp-extra-cb:checked").forEach(cb => {
+    const idx = parseInt(cb.value);
+    if (!mainSet.has(idx)) {
+      extraCols.push({ idx, name: rawHeaders[idx] || "Column " + (idx+1) });
+    }
+  });
+
+  colConfig = {
+    dateCol,
+    revCol,
+    prodCol: prodCol >= 0 ? prodCol : -1,
+    custCol: custCol >= 0 ? custCol : -1,
+    qtyCol:  qtyCol  >= 0 ? qtyCol  : -1,
+    extraCols
+  };
+
+  document.getElementById("col-modal").classList.add("hidden");
+  buildRecords();
+}
+
+/* ─────────────────────────────────────────────────────────
+   BUILD RECORDS FROM RAW ROWS + colConfig
+───────────────────────────────────────────────────────── */
+function buildRecords() {
   const clean = [];
-  for (const row of rows) {
-    const d = parseDate(row[cols.dateCol]);
-    const r = parseNum(row[cols.revCol]);
+
+  for (const row of rawRows) {
+    const d = parseDate(row[colConfig.dateCol]);
+    const r = parseNum(row[colConfig.revCol]);
     if (!d || isNaN(r) || r < 0) continue;
 
     const rec = { date: d, rev: r };
-    if (cols.prodCol >= 0) rec.prod = String(row[cols.prodCol]||"Unknown").trim() || "Unknown";
-    if (cols.custCol >= 0) rec.cust = String(row[cols.custCol]||"Unknown").trim() || "Unknown";
-    if (cols.qtyCol  >= 0) rec.qty  = parseNum(row[cols.qtyCol]) || 1;
+
+    if (colConfig.prodCol >= 0)
+      rec.prod = String(row[colConfig.prodCol]||"Unknown").trim() || "Unknown";
+    if (colConfig.custCol >= 0)
+      rec.cust = String(row[colConfig.custCol]||"Unknown").trim() || "Unknown";
+    if (colConfig.qtyCol  >= 0)
+      rec.qty  = parseNum(row[colConfig.qtyCol]) || 1;
+
+    // Extra columns stored as extra_IDX
+    for (const ec of colConfig.extraCols) {
+      rec["x_" + ec.idx] = String(row[ec.idx]||"Unknown").trim() || "Unknown";
+    }
+
     clean.push(rec);
   }
 
   if (clean.length < 2) {
-    showErr("Could not extract valid rows. Check that your date and amount columns have correct values.");
+    showErr("Could not extract valid rows with the selected configuration. Check that your date and amount columns have correct values.");
     return;
   }
 
-  // Sort ascending by date
   clean.sort((a, b) => a.date - b.date);
   records = clean;
-
-  runAnalysis(cols, headers);
+  runAnalysis();
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    RUN ANALYSIS
-───────────────────────────────────────────────────────────── */
-function runAnalysis(cols, headers) {
+───────────────────────────────────────────────────────── */
+function runAnalysis() {
   const recs = records;
 
-  /* ── Basic stats ─── */
-  const totalRev  = recs.reduce((s, r) => s + r.rev, 0);
-  const totalTx   = recs.length;
-  const avgTx     = totalRev / totalTx;
-  const minDate   = recs[0].date;
-  const maxDate   = recs[totalTx - 1].date;
-  const daySpan   = Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1);
+  // Basic stats
+  const totalRev = recs.reduce((s,r) => s + r.rev, 0);
+  const totalTx  = recs.length;
+  const avgTx    = totalRev / totalTx;
+  const minDate  = recs[0].date;
+  const maxDate  = recs[totalTx-1].date;
+  const daySpan  = Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1);
+  const hasProd  = colConfig.prodCol >= 0;
+  const hasCust  = colConfig.custCol >= 0;
 
-  /* ── Sector ─── */
-  const sector = detectSector(recs, cols.prodCol, cols.custCol);
+  // Sector
+  const sector = detectSector(recs);
 
-  /* ── Period mode ─── */
+  // Period mode
   const periodMode = daySpan >= 60 ? "month" : "week";
 
-  /* ── Group by period ─── */
-  function periodKey(d) {
+  // Period key helper
+  function pKey(d) {
     if (periodMode === "month")
       return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
-    // week key: Sunday of that week
     const t = new Date(d);
     t.setHours(0,0,0,0);
     t.setDate(t.getDate() - t.getDay());
-    return t.toISOString().slice(0, 10);
+    return t.toISOString().slice(0,10);
   }
 
+  // Group by period
   const pmap = {};
   for (const r of recs) {
-    const k = periodKey(r.date);
-    if (!pmap[k]) pmap[k] = { rev: 0, tx: 0, date: r.date };
+    const k = pKey(r.date);
+    if (!pmap[k]) pmap[k] = { rev:0, tx:0, date:r.date };
     pmap[k].rev += r.rev;
     pmap[k].tx  += 1;
   }
-
   const periods = Object.keys(pmap).sort().map(k => ({
     key:   k,
     label: fmtPeriod(pmap[k].date, periodMode),
@@ -1108,17 +1077,13 @@ function runAnalysis(cols, headers) {
     tx:    pmap[k].tx
   }));
 
-  /* ── Growth score (0-40) ─── */
-  let growthScore = 20;
-  let growthPct   = 0;
+  // Growth score (0–40)
+  let growthScore = 20, growthPct = 0;
   if (periods.length >= 2) {
-    const half   = Math.floor(periods.length / 2);
-    const first  = periods.slice(0, half);
-    const second = periods.slice(half);
-    const fAvg   = first.reduce((s,p)  => s + p.rev, 0) / first.length;
-    const sAvg   = second.reduce((s,p) => s + p.rev, 0) / second.length;
-    growthPct    = fAvg > 0 ? ((sAvg - fAvg) / fAvg) * 100 : 0;
-
+    const half  = Math.floor(periods.length / 2);
+    const fAvg  = periods.slice(0,half).reduce((s,p) => s+p.rev, 0) / half;
+    const sAvg  = periods.slice(half).reduce((s,p) => s+p.rev, 0)  / (periods.length - half);
+    growthPct   = fAvg > 0 ? ((sAvg - fAvg) / fAvg) * 100 : 0;
     if      (growthPct >= 20)  growthScore = 40;
     else if (growthPct >= 10)  growthScore = 34;
     else if (growthPct >=  0)  growthScore = 24;
@@ -1127,18 +1092,16 @@ function runAnalysis(cols, headers) {
     else                       growthScore = 2;
   }
 
-  /* ── Consistency score (0-30) ─── */
-  // Penalise if many periods have zero revenue
-  const zeroPeriods = periods.filter(p => p.rev === 0).length;
-  const gapRatio    = zeroPeriods / Math.max(1, periods.length);
-  const consistScore = Math.max(0, Math.round(30 * (1 - gapRatio)));
+  // Consistency score (0–30)
+  const zeroPeriods  = periods.filter(p => p.rev === 0).length;
+  const consistScore = Math.max(0, Math.round(30 * (1 - zeroPeriods / Math.max(1, periods.length))));
 
-  /* ── Diversity score (0-30) ─── */
-  let diversityScore = 15; // default when no product column
-  if (cols.prodCol >= 0) {
-    const pmap2 = {};
-    for (const r of recs) pmap2[r.prod] = (pmap2[r.prod] || 0) + r.rev;
-    const topShare = Math.max(...Object.values(pmap2)) / totalRev;
+  // Diversity score (0–30)
+  let diversityScore = 15;
+  if (hasProd) {
+    const pdmap = {};
+    for (const r of recs) pdmap[r.prod] = (pdmap[r.prod]||0) + r.rev;
+    const topShare = Math.max(...Object.values(pdmap)) / totalRev;
     if      (topShare < 0.30) diversityScore = 30;
     else if (topShare < 0.50) diversityScore = 22;
     else if (topShare < 0.65) diversityScore = 14;
@@ -1146,164 +1109,147 @@ function runAnalysis(cols, headers) {
     else                      diversityScore = 2;
   }
 
-  /* ── Final health score ─── */
+  // Health score
   const healthScore = Math.min(100, Math.max(0, growthScore + consistScore + diversityScore));
-
   let grade, gradeLbl, gradeDesc;
-  if      (healthScore >= 80) { grade="A"; gradeLbl="Excellent";  gradeDesc="Strong performance with consistent revenue and positive growth trend."; }
-  else if (healthScore >= 60) { grade="B"; gradeLbl="Good";       gradeDesc="Solid overall. A few areas can be optimised to push into excellent territory."; }
-  else if (healthScore >= 40) { grade="C"; gradeLbl="Fair";       gradeDesc="Average performance. Key revenue drivers need attention to build growth momentum."; }
-  else if (healthScore >= 20) { grade="D"; gradeLbl="Weak";       gradeDesc="Below average. Revenue patterns show instability. Focus on retention and consistency."; }
-  else                        { grade="F"; gradeLbl="Critical";   gradeDesc="Significant issues detected. Immediate review of pricing, sales channels, and costs is recommended."; }
+  if      (healthScore >= 80) { grade="A"; gradeLbl="Excellent"; gradeDesc="Strong performance with consistent revenue and positive growth trend."; }
+  else if (healthScore >= 60) { grade="B"; gradeLbl="Good";      gradeDesc="Solid overall. A few areas can be optimised to push into excellent territory."; }
+  else if (healthScore >= 40) { grade="C"; gradeLbl="Fair";      gradeDesc="Average performance. Key revenue drivers need attention to build growth momentum."; }
+  else if (healthScore >= 20) { grade="D"; gradeLbl="Weak";      gradeDesc="Below average. Revenue patterns show instability. Focus on retention and consistency."; }
+  else                        { grade="F"; gradeLbl="Critical";  gradeDesc="Significant issues detected. Immediate review of pricing, sales channels, and costs recommended."; }
 
-  /* ── Revenue drivers ─── */
+  // Revenue drivers
   let drivers = [];
-  if (cols.prodCol >= 0) {
+  if (hasProd) {
     const dmap = {};
-    for (const r of recs) dmap[r.prod] = (dmap[r.prod] || 0) + r.rev;
+    for (const r of recs) dmap[r.prod] = (dmap[r.prod]||0) + r.rev;
     drivers = Object.entries(dmap)
-      .sort((a,b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([name, rev]) => ({ name, rev, share: (rev / totalRev) * 100 }));
+      .sort((a,b) => b[1]-a[1])
+      .slice(0,10)
+      .map(([name,rev]) => ({ name, rev, share:(rev/totalRev)*100 }));
   }
 
-  /* ── Customer segments ─── */
+  // Segments
   let segs = {};
-  if (cols.custCol >= 0) {
+  if (hasCust) {
     const cmap = {};
     for (const r of recs) {
-      if (!cmap[r.cust]) cmap[r.cust] = { rev: 0, tx: 0, dates: [] };
+      if (!cmap[r.cust]) cmap[r.cust] = { rev:0, tx:0, dates:[] };
       cmap[r.cust].rev += r.rev;
       cmap[r.cust].tx  += 1;
       cmap[r.cust].dates.push(r.date.getTime());
     }
-    const custs = Object.entries(cmap).map(([name, d]) => {
+    const custs = Object.entries(cmap).map(([name,d]) => {
       const lastDate  = new Date(Math.max(...d.dates));
       const daysSince = Math.round((maxDate - lastDate) / 86400000);
-      return { name, rev: d.rev, tx: d.tx, daysSince };
+      return { name, rev:d.rev, tx:d.tx, daysSince };
     }).sort((a,b) => b.rev - a.rev);
 
-    const recencyThresh = daySpan * 0.25;
-    const avgRev        = totalRev / custs.length;
-
-    const champions    = custs.filter(c => c.daysSince <= recencyThresh && c.rev >= avgRev * 1.5);
-    const regulars     = custs.filter(c => !champions.includes(c) && c.tx >= 2 && c.daysSince <= recencyThresh * 2);
-    const atRisk       = custs.filter(c => c.tx >= 2 && c.daysSince > recencyThresh * 2);
-    const newCustomers = custs.filter(c => c.tx === 1);
+    const rt      = daySpan * 0.25;
+    const avgRev2 = totalRev / custs.length;
+    const champs  = custs.filter(c => c.daysSince <= rt && c.rev >= avgRev2 * 1.5);
+    const regs    = custs.filter(c => !champs.includes(c) && c.tx >= 2 && c.daysSince <= rt*2);
+    const atrisk  = custs.filter(c => c.tx >= 2 && c.daysSince > rt*2);
+    const newCust = custs.filter(c => c.tx === 1);
 
     segs = {
-      type:        "customer",
-      total:       custs.length,
-      champions:   champions.length,
-      regulars:    regulars.length,
-      atRisk:      atRisk.length,
-      newCustomers:newCustomers.length,
-      topCust:     custs[0] ? custs[0].name : "–",
-      champRev:    champions.reduce((s,c) => s+c.rev, 0)
+      type:"customer", total:custs.length,
+      champions:champs.length, regulars:regs.length,
+      atRisk:atrisk.length,    newCustomers:newCust.length,
+      topCust:custs[0]? custs[0].name : "–",
+      champRev:champs.reduce((s,c) => s+c.rev, 0)
     };
   } else {
-    // Segment by transaction value (low / mid / high)
     const sorted = [...recs].sort((a,b) => a.rev - b.rev);
-    const p33 = sorted[Math.floor(sorted.length * 0.33)].rev;
-    const p67 = sorted[Math.floor(sorted.length * 0.67)].rev;
-    const high = recs.filter(r => r.rev >= p67);
-    const mid  = recs.filter(r => r.rev >= p33 && r.rev < p67);
-    const low  = recs.filter(r => r.rev < p33);
+    const p33 = sorted[Math.floor(sorted.length*0.33)].rev;
+    const p67 = sorted[Math.floor(sorted.length*0.67)].rev;
     segs = {
-      type: "value",
-      total: totalTx,
-      high:  { count: high.length, rev: high.reduce((s,r)=>s+r.rev,0) },
-      mid:   { count: mid.length,  rev: mid.reduce((s,r)=>s+r.rev,0) },
-      low:   { count: low.length,  rev: low.reduce((s,r)=>s+r.rev,0) },
+      type:"value", total:totalTx,
+      high:  { count:recs.filter(r=>r.rev>=p67).length,              rev:recs.filter(r=>r.rev>=p67).reduce((s,r)=>s+r.rev,0) },
+      mid:   { count:recs.filter(r=>r.rev>=p33&&r.rev<p67).length,   rev:recs.filter(r=>r.rev>=p33&&r.rev<p67).reduce((s,r)=>s+r.rev,0) },
+      low:   { count:recs.filter(r=>r.rev<p33).length,               rev:recs.filter(r=>r.rev<p33).reduce((s,r)=>s+r.rev,0) },
       p33, p67
     };
   }
 
-  /* ── Anomaly detection ─── */
-  const revArr  = recs.map(r => r.rev);
-  const mean    = revArr.reduce((s,v) => s+v, 0) / revArr.length;
-  const stddev  = Math.sqrt(revArr.reduce((s,v) => s + Math.pow(v-mean,2), 0) / revArr.length);
-
+  // Anomalies
+  const revArr = recs.map(r => r.rev);
+  const mean   = revArr.reduce((s,v) => s+v, 0) / revArr.length;
+  const stddev = Math.sqrt(revArr.reduce((s,v) => s+Math.pow(v-mean,2), 0) / revArr.length);
   const anomalies = recs
     .filter(r => stddev > 0 && Math.abs(r.rev - mean) > 2 * stddev)
-    .slice(0, 10)
+    .slice(0,10)
     .map(r => ({
-      date: r.date,
-      rev:  r.rev,
+      date: r.date, rev: r.rev,
       z:    stddev > 0 ? (r.rev - mean) / stddev : 0,
       type: r.rev > mean ? "spike" : "drop",
       prod: r.prod || null
     }));
 
-  /* ── Save state ─── */
+  // Save state
   st = {
     sector, healthScore, grade, gradeLbl, gradeDesc,
     totalRev, totalTx, avgTx, minDate, maxDate, daySpan,
     periods, periodMode, growthPct,
     drivers, segs, anomalies,
-    mean, stddev,
-    hasProd: cols.prodCol >= 0,
-    hasCust: cols.custCol >= 0
+    mean, stddev, hasProd, hasCust
   };
 
   renderAll();
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    RENDER — ALL
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 function renderAll() {
-  // Show analysis section, hide upload
   document.getElementById("upload-section").style.display   = "none";
   document.getElementById("analysis-section").style.display = "block";
   document.getElementById("btn-print").style.display        = "inline-block";
   document.getElementById("btn-new").style.display          = "inline-block";
+  document.getElementById("btn-reconfig").style.display     = "inline-block";
 
   // Sector
   document.getElementById("sector-text").textContent = st.sector;
 
-  // Health ring animation
-  const circ   = 2 * Math.PI * 38;   // 238.76
+  // Health ring
+  const circ   = 2 * Math.PI * 38;
   const offset = circ * (1 - st.healthScore / 100);
   const fill   = document.getElementById("ring-fill");
   fill.style.strokeDasharray  = circ;
   fill.style.strokeDashoffset = circ;
-  requestAnimationFrame(() => {
-    fill.style.strokeDashoffset = offset;
-  });
+  requestAnimationFrame(() => { fill.style.strokeDashoffset = offset; });
 
-  document.getElementById("ring-num").textContent   = st.healthScore;
-  document.getElementById("grade-pill").textContent = st.grade + " — " + st.gradeLbl;
+  document.getElementById("ring-num").textContent    = st.healthScore;
+  document.getElementById("grade-pill").textContent  = st.grade + " — " + st.gradeLbl;
   document.getElementById("health-label").textContent = "Business Health Score";
   document.getElementById("health-desc").textContent  = st.gradeDesc;
 
-  // Summary cards
-  document.getElementById("s-rev").textContent     = fmt(st.totalRev);
-  document.getElementById("s-rev-sub").textContent  = fmtFull(st.totalRev);
-  document.getElementById("s-tx").textContent       = st.totalTx.toLocaleString();
-  document.getElementById("s-tx-sub").textContent   = "over " + st.daySpan + " days";
-  document.getElementById("s-avg").textContent      = fmt(st.avgTx);
-  document.getElementById("s-range").textContent    = fmtDate(st.minDate) + " – " + fmtDate(st.maxDate);
-  document.getElementById("s-days").textContent     = st.daySpan + "-day period";
+  // Summary
+  document.getElementById("s-rev").textContent    = fmt(st.totalRev);
+  document.getElementById("s-rev-sub").textContent = fmtFull(st.totalRev);
+  document.getElementById("s-tx").textContent      = st.totalTx.toLocaleString();
+  document.getElementById("s-tx-sub").textContent  = "over " + st.daySpan + " days";
+  document.getElementById("s-avg").textContent     = fmt(st.avgTx);
+  document.getElementById("s-range").textContent   = fmtDate(st.minDate) + " – " + fmtDate(st.maxDate);
+  document.getElementById("s-days").textContent    = st.daySpan + "-day period";
 
   renderTrend();
   renderDrivers();
   renderPeriods();
   renderSegments();
+  renderSecondary();
   renderAnomalies();
   initNova();
 }
 
-/* ─────────────────────────────────────────────────────────────
-   RENDER — TREND CHART
-───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   RENDER — TREND
+───────────────────────────────────────────────────────── */
 function renderTrend() {
   killChart("trend");
-
-  // Trend pill
   const pill = document.getElementById("trend-pill");
   const g    = st.growthPct;
-  pill.textContent   = g >= 0 ? "↑ " + g.toFixed(1) + "% growth" : "↓ " + Math.abs(g).toFixed(1) + "% decline";
+  pill.textContent  = g >= 0 ? "↑ " + g.toFixed(1) + "% growth" : "↓ " + Math.abs(g).toFixed(1) + "% decline";
   pill.style.background = g >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)";
   pill.style.color      = g >= 0 ? "#059669"               : "#dc2626";
 
@@ -1313,121 +1259,91 @@ function renderTrend() {
     data: {
       labels: st.periods.map(p => p.label),
       datasets: [{
-        data:              st.periods.map(p => p.rev),
-        borderColor:       "#0D2318",
-        backgroundColor:   "rgba(13,35,24,0.07)",
-        borderWidth:       2.5,
-        pointBackgroundColor: "#C6923A",
-        pointRadius:       st.periods.length > 24 ? 1.5 : 4,
-        pointHoverRadius:  6,
-        fill:              true,
-        tension:           0.35
+        data: st.periods.map(p => p.rev),
+        borderColor: "#0D2318", backgroundColor: "rgba(13,35,24,0.07)",
+        borderWidth: 2.5, pointBackgroundColor: "#C6923A",
+        pointRadius: st.periods.length > 24 ? 1.5 : 4,
+        pointHoverRadius: 6, fill: true, tension: 0.35
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: {
-          grid:  { display: false },
-          ticks: { font: { size: 10 }, color: "#6b7280", maxTicksLimit: 9 }
-        },
-        y: {
-          grid:  { color: "rgba(0,0,0,0.05)" },
-          ticks: { font: { size: 10 }, color: "#6b7280", callback: v => fmt(v) }
-        }
+        x: { grid: { display:false }, ticks: { font:{size:10}, color:"#6b7280", maxTicksLimit:9 } },
+        y: { grid: { color:"rgba(0,0,0,0.05)" }, ticks: { font:{size:10}, color:"#6b7280", callback: v => fmt(v) } }
       }
     }
   });
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    RENDER — DRIVERS
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 function renderDrivers() {
   killChart("drivers");
 
   if (!st.hasProd || st.drivers.length === 0) {
     document.getElementById("drivers-tbl-wrap").innerHTML =
-      '<p style="color:var(--muted);font-size:13px;padding:10px 0;">No product/category column detected. Add a column named "Product" or "Category" to see revenue drivers.</p>';
-    const wrap = document.getElementById("drivers-chart").parentElement;
-    wrap.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:10px 0;">No data available.</p>';
+      '<p style="color:var(--muted);font-size:13px;padding:10px 0;">No product/category column selected. Use ⚙ Reconfig to add one.</p>';
+    document.getElementById("drivers-chart").parentElement.innerHTML =
+      '<p style="color:var(--muted);font-size:13px;padding:10px 0;">No data available.</p>';
     return;
   }
 
-  const top = st.drivers.slice(0, 7);
+  const top = st.drivers.slice(0,7);
   const ctx  = document.getElementById("drivers-chart").getContext("2d");
   charts.drivers = new Chart(ctx, {
     type: "bar",
     data: {
-      labels: top.map(d => d.name.length > 17 ? d.name.slice(0,15) + "…" : d.name),
+      labels: top.map(d => d.name.length > 17 ? d.name.slice(0,15)+"…" : d.name),
       datasets: [{
-        data:            top.map(d => d.rev),
-        backgroundColor: top.map((_, i) => i === 0 ? "#C6923A" : "rgba(13,35,24,0.15)"),
-        borderRadius:    6,
-        borderSkipped:   false
+        data: top.map(d => d.rev),
+        backgroundColor: top.map((_,i) => i===0 ? "#C6923A" : "rgba(13,35,24,0.15)"),
+        borderRadius: 6, borderSkipped: false
       }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      indexAxis: "y",
-      plugins: { legend: { display: false } },
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      plugins: { legend: { display:false } },
       scales: {
-        x: {
-          grid:  { color: "rgba(0,0,0,0.05)" },
-          ticks: { font: { size: 10 }, color: "#6b7280", callback: v => fmt(v) }
-        },
-        y: {
-          grid:  { display: false },
-          ticks: { font: { size: 10 }, color: "#1a1a1a" }
-        }
+        x: { grid:{color:"rgba(0,0,0,0.05)"}, ticks:{font:{size:10},color:"#6b7280",callback:v=>fmt(v)} },
+        y: { grid:{display:false}, ticks:{font:{size:10},color:"#1a1a1a"} }
       }
     }
   });
 
-  // Table
   const tbody = document.querySelector("#drivers-tbl tbody");
   tbody.innerHTML = "";
   for (const d of st.drivers) {
     const tr = document.createElement("tr");
-    const barW = Math.round(d.share * 0.8); // max ~80px at 100%
-    tr.innerHTML = `
-      <td>${d.name}</td>
-      <td>${fmt(d.rev)}</td>
-      <td>
-        <div class="bar-inline">
-          <div class="bar-track" style="width:${barW}px;"></div>
-          <span>${d.share.toFixed(1)}%</span>
-        </div>
-      </td>`;
+    const bw = Math.round(d.share * 0.8);
+    tr.innerHTML = `<td>${d.name}</td><td>${fmt(d.rev)}</td>
+      <td><div class="bar-inline"><div class="bar-track" style="width:${bw}px;"></div><span>${d.share.toFixed(1)}%</span></div></td>`;
     tbody.appendChild(tr);
   }
 }
 
-/* ─────────────────────────────────────────────────────────────
-   RENDER — PERIOD COMPARISON
-───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   RENDER — PERIODS
+───────────────────────────────────────────────────────── */
 function renderPeriods() {
   killChart("period");
-
-  document.getElementById("period-mode-pill").textContent =
-    st.periodMode === "month" ? "Monthly" : "Weekly";
+  document.getElementById("period-mode-pill").textContent = st.periodMode === "month" ? "Monthly" : "Weekly";
 
   const tbody = document.querySelector("#period-tbl tbody");
   tbody.innerHTML = "";
-
   for (let i = 0; i < st.periods.length; i++) {
     const p    = st.periods[i];
     const prev = i > 0 ? st.periods[i-1] : null;
-    let chgHtml = '<span class="neu">–</span>';
+    let chg = '<span class="neu">–</span>';
     if (prev && prev.rev > 0) {
       const c   = ((p.rev - prev.rev) / prev.rev) * 100;
       const cls = c >= 0 ? "up" : "down";
-      const arr = c >= 0 ? "↑" : "↓";
-      chgHtml = `<span class="${cls}">${arr} ${Math.abs(c).toFixed(1)}%</span>`;
+      chg = `<span class="${cls}">${c>=0?"↑":"↓"} ${Math.abs(c).toFixed(1)}%</span>`;
     }
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${p.label}</td><td>${fmt(p.rev)}</td><td>${chgHtml}</td><td>${p.tx}</td>`;
+    tr.innerHTML = `<td>${p.label}</td><td>${fmt(p.rev)}</td><td>${chg}</td><td>${p.tx}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -1436,93 +1352,159 @@ function renderPeriods() {
     type: "bar",
     data: {
       labels: st.periods.map(p => p.label),
-      datasets: [{
-        data:            st.periods.map(p => p.rev),
-        backgroundColor: "rgba(13,35,24,0.75)",
-        borderRadius:    5,
-        borderSkipped:   false
-      }]
+      datasets: [{ data:st.periods.map(p=>p.rev), backgroundColor:"rgba(13,35,24,0.75)", borderRadius:5, borderSkipped:false }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: {
-          grid:  { display: false },
-          ticks: { font: { size: 10 }, color: "#6b7280", maxTicksLimit: 10 }
-        },
-        y: {
-          grid:  { color: "rgba(0,0,0,0.05)" },
-          ticks: { font: { size: 10 }, color: "#6b7280", callback: v => fmt(v) }
-        }
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:10},color:"#6b7280",maxTicksLimit:10}},
+        y:{grid:{color:"rgba(0,0,0,0.05)"},ticks:{font:{size:10},color:"#6b7280",callback:v=>fmt(v)}}
       }
     }
   });
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    RENDER — SEGMENTS
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 function renderSegments() {
   killChart("seg");
-
-  const sg      = st.segs;
-  const chips   = document.getElementById("seg-chips");
-  const note    = document.getElementById("seg-note");
+  const sg    = st.segs;
+  const chips = document.getElementById("seg-chips");
+  const note  = document.getElementById("seg-note");
   chips.innerHTML = "";
 
   let labels, data, colors;
 
   if (sg.type === "customer") {
-    labels = ["Champions", "Regulars", "At Risk", "New"];
+    labels = ["Champions","Regulars","At Risk","New"];
     data   = [sg.champions, sg.regulars, sg.atRisk, sg.newCustomers];
-    colors = ["#C6923A", "#0D2318", "#ef4444", "#10b981"];
-
+    colors = ["#C6923A","#0D2318","#ef4444","#10b981"];
     chips.innerHTML = `
       <div class="seg-chip"><div class="sc-lbl">Total Customers</div><div class="sc-val">${sg.total}</div><div class="sc-sub">unique</div></div>
       <div class="seg-chip"><div class="sc-lbl">Champions</div><div class="sc-val">${sg.champions}</div><div class="sc-sub">high-value, active</div></div>
       <div class="seg-chip"><div class="sc-lbl">Regulars</div><div class="sc-val">${sg.regulars}</div><div class="sc-sub">repeat buyers</div></div>
       <div class="seg-chip"><div class="sc-lbl">At Risk</div><div class="sc-val">${sg.atRisk}</div><div class="sc-sub">haven't returned</div></div>`;
     note.textContent = sg.topCust !== "–" ? "Top customer: " + sg.topCust : "";
-
   } else {
-    labels = ["High Value", "Mid Value", "Low Value"];
+    labels = ["High Value","Mid Value","Low Value"];
     data   = [sg.high.count, sg.mid.count, sg.low.count];
-    colors = ["#C6923A", "#0D2318", "rgba(13,35,24,0.25)"];
-
+    colors = ["#C6923A","#0D2318","rgba(13,35,24,0.25)"];
     chips.innerHTML = `
       <div class="seg-chip"><div class="sc-lbl">High Value</div><div class="sc-val">${sg.high.count}</div><div class="sc-sub">≥ ${fmt(sg.p67)}</div></div>
       <div class="seg-chip"><div class="sc-lbl">Mid Value</div><div class="sc-val">${sg.mid.count}</div><div class="sc-sub">${fmt(sg.p33)} – ${fmt(sg.p67)}</div></div>
       <div class="seg-chip"><div class="sc-lbl">Low Value</div><div class="sc-val">${sg.low.count}</div><div class="sc-sub">< ${fmt(sg.p33)}</div></div>`;
-    note.textContent = "Add a 'Customer' column for full customer segmentation.";
+    note.textContent = "Add a Customer column and use ⚙ Reconfig for full segmentation.";
   }
 
   const ctx = document.getElementById("seg-chart").getContext("2d");
   charts.seg = new Chart(ctx, {
     type: "doughnut",
-    data: {
-      labels,
-      datasets: [{
-        data, backgroundColor: colors,
-        borderWidth: 2, borderColor: "#fff"
-      }]
-    },
+    data: { labels, datasets: [{ data, backgroundColor:colors, borderWidth:2, borderColor:"#fff" }] },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      cutout: "62%",
-      plugins: {
-        legend: {
-          position: "bottom",
-          labels: { font: { size: 10.5 }, padding: 10, usePointStyle: true }
-        }
-      }
+      responsive:true, maintainAspectRatio:false, cutout:"62%",
+      plugins:{ legend:{ position:"bottom", labels:{font:{size:10.5},padding:10,usePointStyle:true} } }
     }
   });
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
+   RENDER — SECONDARY ANALYSIS (EXTRA COLUMNS)
+───────────────────────────────────────────────────────── */
+function renderSecondary() {
+  const container = document.getElementById("secondary-section");
+  container.innerHTML = "";
+
+  // Destroy any previous extra charts
+  Object.keys(charts).filter(k => k.startsWith("extra_")).forEach(k => killChart(k));
+
+  if (!colConfig.extraCols || colConfig.extraCols.length === 0) return;
+
+  // Label above
+  const lbl = document.createElement("p");
+  lbl.className   = "sec-label";
+  lbl.textContent = "Additional Column Analysis";
+  container.appendChild(lbl);
+
+  for (const ec of colConfig.extraCols) {
+    // Group revenue by this column's values
+    const gmap = {};
+    for (const r of records) {
+      const val = r["x_" + ec.idx] || "Unknown";
+      gmap[val] = (gmap[val] || 0) + r.rev;
+    }
+
+    const groups = Object.entries(gmap)
+      .sort((a,b) => b[1] - a[1])
+      .slice(0,10)
+      .map(([name, rev]) => ({ name, rev, share:(rev / st.totalRev)*100 }));
+
+    const uniqueCount = Object.keys(gmap).length;
+    const chartId     = "extra-chart-" + ec.idx;
+    const tblId       = "extra-tbl-"   + ec.idx;
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-hdr">
+        <span class="card-title">By: ${ec.name}</span>
+        <span class="card-pill">${uniqueCount} unique values</span>
+      </div>
+      <div class="two-col">
+        <div class="chart-box" style="height:200px;"><canvas id="${chartId}"></canvas></div>
+        <div style="overflow-x:auto;">
+          <table class="tbl" id="${tblId}">
+            <thead><tr><th>${ec.name}</th><th>Revenue</th><th>Share</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>`;
+    container.appendChild(card);
+
+    // Must render chart after DOM insertion
+    requestAnimationFrame(() => {
+      const canvas = document.getElementById(chartId);
+      if (!canvas) return;
+
+      killChart("extra_" + ec.idx);
+      charts["extra_" + ec.idx] = new Chart(canvas.getContext("2d"), {
+        type: "bar",
+        data: {
+          labels: groups.map(g => g.name.length > 16 ? g.name.slice(0,14)+"…" : g.name),
+          datasets: [{
+            data: groups.map(g => g.rev),
+            backgroundColor: groups.map((_,i) => i===0 ? "#C6923A" : "rgba(13,35,24,0.15)"),
+            borderRadius: 5, borderSkipped: false
+          }]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false, indexAxis:"y",
+          plugins:{ legend:{display:false} },
+          scales:{
+            x:{grid:{color:"rgba(0,0,0,0.05)"},ticks:{font:{size:10},color:"#6b7280",callback:v=>fmt(v)}},
+            y:{grid:{display:false},ticks:{font:{size:10},color:"#1a1a1a"}}
+          }
+        }
+      });
+
+      // Table
+      const tbody = document.querySelector("#" + tblId + " tbody");
+      if (!tbody) return;
+      for (const g of groups) {
+        const bw = Math.round(g.share * 0.8);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${g.name}</td><td>${fmt(g.rev)}</td>
+          <td><div class="bar-inline"><div class="bar-track" style="width:${bw}px;"></div><span>${g.share.toFixed(1)}%</span></div></td>`;
+        tbody.appendChild(tr);
+      }
+    });
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
    RENDER — ANOMALIES
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 function renderAnomalies() {
   const list = document.getElementById("anom-list");
   list.innerHTML = "";
@@ -1534,7 +1516,7 @@ function renderAnomalies() {
   }
 
   for (const a of st.anomalies) {
-    const div  = document.createElement("div");
+    const div = document.createElement("div");
     div.className = "anom-item " + a.type;
     const icon  = a.type === "spike" ? "📈" : "📉";
     const label = a.type === "spike" ? "Revenue spike" : "Revenue drop";
@@ -1548,63 +1530,69 @@ function renderAnomalies() {
   }
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    NOVA — INIT
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 function buildNovaPrompt() {
   const s  = st;
   const sg = s.segs;
 
   const segLine = sg.type === "customer"
-    ? `${sg.total} customers total — ${sg.champions} champions, ${sg.regulars} regulars, ${sg.atRisk} at-risk, ${sg.newCustomers} new. Top customer: ${sg.topCust}.`
+    ? `${sg.total} customers — ${sg.champions} champions, ${sg.regulars} regulars, ${sg.atRisk} at-risk, ${sg.newCustomers} new. Top customer: ${sg.topCust}.`
     : `Transaction segments: ${sg.high.count} high-value (≥${fmt(sg.p67)}), ${sg.mid.count} mid-value, ${sg.low.count} low-value.`;
 
   const driverLine = s.drivers.length > 0
-    ? "Top revenue drivers: " + s.drivers.slice(0,5).map(d => `${d.name} (${d.share.toFixed(1)}%)`).join(", ") + "."
-    : "No product/category column in data.";
+    ? "Top drivers: " + s.drivers.slice(0,5).map(d=>`${d.name} (${d.share.toFixed(1)}%)`).join(", ") + "."
+    : "No product/category column selected.";
 
   const anomLine = s.anomalies.length > 0
-    ? s.anomalies.slice(0,3).map(a => `${a.type} on ${fmtDate(a.date)} (${fmt(a.rev)})`).join("; ")
+    ? s.anomalies.slice(0,3).map(a=>`${a.type} on ${fmtDate(a.date)} (${fmt(a.rev)})`).join("; ")
     : "None detected.";
 
   const trendLine = s.growthPct >= 0
-    ? `Revenue growing at ${s.growthPct.toFixed(1)}% (second half vs first half).`
+    ? `Revenue growing at ${s.growthPct.toFixed(1)}%.`
     : `Revenue declining at ${Math.abs(s.growthPct).toFixed(1)}%.`;
+
+  const extraLine = colConfig.extraCols && colConfig.extraCols.length > 0
+    ? "Additional columns analysed: " + colConfig.extraCols.map(e=>e.name).join(", ") + "."
+    : "";
+
+  const searchLine = TAVILY_KEY
+    ? "You have access to a web_search tool. Use it when asked about current Nigerian market data, prices, news, or industry trends."
+    : "You do not have web search access. Answer from the data and your training knowledge.";
 
   return `You are NOVA, an AI business analyst embedded in COC Intelligence — a business analytics consultancy serving Nigerian SMEs.
 
-You have just completed a full diagnostic of a client's sales data. Here is the full analysis:
-
-BUSINESS OVERVIEW:
+ANALYSIS RESULTS:
 - Sector: ${s.sector}
-- Date range: ${fmtDate(s.minDate)} to ${fmtDate(s.maxDate)} (${s.daySpan} days)
-- Total revenue: ${fmtFull(s.totalRev)}
-- Total transactions: ${s.totalTx.toLocaleString()}
-- Average transaction value: ${fmt(s.avgTx)}
-- Period analysis: ${s.periodMode === "month" ? "Monthly" : "Weekly"}
+- Period: ${fmtDate(s.minDate)} to ${fmtDate(s.maxDate)} (${s.daySpan} days)
+- Total Revenue: ${fmtFull(s.totalRev)}
+- Transactions: ${s.totalTx.toLocaleString()}
+- Avg Transaction: ${fmt(s.avgTx)}
+- Analysis mode: ${s.periodMode === "month" ? "Monthly" : "Weekly"}
 
 HEALTH SCORE: ${s.healthScore}/100 — Grade ${s.grade} (${s.gradeLbl})
 ${s.gradeDesc}
 
 TREND: ${trendLine}
-
-REVENUE DRIVERS: ${driverLine}
-
-SEGMENTATION: ${segLine}
-
+DRIVERS: ${driverLine}
+SEGMENTS: ${segLine}
 ANOMALIES: ${anomLine}
+${extraLine}
 
-YOUR ROLE:
-- Answer questions about this specific business and its data above
-- Give practical, direct, actionable advice for Nigerian SME context
-- Always reference actual numbers from the data when relevant
+WEB SEARCH: ${searchLine}
+
+RULES:
+- Answer questions about this specific business using the data above
+- Reference actual numbers when relevant
 - Use ₦ for all monetary values
-- If asked about something outside the data, clearly say so and give general advice
-- Be concise — no unnecessary preamble or filler`;
+- Keep Nigerian SME context in mind (power, logistics, cash economy, etc.)
+- Be direct and practical — no filler
+- If something is outside the data, say so clearly`;
 }
 
 function initNova() {
-  novaHist = [{ role: "system", content: buildNovaPrompt() }];
+  novaHist = [{ role:"system", content:buildNovaPrompt() }];
   novaOpen = false;
 
   const panel = document.getElementById("nova-panel");
@@ -1614,11 +1602,14 @@ function initNova() {
   document.getElementById("nova-msgs").style.display = "none";
   document.getElementById("nova-bar").style.display  = "none";
   document.getElementById("nova-arrow").textContent  = "▲";
+
+  document.getElementById("nova-subtitle").textContent =
+    TAVILY_KEY ? "Ask me anything · web search enabled 🌐" : "Ask me about this analysis";
 }
 
-/* ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    NOVA — TOGGLE
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 document.getElementById("nova-hdr").addEventListener("click", function() {
   novaOpen = !novaOpen;
   const panel = document.getElementById("nova-panel");
@@ -1627,40 +1618,35 @@ document.getElementById("nova-hdr").addEventListener("click", function() {
   const arrow = document.getElementById("nova-arrow");
 
   if (novaOpen) {
-    panel.className         = "open";
-    msgs.style.display      = "flex";
-    bar.style.display       = "flex";
-    arrow.textContent       = "▼";
-
-    // First-time welcome
+    panel.className        = "open";
+    msgs.style.display     = "flex";
+    bar.style.display      = "flex";
+    arrow.textContent      = "▼";
     if (msgs.children.length === 0) {
-      addMsg("nova", "Hello! I've reviewed the analysis — Health Score " + st.healthScore + "/100 (" + st.gradeLbl + "). What would you like to know about this business?");
+      addMsg("nova", "Hello! I've reviewed the analysis — Health Score " + st.healthScore + "/100 (" + st.gradeLbl + ")." + (TAVILY_KEY ? " I can also search the web for current market data. " : " ") + "What would you like to know?");
     }
     document.getElementById("nova-input").focus();
   } else {
-    panel.className         = "shut";
-    msgs.style.display      = "none";
-    bar.style.display       = "none";
-    arrow.textContent       = "▲";
+    panel.className        = "shut";
+    msgs.style.display     = "none";
+    bar.style.display      = "none";
+    arrow.textContent      = "▲";
   }
 });
 
-/* ─────────────────────────────────────────────────────────────
-   NOVA — CHAT
-───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   NOVA — CHAT MESSAGES
+───────────────────────────────────────────────────────── */
 function addMsg(role, text) {
   const msgs = document.getElementById("nova-msgs");
   const wrap = document.createElement("div");
   wrap.className = "n-msg " + role;
-
-  const nm = document.createElement("div");
+  const nm  = document.createElement("div");
   nm.className   = "nm";
   nm.textContent = role === "user" ? "You" : "NOVA";
-
   const bbl = document.createElement("div");
   bbl.className   = "bbl";
   bbl.textContent = text;
-
   wrap.appendChild(nm);
   wrap.appendChild(bbl);
   msgs.appendChild(wrap);
@@ -1672,15 +1658,12 @@ function addThinking() {
   const msgs = document.getElementById("nova-msgs");
   const wrap = document.createElement("div");
   wrap.className = "n-msg nova";
-
-  const nm = document.createElement("div");
+  const nm  = document.createElement("div");
   nm.className   = "nm";
   nm.textContent = "NOVA";
-
   const bbl = document.createElement("div");
   bbl.className = "thinking-bbl";
   bbl.innerHTML = '<div class="d"></div><div class="d"></div><div class="d"></div>';
-
   wrap.appendChild(nm);
   wrap.appendChild(bbl);
   msgs.appendChild(wrap);
@@ -1688,6 +1671,19 @@ function addThinking() {
   return wrap;
 }
 
+function addSearchNote(query) {
+  const msgs = document.getElementById("nova-msgs");
+  const el   = document.createElement("div");
+  el.className   = "search-note";
+  el.textContent = "🔍 Searching: " + query + "…";
+  msgs.appendChild(el);
+  msgs.scrollTop = msgs.scrollHeight;
+  return el;
+}
+
+/* ─────────────────────────────────────────────────────────
+   NOVA — SEND (with Groq tool use + Tavily)
+───────────────────────────────────────────────────────── */
 async function sendNova() {
   const input = document.getElementById("nova-input");
   const text  = input.value.trim();
@@ -1695,62 +1691,191 @@ async function sendNova() {
 
   input.value = "";
   addMsg("user", text);
-  novaHist.push({ role: "user", content: text });
+  novaHist.push({ role:"user", content:text });
 
   const thinking = addThinking();
 
   try {
-    const res = await fetch(GROQ_URL, {
-      method:  "POST",
-      headers: {
-        "Authorization": "Bearer " + GROQ_KEY,
-        "Content-Type":  "application/json"
-      },
-      body: JSON.stringify({
-        model:       GROQ_MODEL,
-        messages:    novaHist,
-        temperature: 0.6,
-        max_tokens:  700
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || "API error " + res.status);
-    }
-
-    const json  = await res.json();
-    const reply = json.choices[0].message.content.trim();
-
+    const reply = await novaAgentLoop(thinking);
     thinking.remove();
     addMsg("nova", reply);
-    novaHist.push({ role: "assistant", content: reply });
+    novaHist.push({ role:"assistant", content:reply });
 
-    // Trim history: keep system prompt + last 20 messages
+    // Trim: keep system + last 20
     if (novaHist.length > 22) {
       const sys = novaHist[0];
       novaHist  = [sys, ...novaHist.slice(-20)];
     }
-
-  } catch (err) {
+  } catch(err) {
     thinking.remove();
-    addMsg("nova", "⚠ " + (err.message || "Connection failed. Check your API key in the file."));
+    addMsg("nova", "⚠ " + (err.message || "Connection error. Check your API key."));
   }
 }
 
-document.getElementById("nova-send").addEventListener("click", sendNova);
+async function novaAgentLoop(thinkingEl) {
+  // Define web search tool (only used if Tavily key exists)
+  const tools = TAVILY_KEY ? [{
+    type: "function",
+    function: {
+      name: "web_search",
+      description: "Search the web for current Nigerian market information, commodity prices, business news, industry trends, exchange rates, or any information that requires up-to-date knowledge beyond the uploaded data.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type:"string", description:"The search query to run" }
+        },
+        required: ["query"]
+      }
+    }
+  }] : undefined;
 
-document.getElementById("nova-input").addEventListener("keydown", function(e) {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendNova(); }
+  let messages = [...novaHist];
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const body = {
+      model:       GROQ_MODEL,
+      messages,
+      max_tokens:  700,
+      temperature: 0.6
+    };
+    if (tools) { body.tools = tools; body.tool_choice = "auto"; }
+
+    const res = await fetch(GROQ_URL, {
+      method:  "POST",
+      headers: { "Authorization": "Bearer " + GROQ_KEY, "Content-Type": "application/json" },
+      body:    JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || "Groq API error " + res.status);
+    }
+
+    const json   = await res.json();
+    const choice = json.choices[0];
+
+    // Tool call requested
+    if (choice.finish_reason === "tool_calls" && choice.message.tool_calls) {
+      const toolCall = choice.message.tool_calls[0];
+      let   query    = "";
+      try { query = JSON.parse(toolCall.function.arguments).query; } catch(e) { query = toolCall.function.arguments; }
+
+      // Show search note (replacing thinking dots temporarily)
+      if (thinkingEl) thinkingEl.style.display = "none";
+      const note = addSearchNote(query);
+
+      const results = await searchTavily(query);
+
+      note.remove();
+      if (thinkingEl) thinkingEl.style.display = "";
+
+      // Append tool call and result to message chain
+      messages.push(choice.message);
+      messages.push({
+        role:         "tool",
+        tool_call_id: toolCall.id,
+        content:      results
+      });
+
+      // Continue loop to get final response
+      continue;
+    }
+
+    // Final text response
+    // Update novaHist with any intermediate messages (tool exchanges)
+    novaHist = messages;
+    return choice.message.content.trim();
+  }
+
+  throw new Error("Response loop exceeded maximum iterations.");
+}
+
+/* ─────────────────────────────────────────────────────────
+   TAVILY SEARCH
+───────────────────────────────────────────────────────── */
+async function searchTavily(query) {
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method:  "POST",
+      headers: { "Content-Type":"application/json" },
+      body:    JSON.stringify({
+        api_key:        TAVILY_KEY,
+        query,
+        max_results:    4,
+        search_depth:   "basic",
+        include_answer: true
+      })
+    });
+
+    if (!res.ok) return "Search unavailable (status " + res.status + ").";
+
+    const data = await res.json();
+    let   out  = "";
+
+    if (data.answer) out += "Summary: " + data.answer + "\n\n";
+    if (data.results) {
+      out += data.results.slice(0,3)
+        .map(r => "[" + r.title + "]\n" + (r.content || r.snippet || ""))
+        .join("\n\n");
+    }
+
+    return out.trim() || "No search results found.";
+  } catch(e) {
+    return "Search error: " + e.message;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   KEY MODAL
+───────────────────────────────────────────────────────── */
+function openKeyModal() {
+  document.getElementById("key-groq").value   = GROQ_KEY;
+  document.getElementById("key-tavily").value = TAVILY_KEY;
+  document.getElementById("key-modal").classList.remove("hidden");
+}
+
+function saveKey() {
+  const groqVal   = document.getElementById("key-groq").value.trim();
+  const tavilyVal = document.getElementById("key-tavily").value.trim();
+  const err       = document.getElementById("kb-err");
+
+  if (!groqVal.startsWith("gsk_") || groqVal.length < 20) {
+    err.style.display = "block";
+    return;
+  }
+  err.style.display = "none";
+
+  GROQ_KEY   = groqVal;
+  TAVILY_KEY = tavilyVal;
+
+  sessionStorage.setItem("coc_groq_key",   groqVal);
+  if (tavilyVal) sessionStorage.setItem("coc_tavily_key", tavilyVal);
+  else           sessionStorage.removeItem("coc_tavily_key");
+
+  document.getElementById("key-modal").classList.add("hidden");
+
+  // Update NOVA subtitle if analysis already running
+  const sub = document.getElementById("nova-subtitle");
+  if (sub) sub.textContent = TAVILY_KEY ? "Ask me anything · web search enabled 🌐" : "Ask me about this analysis";
+}
+
+// Allow Enter key in key inputs
+["key-groq","key-tavily"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", e => {
+    if (e.key === "Enter") saveKey();
+  });
 });
 
-/* ─────────────────────────────────────────────────────────────
+function checkKey() {
+  if (!GROQ_KEY) openKeyModal();
+}
+
+/* ─────────────────────────────────────────────────────────
    RESET
-───────────────────────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 function resetApp() {
-  records  = [];
-  st       = {};
-  novaHist = [];
+  rawHeaders = []; rawRows = []; colConfig = {};
+  records = []; st = {}; novaHist = [];
 
   Object.keys(charts).forEach(k => killChart(k));
 
@@ -1758,10 +1883,17 @@ function resetApp() {
   document.getElementById("upload-section").style.display   = "flex";
   document.getElementById("btn-print").style.display        = "none";
   document.getElementById("btn-new").style.display          = "none";
+  document.getElementById("btn-reconfig").style.display     = "none";
   document.getElementById("nova-panel").style.display       = "none";
   document.getElementById("nova-msgs").innerHTML            = "";
+  document.getElementById("secondary-section").innerHTML    = "";
   document.getElementById("file-input").value               = "";
 }
+
+/* ─────────────────────────────────────────────────────────
+   INIT
+───────────────────────────────────────────────────────── */
+window.addEventListener("DOMContentLoaded", checkKey);
 </script>
 </body>
 </html>
