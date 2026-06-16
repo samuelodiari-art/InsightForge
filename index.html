@@ -1891,6 +1891,15 @@ function resetApp() {
 }
 
 /* ─────────────────────────────────────────────────────────
+   NOVA — INPUT LISTENERS
+───────────────────────────────────────────────────────── */
+document.getElementById("nova-send").addEventListener("click", sendNova);
+
+document.getElementById("nova-input").addEventListener("keydown", function(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendNova(); }
+});
+
+/* ─────────────────────────────────────────────────────────
    INIT
 ───────────────────────────────────────────────────────── */
 window.addEventListener("DOMContentLoaded", checkKey);
